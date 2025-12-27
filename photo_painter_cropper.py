@@ -4,12 +4,12 @@ import time
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from PIL import Image, ImageTk, ImageFilter
+import subprocess
 
 # ====== CONFIG ======
 TARGET_SIZE = (800, 480)           # exact JPG output
 WINDOW_MIN = (TARGET_SIZE[0]+100, TARGET_SIZE[1]+100)
 RATIO = TARGET_SIZE[0] / TARGET_SIZE[1]
-WINDOW_MIN = (900, 700)
 JPEG_QUALITY = 95
 DIRECTION = "portrait" # landscape | portrait
 FILL_MODE = "blur" # white | blur
@@ -34,7 +34,7 @@ if DIRECTION == "portrait":
 class CropperApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Photo Painter – Crop 800x480 (JPG, white/blur fill) + stato")
+        self.root.title(f"Photo Painter – Crop {TARGET_SIZE[0]}x{TARGET_SIZE[1]} (JPG, white/blur fill) + state")
         self.root.minsize(*WINDOW_MIN)
 
         top = tk.Frame(root)
@@ -76,6 +76,8 @@ class CropperApp:
         self.root.bind("<Configure>", self.on_resize)
         self.root.bind("<f>", self.toggle_fill)
         self.root.bind("<F>", self.toggle_fill)
+        self.root.bind("<d>", self.toggle_direction)
+        self.root.bind("<D>", self.toggle_direction)
 
         # State
         self.direction = DIRECTION
@@ -92,6 +94,7 @@ class CropperApp:
         self.img_off = (0, 0)
         self.disp_size = (0, 0)
 
+        self.ratio = RATIO
         self.rect_w = 0
         self.rect_h = 0
         self.rect_center = (0, 0)
@@ -168,10 +171,10 @@ class CropperApp:
     def init_rect(self):
         dw, dh = self.disp_size
         rw = int(dw * 0.8)
-        rh = int(rw / RATIO)
+        rh = int(rw / self.ratio)
         if rh > dh:
             rh = int(dh * 0.8)
-            rw = int(rh * RATIO)
+            rw = int(rh * self.ratio)
         self.rect_w, self.rect_h = max(20, rw), max(20, rh)
         cx = self.img_off[0] + dw // 2
         cy = self.img_off[1] + dh // 2
@@ -182,6 +185,7 @@ class CropperApp:
         cx, cy = self.rect_center
         w2 = self.rect_w // 2
         h2 = self.rect_h // 2
+        print((cx - w2, cy - h2, cx + w2, cy + h2))
         return (cx - w2, cy - h2, cx + w2, cy + h2)
 
     def clamp_rect_to_canvas(self):
@@ -212,14 +216,17 @@ class CropperApp:
 
         # crop rectangle
         x1f, y1f, x2f, y2f = self.rect_coords()
-        x1 = snap(x1f); y1 = snap(y1f); x2 = snap(x2f); y2 = snap(y2f)
+        x1: int = snap(x1f)
+        y1: int = snap(y1f)
+        x2: int = snap(x2f)
+        y2: int = snap(y2f)
 
         # off-crop mask
         w, h = self.canvas_size()
-        self.canvas.create_rectangle(0, 0, w, y1, fill="#000", stipple="gray25", width=0)
-        self.canvas.create_rectangle(0, y2, w, h, fill="#000", stipple="gray25", width=0)
-        self.canvas.create_rectangle(0, y1, x1, y2, fill="#000", stipple="gray25", width=0)
-        self.canvas.create_rectangle(x2, y1, w, y2, fill="#000", stipple="gray25", width=0)
+        self.canvas.create_rectangle(0, 0, w, y1, fill="#000", stipple="gray50", width=0)
+        self.canvas.create_rectangle(0, y2, w, h, fill="#000", stipple="gray50", width=0)
+        self.canvas.create_rectangle(0, y1, x1, y2, fill="#000", stipple="gray50", width=0)
+        self.canvas.create_rectangle(x2, y1, w, y2, fill="#000", stipple="gray50", width=0)
 
         # crop edge
         self.canvas.create_rectangle(x1, y1, x2, y2, outline=CROP_BORDER_COLOR, width=1)
@@ -289,11 +296,11 @@ class CropperApp:
 
     def apply_resize_factor(self, factor):
         cw, ch = self.canvas_size()
-        max_w = min(cw, int(ch * RATIO))
+        max_w = min(cw, int(ch * self.ratio))
         new_w = int(self.rect_w * factor)
         new_w = max(64, min(new_w, max_w))
         self.rect_w = new_w
-        self.rect_h = int(self.rect_w / RATIO)
+        self.rect_h = int(self.rect_w / self.ratio)
         self.clamp_rect_to_canvas()
         self.redraw()
 
@@ -308,13 +315,17 @@ class CropperApp:
         x2d = self.img_off[0] + int(x2i * self.scale)
         y2d = self.img_off[1] + int(y2i * self.scale)
         self.rect_w = max(1, x2d - x1d)
-        self.rect_h = int(self.rect_w / RATIO)
+        self.rect_h = int(self.rect_w / self.ratio)
         self.rect_center = ((x1d + x2d)//2, (y1d + y2d)//2)
         self.clamp_rect_to_canvas()
         self.redraw()
 
     def toggle_fill(self, _e=None):
         self.fill_mode = "blur" if self.fill_mode == "white" else "white"
+        self.update_mode_label()
+
+    def toggle_direction(self, _e=None):
+        self.direction = "landscape" if self.direction == "portrait" else "portrait"
         self.update_mode_label()
 
     # ---------- Coordinate helpers ----------
@@ -404,13 +415,14 @@ class CropperApp:
             return base.filter(ImageFilter.GaussianBlur(radius=25))
 
     def save_output(self, out_img):
+        print(f"Source: {self.image_paths[self.idx]}")
         in_path = self.image_paths[self.idx]
         base = os.path.splitext(os.path.basename(in_path))[0]
-        out_dir = os.path.join(os.path.dirname(in_path), "_export_photopainter_jpg")
+        out_dir = os.path.join(os.path.dirname(in_path), f"{EXPORT_FOLDER}")
         os.makedirs(out_dir, exist_ok=True)
-        out_path = os.path.join(out_dir, f"{base}_pp.jpg")
+        out_path = os.path.join(out_dir, f"{base}{EXPORT_FILENAME_SUFFIX}_{self.direction}.jpg")
         out_img.save(out_path, format="JPEG", quality=JPEG_QUALITY, optimize=True, progressive=True)
-        print(f"Salvato: {out_path}")
+        print(f"Crop saved: {out_path}")
 
     # ---------- Persistent state ----------
     def state_path_for_image(self, img_path: str) -> str:
@@ -418,7 +430,7 @@ class CropperApp:
         b = os.path.splitext(os.path.basename(img_path))[0]
         return os.path.join(d, f"{b}{STATE_SUFFIX}")
 
-    def save_state(self, img_path: str, x1i, y1i, x2i, y2i):
+    def save_state(self, img_path: str, x1i: int, y1i: int, x2i: int, y2i: int):
         iw, ih = self.img.size
         nx1 = x1i / iw
         ny1 = y1i / ih
@@ -440,8 +452,9 @@ class CropperApp:
             f"rect_ny2={ny2:.6f}",
             f"target_w={TARGET_SIZE[0]}",
             f"target_h={TARGET_SIZE[1]}",
-            f"ratio={RATIO:.6f}",
+            f"ratio={self.ratio:.6f}",
             f"fill_mode={self.fill_mode}",
+            f"direction={self.direction}",
         ]
         path = self.state_path_for_image(img_path)
         try:
@@ -450,7 +463,15 @@ class CropperApp:
             print(f"State saved: {path}")
             return img_path
         except Exception as e:
-            print(f"[WARN] Impossibile salvare stato: {e}")
+            print(f"[WARN] Unable to save state: {e}")
+
+    def convert_to_bmp(self, in_path: str):
+        base = os.path.splitext(os.path.basename(in_path))[0]
+        out_dir = os.path.join(os.path.dirname(in_path), f"{EXPORT_FOLDER}")
+        out_path = os.path.join(out_dir, f"{base}{EXPORT_FILENAME_SUFFIX}_{self.direction}.jpg").replace('\\', '/') # complete source path & file of cropped image for convert
+        # Execute called script with the arguments
+        os.system(f'python convert.py --dir {self.direction} --mode {CONVERT_MODE} --dither {CONVERT_DITHER} "{out_path}"')
+        print(f"- - -")
 
     def load_kv(self, path: str):
         data = {}
@@ -495,8 +516,8 @@ class CropperApp:
 
         if saved_w == iw and saved_h == ih:
             try:
-                x1i = float(kv["rect_x1"]); y1i = float(kv["rect_y1"])
-                x2i = float(kv["rect_x2"]); y2i = float(kv["rect_y2"])
+                x1i: float = float(kv["rect_x1"]); y1i: float = float(kv["rect_y1"])
+                x2i: float = float(kv["rect_x2"]); y2i: float = float(kv["rect_y2"])
             except Exception:
                 x1i, y1i, x2i, y2i = self._coords_from_normalized(kv, iw, ih)
         else:
@@ -513,7 +534,7 @@ class CropperApp:
 
         # reconstruct rectangle while maintaining a fixed ratio
         w = max(1, x2d - x1d)
-        h = int(w / RATIO)
+        h = int(w / self.ratio)
         cx = (x1d + x2d) // 2
         cy = (y1d + y2d) // 2
 
@@ -523,7 +544,7 @@ class CropperApp:
         self.clamp_rect_to_canvas()
         return True
 
-    def _coords_from_normalized(self, kv, iw, ih):
+    def _coords_from_normalized(self, kv, iw: float, ih: float):
         try:
             nx1 = float(kv["rect_nx1"]); ny1 = float(kv["rect_ny1"])
             nx2 = float(kv["rect_nx2"]); ny2 = float(kv["rect_ny2"])
