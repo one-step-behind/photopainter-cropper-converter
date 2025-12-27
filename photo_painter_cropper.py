@@ -6,17 +6,30 @@ from tkinter import filedialog, messagebox
 from PIL import Image, ImageTk, ImageFilter
 
 # ====== CONFIG ======
-TARGET_SIZE = (800, 480)           # output JPG esatto
+TARGET_SIZE = (800, 480)           # exact JPG output
+WINDOW_MIN = (TARGET_SIZE[0]+100, TARGET_SIZE[1]+100)
 RATIO = TARGET_SIZE[0] / TARGET_SIZE[1]
 WINDOW_MIN = (900, 700)
 JPEG_QUALITY = 95
+DIRECTION = "portrait" # landscape | portrait
+FILL_MODE = "blur" # white | blur
+CONVERT_MODE = "cut" # scale | cut
+CONVERT_DITHER = 3 # NONE(0) or FLOYDSTEINBERG(3)
+CROP_BORDER_COLOR = "#00ff88"
 
-ARROW_STEP = 5                      # px per step con frecce
-ARROW_STEP_FAST = 20                # px con Shift premuto
-SCALE_FACTOR = 1.05                 # zoom step con +/- normali
-SCALE_FACTOR_FAST = 1.10            # zoom step con Shift
+ARROW_STEP = 1                      # px for step with arrows
+ARROW_STEP_FAST = 10                # px with Shift pressed
+SCALE_FACTOR = 1.01                 # zoom step with normal +/-
+SCALE_FACTOR_FAST = 1.10            # zoom step with Shift
 
-STATE_SUFFIX = "_ppcrop.txt"        # file stato accanto all'immagine sorgente
+EXPORT_FOLDER = "export_photopainter_jpg" # folder where to store cropped images
+EXPORT_FILENAME_SUFFIX = "_pp"
+STATE_SUFFIX = "_ppcrop.txt"        # file status next to the source image
+
+if DIRECTION == "portrait":
+    TARGET_SIZE = (TARGET_SIZE[1], TARGET_SIZE[0])
+    WINDOW_MIN = (TARGET_SIZE[1]+100, TARGET_SIZE[0]+100)
+    RATIO = TARGET_SIZE[1] / TARGET_SIZE[0]
 
 class CropperApp:
     def __init__(self, root):
@@ -40,32 +53,33 @@ class CropperApp:
         self.canvas.bind("<Button-4>", self.on_wheel_linux) # linux up
         self.canvas.bind("<Button-5>", self.on_wheel_linux) # linux down
 
-        # Tastiera (conferma)
+        # Keyboard (confirm)
         self.root.bind("<Return>", self.on_confirm)
-        self.root.bind_all("<Tab>", self.on_confirm_tab)    # intercetta Tab (evita cambio focus)
+        self.root.bind_all("<Tab>", self.on_confirm_tab)    # Tab intercept (prevent focus change)
         self.root.bind("<a>", self.on_confirm)
         self.root.bind("<A>", self.on_confirm)
         self.root.bind("<Escape>", self.on_skip)
 
-        # Tastiera (spostamento)
+        # Keyboard (movement)
         self.root.bind("<Left>",  lambda e: self.on_arrow(e, -1,  0))
         self.root.bind("<Right>", lambda e: self.on_arrow(e,  1,  0))
         self.root.bind("<Up>",    lambda e: self.on_arrow(e,  0, -1))
         self.root.bind("<Down>",  lambda e: self.on_arrow(e,  0,  1))
 
-        # Tastiera (ridimensiona)
-        for ks in ("<plus>", "<KP_Add>", "<equal>"):  # '+' spesso è Shift+'='; includo '=' per comodità
+        # Keyboard (resize)
+        for ks in ("<plus>", "<KP_Add>", "<equal>"):  # '+' It's often Shift+'='; include '=' for convenience
             self.root.bind(ks, self.on_plus)
         for ks in ("<minus>", "<KP_Subtract>"):
             self.root.bind(ks, self.on_minus)
 
-        # Vari
+        # Various
         self.root.bind("<Configure>", self.on_resize)
         self.root.bind("<f>", self.toggle_fill)
         self.root.bind("<F>", self.toggle_fill)
 
-        # Stato
-        self.fill_mode = "white"  # "white" | "blur"
+        # State
+        self.direction = DIRECTION
+        self.fill_mode = FILL_MODE
         self.update_mode_label()
 
         self.img = None
@@ -88,15 +102,17 @@ class CropperApp:
 
     # ---------- UI helpers ----------
     def update_mode_label(self):
-        filler = "BIANCO" if self.fill_mode == "white" else "BLUR"
+        fill_label_value = "WHITE" if self.fill_mode == "white" else "BLUR"
+        direction_label_value = "PORTRAIT" if self.direction == "portrait" else "LANDSCAPE"
         self.mode_lbl.config(text=(
-            f"Modalità riempimento: {filler}  |  F = cambia  •  "
-            "Frecce=sposta (Shift=+veloce)  •  +/-=ridim (Shift=+veloce)  •  Invio/Tab/A=salva  •  Esc=salta"
+            f"Fill mode: {fill_label_value} (F)  •  "
+            f"Direction: {direction_label_value} (D)  •  "
+            "Arrows=move (Shift=+fast)  •  +/-=resize (Shift=+fast)  •  Enter/Tab/A=save  •  Esc=skip"
         ))
 
     # ---------- File loading ----------
     def load_folder(self):
-        folder = filedialog.askdirectory(title="Seleziona cartella con le foto")
+        folder = filedialog.askdirectory(title="Select folder with photos")
         if not folder:
             self.root.after(50, self.root.quit)
             return
@@ -105,14 +121,14 @@ class CropperApp:
             if f.lower().endswith((".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"))
         ]
         if not self.image_paths:
-            messagebox.showerror("Nessuna immagine", "La cartella non contiene immagini.")
+            messagebox.showerror("No image", "The folder contains no images.")
             self.root.after(50, self.root.quit)
             return
         self.show_image()
 
     def show_image(self):
         if self.idx >= len(self.image_paths):
-            messagebox.showinfo("Fatto", "Tutte le immagini sono state elaborate.")
+            messagebox.showinfo("Done", "All images have been processed.")
             self.root.after(50, self.root.quit)
             return
 
@@ -120,14 +136,14 @@ class CropperApp:
         try:
             self.img = Image.open(path).convert("RGB")
         except Exception as e:
-            messagebox.showwarning("Errore immagine", f"Impossibile aprire:\n{path}\n{e}\nSi passa alla successiva.")
+            messagebox.showwarning("Image error", f"Unable to open:\n{path}\n{e}\nWe move on to the next one.")
             self.idx += 1
             self.show_image()
             return
 
         self.layout_image()
 
-        # ripristina stato se esiste; altrimenti riquadro iniziale
+        # restore state if it exists; otherwise initial pane
         if not self.apply_saved_state(path):
             self.init_rect()
 
@@ -169,7 +185,7 @@ class CropperApp:
         return (cx - w2, cy - h2, cx + w2, cy + h2)
 
     def clamp_rect_to_canvas(self):
-        # Mantieni il rettangolo dentro i bordi del canvas (può uscire dalla FOTO)
+        # Keep the rectangle within the edges of the canvas (it can go outside the PHOTO)
         x1, y1, x2, y2 = self.rect_coords()
         cw, ch = self.canvas_size()
         dx = dy = 0
@@ -180,44 +196,44 @@ class CropperApp:
         cx, cy = self.rect_center
         self.rect_center = (cx + dx, cy + dy)
 
-        # limiti dimensione: almeno 64px di larghezza, massimo canvas mantenendo ratio
-        max_w = min(cw, int(ch * RATIO))
+        # Size limits: at least 64px wide, maximum canvas maintaining ratio
+        max_w = min(cw, int(ch * self.ratio))
         self.rect_w = max(64, min(self.rect_w, max_w))
-        self.rect_h = int(self.rect_w / RATIO)
+        self.rect_h = int(self.rect_w / self.ratio)
 
     def redraw(self):
-        # snap per avere linee dritte (no sub-pixel)
+        # snap to have straight lines (no sub-pixels)
         def snap(v): return int(round(v))
 
         self.canvas.delete("all")
 
-        # immagine
+        # image
         self.canvas.create_image(self.img_off[0], self.img_off[1], anchor="nw", image=self.tk_img)
 
-        # rettangolo di crop
+        # crop rectangle
         x1f, y1f, x2f, y2f = self.rect_coords()
         x1 = snap(x1f); y1 = snap(y1f); x2 = snap(x2f); y2 = snap(y2f)
 
-        # maschera fuori crop
+        # off-crop mask
         w, h = self.canvas_size()
         self.canvas.create_rectangle(0, 0, w, y1, fill="#000", stipple="gray25", width=0)
         self.canvas.create_rectangle(0, y2, w, h, fill="#000", stipple="gray25", width=0)
         self.canvas.create_rectangle(0, y1, x1, y2, fill="#000", stipple="gray25", width=0)
         self.canvas.create_rectangle(x2, y1, w, y2, fill="#000", stipple="gray25", width=0)
 
-        # bordo crop
-        self.canvas.create_rectangle(x1, y1, x2, y2, outline="#00ff88", width=2)
+        # crop edge
+        self.canvas.create_rectangle(x1, y1, x2, y2, outline=CROP_BORDER_COLOR, width=1)
 
-        # griglia (terzi) con linee dritte
+        # grid (thirds) with straight lines
         v1 = snap(x1 + (x2 - x1) / 3.0)
         v2 = snap(x1 + 2 * (x2 - x1) / 3.0)
         h1 = snap(y1 + (y2 - y1) / 3.0)
         h2 = snap(y1 + 2 * (y2 - y1) / 3.0)
         dash_pat = (3, 3)
-        self.canvas.create_line(v1, y1, v1, y2, fill="#00ff88", dash=dash_pat, width=1, capstyle="butt", joinstyle="miter")
-        self.canvas.create_line(v2, y1, v2, y2, fill="#00ff88", dash=dash_pat, width=1, capstyle="butt", joinstyle="miter")
-        self.canvas.create_line(x1, h1, x2, h1, fill="#00ff88", dash=dash_pat, width=1, capstyle="butt", joinstyle="miter")
-        self.canvas.create_line(x1, h2, x2, h2, fill="#00ff88", dash=dash_pat, width=1, capstyle="butt", joinstyle="miter")
+        self.canvas.create_line(v1, y1, v1, y2, fill=CROP_BORDER_COLOR, dash=dash_pat, width=1, capstyle="butt", joinstyle="miter")
+        self.canvas.create_line(v2, y1, v2, y2, fill=CROP_BORDER_COLOR, dash=dash_pat, width=1, capstyle="butt", joinstyle="miter")
+        self.canvas.create_line(x1, h1, x2, h1, fill=CROP_BORDER_COLOR, dash=dash_pat, width=1, capstyle="butt", joinstyle="miter")
+        self.canvas.create_line(x1, h2, x2, h2, fill=CROP_BORDER_COLOR, dash=dash_pat, width=1, capstyle="butt", joinstyle="miter")
 
     # ---------- Mouse ----------
     def on_click(self, e):
@@ -250,13 +266,13 @@ class CropperApp:
         factor = SCALE_FACTOR if direction > 0 else (1 / SCALE_FACTOR)
         self.apply_resize_factor(factor)
 
-    # ---------- Tastiera ----------
+    # ---------- Keyboard ----------
     def on_confirm_tab(self, event):
         self.on_confirm()
-        return "break"  # evita cambio focus di Tab
+        return "break"  # avoid changing Tab focus
 
     def on_arrow(self, e, dx, dy):
-        step = ARROW_STEP_FAST if (e.state & 0x0001) else ARROW_STEP  # Shift accelera
+        step = ARROW_STEP_FAST if (e.state & 0x0001) else ARROW_STEP  # Shift accelerates
         self.rect_center = (self.rect_center[0] + dx*step, self.rect_center[1] + dy*step)
         self.clamp_rect_to_canvas()
         self.redraw()
@@ -304,8 +320,8 @@ class CropperApp:
     # ---------- Coordinate helpers ----------
     def rect_in_image_coords_raw(self):
         """
-        Converte rettangolo (display) -> coordinate immagine ORIGINALE
-        senza clamp: possono essere negative o > size (out-of-bounds).
+        Converts rectangle (display) -> ORIGINAL image coordinates
+        without clamping: they can be negative or > size (out-of-bounds).
         """
         x1d, y1d, x2d, y2d = self.rect_coords()
         ox, oy = self.img_off
@@ -319,19 +335,19 @@ class CropperApp:
     def on_confirm(self, _e=None):
         in_path = self.image_paths[self.idx]
 
-        # 1) coordinate raw (possono uscire dai bordi)
+        # 1) raw coordinates (may go outside the borders)
         x1i, y1i, x2i, y2i = self.rect_in_image_coords_raw()
         if x2i <= x1i or y2i <= y1i:
-            messagebox.showerror("Selezione non valida", "Il riquadro di selezione è vuoto.")
+            messagebox.showerror("Invalid selection", "The selection box is empty.")
             return
 
         sel_w_orig = x2i - x1i
         sel_h_orig = y2i - y1i
         if sel_w_orig <= 1 or sel_h_orig <= 1:
-            messagebox.showerror("Selezione non valida", "Selezione troppo piccola.")
+            messagebox.showerror("Invalid selection", "Selection too small.")
             return
 
-        # 2) intersezione con l'immagine originale
+        # 2) intersection with the original image
         iw, ih = self.img.size
         ix1 = max(0, math.floor(x1i))
         iy1 = max(0, math.floor(y1i))
@@ -342,7 +358,7 @@ class CropperApp:
         sx = TARGET_SIZE[0] / sel_w_orig
         sy = TARGET_SIZE[1] / sel_h_orig
 
-        # 4) base di sfondo (white o blur) + incolla parte nitida se esiste intersezione
+        # 4) background base (white or blur) + paste sharp part if intersection exists
         if ix2 <= ix1 or iy2 <= iy1:
             out = self.background_only(None)
         else:
@@ -368,13 +384,16 @@ class CropperApp:
                 sub = region_scaled.crop((src_x1, src_y1, src_x1 + width, src_y1 + height))
                 out.paste(sub, (dst_x1, dst_y1))
 
-        # 5) salva immagine
+        # 5) save image
         self.save_output(out)
 
-        # 6) salva stato (txt) accanto alla sorgente
+        # 6) save state (txt) next to the source
         self.save_state(in_path, x1i, y1i, x2i, y2i)
 
-        # 7) prossima
+        # 7) convert to 24 bit BMP
+        self.convert_to_bmp(in_path)
+
+        # 8) next image
         self.next_image()
 
     def background_only(self, region_scaled_or_none):
@@ -393,7 +412,7 @@ class CropperApp:
         out_img.save(out_path, format="JPEG", quality=JPEG_QUALITY, optimize=True, progressive=True)
         print(f"Salvato: {out_path}")
 
-    # ---------- Stato persistente ----------
+    # ---------- Persistent state ----------
     def state_path_for_image(self, img_path: str) -> str:
         d = os.path.dirname(img_path)
         b = os.path.splitext(os.path.basename(img_path))[0]
@@ -428,7 +447,8 @@ class CropperApp:
         try:
             with open(path, "w", encoding="utf-8") as f:
                 f.write("\n".join(lines) + "\n")
-            print(f"Stato salvato: {path}")
+            print(f"State saved: {path}")
+            return img_path
         except Exception as e:
             print(f"[WARN] Impossibile salvare stato: {e}")
 
@@ -456,12 +476,17 @@ class CropperApp:
 
         iw, ih = self.img.size
 
-        # riporta fill mode se presente
+        # reports fill mode if present
+        if kv.get("direction") in ("landscape", "portrait"):
+            self.direction = kv["direction"]
+            self.update_mode_label()
+
+        # reports fill mode if present
         if kv.get("fill_mode") in ("white", "blur"):
             self.fill_mode = kv["fill_mode"]
             self.update_mode_label()
 
-        # preferisci coordinate assolute se le dimensioni combaciano
+        # prefer absolute coordinates if the dimensions match
         try:
             saved_w = int(kv.get("image_w", iw))
             saved_h = int(kv.get("image_h", ih))
@@ -480,13 +505,13 @@ class CropperApp:
         if None in (x1i, y1i, x2i, y2i):
             return False
 
-        # converti a display coords
+        # convert to display coordinates
         x1d = self.img_off[0] + int(x1i * self.scale)
         y1d = self.img_off[1] + int(y1i * self.scale)
         x2d = self.img_off[0] + int(x2i * self.scale)
         y2d = self.img_off[1] + int(y2i * self.scale)
 
-        # ricostruisci rettangolo mantenendo ratio fisso
+        # reconstruct rectangle while maintaining a fixed ratio
         w = max(1, x2d - x1d)
         h = int(w / RATIO)
         cx = (x1d + x2d) // 2
