@@ -8,10 +8,10 @@ import subprocess
 
 # ====== CONFIG ======
 TARGET_SIZE = (800, 480)           # exact JPG output
-WINDOW_MIN = (TARGET_SIZE[0]+100, TARGET_SIZE[1]+100)
+WINDOW_MIN = (900, 700)
 RATIO = TARGET_SIZE[0] / TARGET_SIZE[1]
 JPEG_QUALITY = 95
-DIRECTION = "portrait" # landscape | portrait
+DIRECTION = "landscape" # landscape | portrait
 FILL_MODE = "blur" # white | blur
 CONVERT_MODE = "cut" # scale | cut
 CONVERT_DITHER = 3 # NONE(0) or FLOYDSTEINBERG(3)
@@ -22,13 +22,12 @@ ARROW_STEP_FAST = 10                # px with Shift pressed
 SCALE_FACTOR = 1.01                 # zoom step with normal +/-
 SCALE_FACTOR_FAST = 1.10            # zoom step with Shift
 
-EXPORT_FOLDER = "export_photopainter_jpg" # folder where to store cropped images
+EXPORT_FOLDER = "export" # folder where to store cropped images
 EXPORT_FILENAME_SUFFIX = "_pp"
 STATE_SUFFIX = "_ppcrop.txt"        # file status next to the source image
 
 if DIRECTION == "portrait":
     TARGET_SIZE = (TARGET_SIZE[1], TARGET_SIZE[0])
-    WINDOW_MIN = (TARGET_SIZE[1]+100, TARGET_SIZE[0]+100)
     RATIO = TARGET_SIZE[1] / TARGET_SIZE[0]
 
 class CropperApp:
@@ -39,7 +38,7 @@ class CropperApp:
 
         top = tk.Frame(root)
         top.pack(fill=tk.X, side=tk.TOP)
-        self.mode_lbl = tk.Label(top, text="")
+        self.mode_lbl = tk.Label(top, text="") # mode_lbl: top bar
         self.mode_lbl.pack(padx=10, pady=6, anchor="w")
 
         self.canvas = tk.Canvas(root, bg="#111")
@@ -169,6 +168,9 @@ class CropperApp:
         self.img_off = ((cw - disp_w) // 2, (ch - disp_h) // 2)
 
     def init_rect(self):
+        """
+        Initialize crop rectangle
+        """
         dw, dh = self.disp_size
         rw = int(dw * 0.8)
         rh = int(rw / self.ratio)
@@ -297,7 +299,7 @@ class CropperApp:
     def apply_resize_factor(self, factor):
         cw, ch = self.canvas_size()
         max_w = min(cw, int(ch * self.ratio))
-        new_w = int(self.rect_w * factor)
+        new_w = int(self.rect_w * factor) # if self.direction == 'landscape' else int(self.rect_h * factor)
         new_w = max(64, min(new_w, max_w))
         self.rect_w = new_w
         self.rect_h = int(self.rect_w / self.ratio)
@@ -326,6 +328,7 @@ class CropperApp:
 
     def toggle_direction(self, _e=None):
         self.direction = "landscape" if self.direction == "portrait" else "portrait"
+        #self.ratio = TARGET_SIZE[1] / TARGET_SIZE[0] if self.direction == "portrait" else TARGET_SIZE[0] / TARGET_SIZE[1]
         self.update_mode_label()
 
     # ---------- Coordinate helpers ----------

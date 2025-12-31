@@ -88,7 +88,18 @@ pal_image.putpalette( (0,0,0,  255,255,255,  0,255,0,   0,0,255,  255,0,0,  255,
 quantized_image = resized_image.quantize(dither=display_dither, palette=pal_image).convert('RGB')
 
 # Save output image
-output_filename = os.path.splitext(input_filename)[0] + '_' + display_mode + '_' + display_direction + '_output.bmp'
+# output_filename = os.path.splitext(input_filename)[0] + '_' + display_mode + '_' + display_direction + '_output.bmp'
+output_path = os.path.dirname(input_filename) # get path
+output_basename = os.path.basename(input_filename)
+
+os.makedirs(output_path + '/pic', exist_ok=True)
+
+output_filename = output_path + '/pic/' + os.path.splitext(output_basename)[0] + '_' + display_mode + '_' + display_direction + '_output.bmp'
+
+print(f"output_path: {output_path}")
+print(f"output_basename: {output_basename}")
+print(f"output_filename: {output_filename}")
+
 quantized_image.save(output_filename)
 
 print(f'Successfully converted {input_filename} to {output_filename}')
