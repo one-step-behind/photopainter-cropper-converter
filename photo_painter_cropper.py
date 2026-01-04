@@ -96,9 +96,15 @@ class CropperApp:
         self.dragging = False
         self.drag_offset = (0, 0)
 
-        self.load_folder()
+        self.root.after(200, self.delayed_start)
 
     # ---------- UI helpers ----------
+    def delayed_start(self):
+        # ensure window is fully realized
+        self.root.update()
+        self.canvas.focus_set()       # keyboard focus works now
+        self.load_folder()
+
     def update_title(self):
         TS = self.current_target_size()
         self.root.title(f"Photo Painter – Crop {TS[0]}x{TS[1]} (JPG, {self.fill_mode} fill) + state")
