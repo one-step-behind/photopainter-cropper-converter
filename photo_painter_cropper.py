@@ -637,7 +637,7 @@ class CropperApp:
         except Exception:
             return (None, None, None, None)
 
-    # ---------- Avanzamento ----------
+    # ---------- Progress ----------
     def next_image(self):
         self.idx += 1
         self.show_image()
