@@ -138,6 +138,36 @@ class CropperApp:
 
         self.show_image()
 
+    def load_image_with_exif(self, path: str) -> Image:
+        """
+        Loads an image and applies EXIF orientation correction (auto-rotate).
+        Returns an RGB image with correct orientation.
+        """
+        try:
+            im = Image.open(path)
+
+            try:
+                # modern Pillow: .getexif()
+                exif = im.getexif()
+                orientation = exif.get(0x0112, 1)  # EXIF Orientation
+            except Exception:
+                orientation = 1
+
+            # Rotate according to EXIF orientation tag
+            if orientation == 3:
+                im = im.rotate(180, expand=True)
+            elif orientation == 6:
+                im = im.rotate(270, expand=True)  # 90° CW
+            elif orientation == 8:
+                im = im.rotate(90, expand=True)   # 90° CCW
+
+            # Convert only after orientation repair
+            return im.convert("RGB")
+
+        except Exception as e:
+            print("EXIF load/rotation failed:", e)
+            return Image.open(path).convert("RGB")
+
     def show_image(self):
         if self.idx >= len(self.image_paths):
             messagebox.showinfo("Done", "All images have been processed.")
@@ -147,7 +177,8 @@ class CropperApp:
         path = self.image_paths[self.idx]
 
         try:
-            self.img = Image.open(path).convert("RGB")
+            #self.img = Image.open(path).convert("RGB")
+            self.img = self.load_image_with_exif(path) # EXIF auto-rotate
         except Exception as e:
             messagebox.showwarning("Image error", f"Unable to open:\n{path}\n{e}\nWe move on to the next one.")
             self.idx += 1
