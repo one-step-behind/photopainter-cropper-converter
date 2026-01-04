@@ -3,7 +3,7 @@ import math
 import time
 import tkinter as tk
 from tkinter import filedialog, messagebox
-from PIL import Image, ImageTk, ImageFilter
+from PIL import Image, ImageTk, ImageFilter # pyright: ignore[reportMissingImports]
 import subprocess
 
 # ====== CONFIG ======
@@ -79,7 +79,7 @@ class CropperApp:
         self.fill_mode = FILL_MODE
         self.update_mode_label()
 
-        self.img = None
+        self.img: Image = None
         self.disp_img = None
         self.tk_img = None
         self.image_paths = []

@@ -29,7 +29,7 @@ For the waveshare 13.3 inch SPECTRA6 e-paper display, try these flags:
 
 import sys
 import os.path
-from PIL import Image, ImagePalette, ImageOps
+from PIL import Image, ImageOps # pyright: ignore[reportMissingImports]
 import argparse
 
 # CONFIG
