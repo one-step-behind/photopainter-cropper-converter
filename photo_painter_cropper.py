@@ -601,8 +601,10 @@ class CropperApp:
 
         if saved_w == iw and saved_h == ih:
             try:
-                x1i: float = float(kv["rect_x1"]); y1i: float = float(kv["rect_y1"])
-                x2i: float = float(kv["rect_x2"]); y2i: float = float(kv["rect_y2"])
+                x1i: float = float(kv["rect_x1"])
+                y1i: float = float(kv["rect_y1"])
+                x2i: float = float(kv["rect_x2"])
+                y2i: float = float(kv["rect_y2"])
             except Exception:
                 x1i, y1i, x2i, y2i = self._coords_from_normalized(kv, iw, ih)
         else:
@@ -631,8 +633,10 @@ class CropperApp:
 
     def _coords_from_normalized(self, kv, iw: float, ih: float):
         try:
-            nx1 = float(kv["rect_nx1"]); ny1 = float(kv["rect_ny1"])
-            nx2 = float(kv["rect_nx2"]); ny2 = float(kv["rect_ny2"])
+            nx1: float = float(kv["rect_nx1"])
+            ny1: float = float(kv["rect_ny1"])
+            nx2: float = float(kv["rect_nx2"])
+            ny2: float = float(kv["rect_ny2"])
             return (nx1 * iw, ny1 * ih, nx2 * iw, ny2 * ih)
         except Exception:
             return (None, None, None, None)
