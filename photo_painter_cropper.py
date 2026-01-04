@@ -8,7 +8,7 @@ import subprocess
 
 # ====== CONFIG ======
 TARGET_SIZE = (800, 480)           # exact JPG output
-WINDOW_MIN = (900, 700)
+WINDOW_MIN = (TARGET_SIZE[0] + 100, TARGET_SIZE[1] + 100)
 RATIO = TARGET_SIZE[0] / TARGET_SIZE[1]
 JPEG_QUALITY = 95
 DIRECTION = "landscape" # landscape | portrait
@@ -22,18 +22,14 @@ ARROW_STEP_FAST = 10                # px with Shift pressed
 SCALE_FACTOR = 1.01                 # zoom step with normal +/-
 SCALE_FACTOR_FAST = 1.10            # zoom step with Shift
 
-EXPORT_FOLDER = "export" # folder where to store cropped images
+EXPORT_FOLDER = "cropped" # folder where to store cropped images
 EXPORT_FILENAME_SUFFIX = "_pp"
 STATE_SUFFIX = "_ppcrop.txt"        # file status next to the source image
-
-if DIRECTION == "portrait":
-    TARGET_SIZE = (TARGET_SIZE[1], TARGET_SIZE[0])
-    RATIO = TARGET_SIZE[1] / TARGET_SIZE[0]
 
 class CropperApp:
     def __init__(self, root):
         self.root = root
-        self.root.title(f"Photo Painter – Crop {TARGET_SIZE[0]}x{TARGET_SIZE[1]} (JPG, white/blur fill) + state")
+        #self.root.title(f"Photo Painter – Crop {TARGET_SIZE[0]}x{TARGET_SIZE[1]} (JPG, white/blur fill) + state")
         self.root.minsize(*WINDOW_MIN)
 
         top = tk.Frame(root)
@@ -103,6 +99,10 @@ class CropperApp:
         self.load_folder()
 
     # ---------- UI helpers ----------
+    def update_title(self):
+        TS = self.current_target_size()
+        self.root.title(f"Photo Painter – Crop {TS[0]}x{TS[1]} (JPG, {self.fill_mode} fill) + state")
+
     def update_mode_label(self):
         fill_label_value = "WHITE" if self.fill_mode == "white" else "BLUR"
         direction_label_value = "PORTRAIT" if self.direction == "portrait" else "LANDSCAPE"
@@ -114,18 +114,22 @@ class CropperApp:
 
     # ---------- File loading ----------
     def load_folder(self):
-        folder = filedialog.askdirectory(title="Select folder with photos")
+        folder = filedialog.askdirectory(title="Select source folder with photos")
+
         if not folder:
             self.root.after(50, self.root.quit)
             return
+
         self.image_paths = [
             os.path.join(folder, f) for f in sorted(os.listdir(folder))
             if f.lower().endswith((".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"))
         ]
+
         if not self.image_paths:
             messagebox.showerror("No image", "The folder contains no images.")
             self.root.after(50, self.root.quit)
             return
+
         self.show_image()
 
     def show_image(self):
@@ -135,6 +139,7 @@ class CropperApp:
             return
 
         path = self.image_paths[self.idx]
+
         try:
             self.img = Image.open(path).convert("RGB")
         except Exception as e:
@@ -149,12 +154,17 @@ class CropperApp:
         if not self.apply_saved_state(path):
             self.init_rect()
 
+        self.update_title() # after loading state
         self.redraw()
 
     # ---------- Layout & Drawing ----------
+#    def canvas_size(self):
+#        return (max(self.canvas.winfo_width(), WINDOW_MIN[0]),
+#                max(self.canvas.winfo_height(), WINDOW_MIN[1]))
+
     def canvas_size(self):
-        return (max(self.canvas.winfo_width(), WINDOW_MIN[0]),
-                max(self.canvas.winfo_height(), WINDOW_MIN[1]))
+        # Return REAL canvas size (never force minimum)
+        return (self.canvas.winfo_width(), self.canvas.winfo_height())
 
     def layout_image(self):
         cw, ch = self.canvas_size()
@@ -187,7 +197,7 @@ class CropperApp:
         cx, cy = self.rect_center
         w2 = self.rect_w // 2
         h2 = self.rect_h // 2
-        print((cx - w2, cy - h2, cx + w2, cy + h2))
+        #print((cx - w2, cy - h2, cx + w2, cy + h2))
         return (cx - w2, cy - h2, cx + w2, cy + h2)
 
     def clamp_rect_to_canvas(self):
@@ -327,9 +337,44 @@ class CropperApp:
         self.update_mode_label()
 
     def toggle_direction(self, _e=None):
-        self.direction = "landscape" if self.direction == "portrait" else "portrait"
-        #self.ratio = TARGET_SIZE[1] / TARGET_SIZE[0] if self.direction == "portrait" else TARGET_SIZE[0] / TARGET_SIZE[1]
+        # Switch internal state
+        self.direction = "portrait" if self.direction == "landscape" else "landscape"
+
+        # Update ratio for new direction
+        if self.direction == "portrait":
+            self.ratio = TARGET_SIZE[1] / TARGET_SIZE[0]
+        else:
+            self.ratio = TARGET_SIZE[0] / TARGET_SIZE[1]
+
+        # Resize crop rect to respect the new ratio
+        old_h = self.rect_h  # preserve height (stable dimension)
+        new_w = int(old_h * self.ratio)
+        new_h = old_h
+
+        # Clamp to canvas
+        cw, ch = self.canvas_size()
+        
+        # If new width is too large → shrink using height
+        if new_w > cw:
+            new_w = int(cw * 0.8)
+            new_h = int(new_w / self.ratio)
+
+        # If new height too large → shrink using width
+        if new_h > ch:
+            new_h = int(ch * 0.8)
+            new_w = int(new_h * self.ratio)
+
+        # Apply new dims
+        self.rect_w = new_w
+        self.rect_h = new_h
+
+        # Keep centered and inside canvas
+        self.clamp_rect_to_canvas()
+
+        # Update title + label + redraw
+        self.update_title()
         self.update_mode_label()
+        self.redraw()
 
     # ---------- Coordinate helpers ----------
     def rect_in_image_coords_raw(self):
@@ -369,8 +414,9 @@ class CropperApp:
         iy2 = min(ih, math.ceil(y2i))
 
         # 3) scala orig->target
-        sx = TARGET_SIZE[0] / sel_w_orig
-        sy = TARGET_SIZE[1] / sel_h_orig
+        TS = self.current_target_size()
+        sx = TS[0] / sel_w_orig
+        sy = TS[1] / sel_h_orig
 
         # 4) background base (white or blur) + paste sharp part if intersection exists
         if ix2 <= ix1 or iy2 <= iy1:
@@ -391,8 +437,8 @@ class CropperApp:
             dst_x1 = max(0, dx_tgt)
             dst_y1 = max(0, dy_tgt)
 
-            width  = min(TARGET_SIZE[0] - dst_x1, region_scaled.width  - src_x1)
-            height = min(TARGET_SIZE[1] - dst_y1, region_scaled.height - src_y1)
+            width  = min(TS[0] - dst_x1, region_scaled.width  - src_x1)
+            height = min(TS[1] - dst_y1, region_scaled.height - src_y1)
 
             if width > 0 and height > 0:
                 sub = region_scaled.crop((src_x1, src_y1, src_x1 + width, src_y1 + height))
@@ -410,18 +456,29 @@ class CropperApp:
         # 8) next image
         self.next_image()
 
-    def background_only(self, region_scaled_or_none):
-        if self.fill_mode == "white" or region_scaled_or_none is None:
-            return Image.new("RGB", TARGET_SIZE, "white")
+    def current_target_size(self):
+        if self.direction == "landscape":
+            return TARGET_SIZE
         else:
-            base = region_scaled_or_none.resize(TARGET_SIZE, Image.LANCZOS)
+            return (TARGET_SIZE[1], TARGET_SIZE[0])
+
+    def export_folder_with_direction(self):
+        return EXPORT_FOLDER + '_' + self.direction
+    
+    def background_only(self, region_scaled_or_none):
+        TS = self.current_target_size()
+
+        if self.fill_mode == "white" or region_scaled_or_none is None:
+            return Image.new("RGB", TS, "white")
+        else:
+            base = region_scaled_or_none.resize(TS, Image.LANCZOS)
             return base.filter(ImageFilter.GaussianBlur(radius=25))
 
     def save_output(self, out_img):
         print(f"Source: {self.image_paths[self.idx]}")
         in_path = self.image_paths[self.idx]
         base = os.path.splitext(os.path.basename(in_path))[0]
-        out_dir = os.path.join(os.path.dirname(in_path), f"{EXPORT_FOLDER}")
+        out_dir = os.path.join(os.path.dirname(in_path), f"{self.export_folder_with_direction()}")
         os.makedirs(out_dir, exist_ok=True)
         out_path = os.path.join(out_dir, f"{base}{EXPORT_FILENAME_SUFFIX}_{self.direction}.jpg")
         out_img.save(out_path, format="JPEG", quality=JPEG_QUALITY, optimize=True, progressive=True)
@@ -429,9 +486,9 @@ class CropperApp:
 
     # ---------- Persistent state ----------
     def state_path_for_image(self, img_path: str) -> str:
-        d = os.path.dirname(img_path)
-        b = os.path.splitext(os.path.basename(img_path))[0]
-        return os.path.join(d, f"{b}{STATE_SUFFIX}")
+        dirname = os.path.dirname(img_path)
+        basename = os.path.splitext(os.path.basename(img_path))[0]
+        return os.path.join(dirname, f"{basename}{STATE_SUFFIX}")
 
     def save_state(self, img_path: str, x1i: int, y1i: int, x2i: int, y2i: int):
         iw, ih = self.img.size
@@ -470,13 +527,20 @@ class CropperApp:
 
     def convert_to_bmp(self, in_path: str):
         base = os.path.splitext(os.path.basename(in_path))[0]
-        out_dir = os.path.join(os.path.dirname(in_path), f"{EXPORT_FOLDER}")
+        out_dir = os.path.join(os.path.dirname(in_path), f"{self.export_folder_with_direction()}")
         out_path = os.path.join(out_dir, f"{base}{EXPORT_FILENAME_SUFFIX}_{self.direction}.jpg").replace('\\', '/') # complete source path & file of cropped image for convert
-        # Execute called script with the arguments
+        # Execute called script with arguments
         os.system(f'python convert.py --dir {self.direction} --mode {CONVERT_MODE} --dither {CONVERT_DITHER} "{out_path}"')
         print(f"- - -")
 
     def load_kv(self, path: str):
+        """
+        loads crops state from sidecar file
+        
+        :param self: Beschreibung
+        :param path: state_path_for_image
+        :type path: str
+        """
         data = {}
         try:
             with open(path, "r", encoding="utf-8") as f:
@@ -492,17 +556,29 @@ class CropperApp:
 
     def apply_saved_state(self, img_path: str) -> bool:
         kv_path = self.state_path_for_image(img_path)
+
         if not os.path.exists(kv_path):
             return False
+
         kv = self.load_kv(kv_path)
+
         if not kv:
             return False
 
         iw, ih = self.img.size
 
-        # reports fill mode if present
+        # reports direction if present
         if kv.get("direction") in ("landscape", "portrait"):
+            # 1) apply direction from state file
             self.direction = kv["direction"]
+
+            # 2) update aspect ratio immediately
+            if self.direction == "portrait":
+                self.ratio = TARGET_SIZE[1] / TARGET_SIZE[0]
+            else:
+                self.ratio = TARGET_SIZE[0] / TARGET_SIZE[1]
+
+            # 3) update label
             self.update_mode_label()
 
         # reports fill mode if present
@@ -561,6 +637,7 @@ class CropperApp:
         self.show_image()
 
     def on_skip(self, _e=None):
+        print(f"skipped: {self.image_paths[self.idx]}")
         self.next_image()
 
 if __name__ == "__main__":
