@@ -339,13 +339,16 @@ class CropperApp:
         self.dragging = False
 
     def on_wheel(self, e):
-        self.resize_rect_mouse(1 if e.delta > 0 else -1)
+        fast = bool(e.state & 0x0001)  # Shift
+        self.resize_rect_mouse(1 if e.delta > 0 else -1, fast)
 
     def on_wheel_linux(self, e):
-        self.resize_rect_mouse(1 if e.num == 4 else -1)
+        fast = bool(e.state & 0x0001)  # Shift
+        self.resize_rect_mouse(1 if e.num == 4 else -1, fast)
 
-    def resize_rect_mouse(self, direction):
-        factor = SCALE_FACTOR if direction > 0 else (1 / SCALE_FACTOR)
+    def resize_rect_mouse(self, direction, fast):
+        speed = SCALE_FACTOR_FAST if fast else SCALE_FACTOR
+        factor = speed if direction > 0 else (1 / speed)
         self.apply_resize_factor(factor)
 
     # ---------- Keyboard ----------
