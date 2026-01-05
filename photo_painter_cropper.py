@@ -50,9 +50,9 @@ class CropperApp:
 
         # Keyboard (confirm)
         self.root.bind("<Return>", self.on_confirm)
-        self.root.bind_all("<Tab>", self.on_confirm_tab)    # Tab intercept (prevent focus change)
-        self.root.bind("<a>", self.on_confirm)
-        self.root.bind("<A>", self.on_confirm)
+        #self.root.bind_all("<Tab>", self.on_confirm_tab)    # Tab intercept (prevent focus change)
+        self.root.bind("<s>", self.on_confirm)
+        self.root.bind("<S>", self.on_confirm)
         self.root.bind("<Escape>", self.on_skip)
 
         # Keyboard (movement)
@@ -89,6 +89,7 @@ class CropperApp:
         self.img_off = (0, 0)
         self.disp_size = (0, 0)
 
+        self.target_size = TARGET_SIZE  # will be updated dynamically
         self.ratio = RATIO
         self.rect_w = 0
         self.rect_h = 0
@@ -115,7 +116,7 @@ class CropperApp:
         self.mode_lbl.config(text=(
             f"Fill mode: {fill_label_value} (F)  •  "
             f"Direction: {direction_label_value} (D)  •  "
-            "Arrows=move (Shift=+fast)  •  +/-=resize (Shift=+fast)  •  Enter/Tab/A=save  •  Esc=skip"
+            "Arrows=move (Shift=+fast)  •  +/-=resize (Shift=+fast)  •  Enter/S=save  •  Esc=skip"
         ))
 
     # ---------- File loading ----------
