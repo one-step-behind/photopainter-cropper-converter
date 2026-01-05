@@ -661,8 +661,11 @@ class CropperApp:
         y2d = self.img_off[1] + int(y2i * self.scale)
 
         # reconstruct rectangle while maintaining a fixed ratio
-        w = max(1, x2d - x1d)
-        h = int(w / self.ratio)
+        w = x2d - x1d
+        h = y2d - y1d
+        # ensure based on ratio
+        if abs(w / h - self.ratio) > 0.001:
+            h = int(w / self.ratio)
         cx = (x1d + x2d) // 2
         cy = (y1d + y2d) // 2
 
