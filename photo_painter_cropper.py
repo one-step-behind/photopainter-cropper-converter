@@ -16,6 +16,7 @@ FILL_MODE = "blur" # white | blur
 CONVERT_MODE = "cut" # scale | cut
 CONVERT_DITHER = 3 # NONE(0) or FLOYDSTEINBERG(3)
 CROP_BORDER_COLOR = "#00ff88"
+APP_TITLE = "PhotoPainterCropper"
 
 ARROW_STEP = 1                      # px for step with arrows
 ARROW_STEP_FAST = 10                # px with Shift pressed
@@ -30,7 +31,7 @@ class CropperApp:
     def __init__(self, root):
         self._resize_pending = False
         self.root = root
-        #self.root.title(f"Photo Painter – Crop {TARGET_SIZE[0]}x{TARGET_SIZE[1]} (JPG, white/blur fill) + state")
+        self.root.title(f"{APP_TITLE}")
         self.root.minsize(*WINDOW_MIN)
 
         top = tk.Frame(root)
@@ -78,7 +79,6 @@ class CropperApp:
         # State
         self.direction = DIRECTION
         self.fill_mode = FILL_MODE
-        self.update_mode_label()
 
         self.img: Image = None
         self.disp_img = None
