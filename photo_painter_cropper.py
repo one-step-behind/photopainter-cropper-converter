@@ -198,10 +198,6 @@ class CropperApp:
             return Image.open(path).convert("RGB")
 
     # ---------- Layout & Drawing ----------
-#    def canvas_size(self):
-#        return (max(self.canvas.winfo_width(), WINDOW_MIN[0]),
-#                max(self.canvas.winfo_height(), WINDOW_MIN[1]))
-
     def canvas_size(self):
         # Return REAL canvas size (never force minimum)
         return (self.canvas.winfo_width(), self.canvas.winfo_height())
