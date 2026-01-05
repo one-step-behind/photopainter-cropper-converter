@@ -63,6 +63,8 @@ class CropperApp:
         #self.root.bind_all("<Tab>", self.on_confirm_tab)    # Tab intercept (prevent focus change)
         self.root.bind("<s>", self.on_confirm)
         self.root.bind("<S>", self.on_confirm)
+        self.root.bind("<Prior>", self.prev_image) # PAGE UP
+        self.root.bind("<Next>", self.next_image) # PAGE DOWN
         self.root.bind("<Escape>", self.on_skip)
 
         # Keyboard (movement)
@@ -123,9 +125,13 @@ class CropperApp:
         fill_label_value = "WHITE" if self.fill_mode == "white" else "BLUR"
         direction_label_value = "PORTRAIT" if self.direction == "portrait" else "LANDSCAPE"
         self.mode_lbl.config(text=(
-            f"Fill mode: {fill_label_value} (F)  •  "
-            f"Direction: {direction_label_value} (D)  •  "
-            "Arrows=move (Shift=+fast)  •  +/-=resize (Shift=+fast)  •  Enter/S=save  •  Esc=skip"
+            f"Fill mode (F): {fill_label_value}  •  "
+            f"Direction (D): {direction_label_value}  •  "
+            "Mouse drag/Arrows=move (Shift=+fast)  •  "
+            "Mouse scroll/+/-=resize (Shift=+fast)  •  "
+            "Enter/S=process  •  "
+            "Esc=skip  •  "
+            "PGUP/DOWN=prev/next"
         ))
 
     def set_status(self, msg):
@@ -718,8 +724,12 @@ class CropperApp:
             return (None, None, None, None)
 
     # ---------- Progress ----------
-    def next_image(self):
+    def next_image(self, _e=None):
         self.idx += 1
+        self.show_image()
+
+    def prev_image(self, _e=None):
+        self.idx -= 1
         self.show_image()
 
     def on_skip(self, _e=None):
