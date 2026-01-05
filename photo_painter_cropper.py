@@ -11,7 +11,7 @@ from PIL import Image, ImageTk, ImageFilter # pyright: ignore[reportMissingImpor
 # ====== CONFIG ======
 DEFAULT_TARGET_SIZE = (800, 480)           # exact JPG output
 DEFAULT_RATIO = DEFAULT_TARGET_SIZE[0] / DEFAULT_TARGET_SIZE[1]
-WINDOW_MIN = (DEFAULT_TARGET_SIZE[0] + 100, DEFAULT_TARGET_SIZE[1] + 100)
+WINDOW_MIN = (1024, 768)
 JPEG_QUALITY = 90
 DIRECTION = "landscape" # landscape | portrait
 FILL_MODE = "blur" # white | blur
@@ -127,8 +127,8 @@ class CropperApp:
         self.mode_lbl.config(text=(
             f"Fill mode (F): {fill_label_value}  •  "
             f"Direction (D): {direction_label_value}  •  "
-            "Mouse drag/Arrows=move (Shift=+fast)  •  "
-            "Mouse scroll/+/-=resize (Shift=+fast)  •  "
+            "Drag/Arrows=move (Shift=+fast)  •  "
+            "Scroll/+/-=resize (Shift=+fast)  •  "
             "Enter/S=process  •  "
             "Esc=skip  •  "
             "PGUP/DOWN=prev/next"
