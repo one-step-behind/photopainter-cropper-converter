@@ -60,7 +60,7 @@ class CropperApp:
 
         # Keyboard (confirm)
         self.root.bind("<Return>", self.on_confirm)
-        #self.root.bind_all("<Tab>", self.on_confirm_tab)    # Tab intercept (prevent focus change)
+        self.root.bind_all("<Tab>", self.on_confirm_tab)    # Tab intercept (prevent focus change)
         self.root.bind("<s>", self.on_confirm)
         self.root.bind("<S>", self.on_confirm)
         self.root.bind("<Prior>", self.prev_image) # PAGE UP
@@ -190,7 +190,7 @@ class CropperApp:
 
         self.update_mode_label()
         self.update_title() # after loading state
-        self.redraw()
+        self.draw_crop_marker_grid()
         self.set_status(f"Loaded: {path}")
 
     def load_image_with_exif(self, path: str) -> Image:
@@ -259,7 +259,7 @@ class CropperApp:
         cx, cy = self.rect_center
         w2 = self.rect_w // 2
         h2 = self.rect_h // 2
-        #print((cx - w2, cy - h2, cx + w2, cy + h2))
+
         return (cx - w2, cy - h2, cx + w2, cy + h2)
 
     def clamp_rect_to_canvas(self):
@@ -279,11 +279,11 @@ class CropperApp:
         self.rect_w = max(64, min(self.rect_w, max_w))
         self.rect_h = int(self.rect_w / self.ratio)
 
-    def redraw(self):
+    def draw_crop_marker_grid(self):
         # snap to have straight lines (no sub-pixels)
         def snap(v): return int(round(v))
 
-        self.canvas.delete("all")
+        self.canvas.delete("all") # remove previous grid
 
         # image
         self.canvas.create_image(self.img_off[0], self.img_off[1], anchor="nw", image=self.tk_img)
@@ -325,14 +325,15 @@ class CropperApp:
         else:
             self.rect_center = (e.x, e.y)
             self.clamp_rect_to_canvas()
-            self.redraw()
+            self.draw_crop_marker_grid()
 
     def on_drag(self, e):
         if not self.dragging:
             return
+
         self.rect_center = (e.x - self.drag_offset[0], e.y - self.drag_offset[1])
         self.clamp_rect_to_canvas()
-        self.redraw()
+        self.draw_crop_marker_grid()
 
     def on_release(self, _e):
         self.dragging = False
@@ -348,15 +349,16 @@ class CropperApp:
         self.apply_resize_factor(factor)
 
     # ---------- Keyboard ----------
-    def on_confirm_tab(self, event):
-        self.on_confirm()
+    def on_confirm_tab(self):
+        self.next_image()
+
         return "break"  # avoid changing Tab focus
 
     def on_arrow(self, e, dx, dy):
         step = ARROW_STEP_FAST if (e.state & 0x0001) else ARROW_STEP  # Shift accelerates
         self.rect_center = (self.rect_center[0] + dx*step, self.rect_center[1] + dy*step)
         self.clamp_rect_to_canvas()
-        self.redraw()
+        self.draw_crop_marker_grid()
 
     def on_plus(self, e):
         fast = bool(e.state & 0x0001)  # Shift
@@ -371,12 +373,12 @@ class CropperApp:
     def apply_resize_factor(self, factor):
         cw, ch = self.canvas_size()
         max_w = min(cw, int(ch * self.ratio))
-        new_w = int(self.rect_w * factor) # if self.direction == 'landscape' else int(self.rect_h * factor)
+        new_w = int(self.rect_w * factor)
         new_w = max(64, min(new_w, max_w))
         self.rect_w = new_w
         self.rect_h = int(self.rect_w / self.ratio)
         self.clamp_rect_to_canvas()
-        self.redraw()
+        self.draw_crop_marker_grid()
 
     def on_resize(self, _e):
         if self.img is None:
@@ -405,7 +407,7 @@ class CropperApp:
         self.rect_h = int(self.rect_w / self.ratio)
         self.rect_center = ((x1d + x2d)//2, (y1d + y2d)//2)
         self.clamp_rect_to_canvas()
-        self.redraw()
+        self.draw_crop_marker_grid()
 
     def toggle_fill(self, _e=None):
         self.fill_mode = "blur" if self.fill_mode == "white" else "white"
@@ -446,7 +448,7 @@ class CropperApp:
         # Update title + label + redraw
         self.update_title()
         self.update_mode_label()
-        self.redraw()
+        self.draw_crop_marker_grid()
 
     def update_targetsize_and_ratio(self):
         if self.direction == "portrait":
