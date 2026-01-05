@@ -28,6 +28,7 @@ STATE_SUFFIX = "_ppcrop.txt"        # file status next to the source image
 
 class CropperApp:
     def __init__(self, root):
+        self._resize_pending = False
         self.root = root
         #self.root.title(f"Photo Painter – Crop {TARGET_SIZE[0]}x{TARGET_SIZE[1]} (JPG, white/blur fill) + state")
         self.root.minsize(*WINDOW_MIN)
@@ -357,6 +358,19 @@ class CropperApp:
     def on_resize(self, _e):
         if self.img is None:
             return
+
+        if self._resize_pending:
+            return
+
+        self._resize_pending = True
+        self.root.after(30, self._apply_resize)
+
+    def _apply_resize(self):
+        self._resize_pending = False
+
+        if self.img is None:
+            return
+        
         rect_img_raw = self.rect_in_image_coords_raw()
         self.layout_image()
         x1i, y1i, x2i, y2i = rect_img_raw
