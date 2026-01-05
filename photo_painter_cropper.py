@@ -9,10 +9,10 @@ from tkinter import filedialog, messagebox
 from PIL import Image, ImageTk, ImageFilter # pyright: ignore[reportMissingImports]
 
 # ====== CONFIG ======
-TARGET_SIZE = (800, 480)           # exact JPG output
-WINDOW_MIN = (TARGET_SIZE[0] + 100, TARGET_SIZE[1] + 100)
-RATIO = TARGET_SIZE[0] / TARGET_SIZE[1]
-JPEG_QUALITY = 95
+DEFAULT_TARGET_SIZE = (800, 480)           # exact JPG output
+DEFAULT_RATIO = DEFAULT_TARGET_SIZE[0] / DEFAULT_TARGET_SIZE[1]
+WINDOW_MIN = (DEFAULT_TARGET_SIZE[0] + 100, DEFAULT_TARGET_SIZE[1] + 100)
+JPEG_QUALITY = 90
 DIRECTION = "landscape" # landscape | portrait
 FILL_MODE = "blur" # white | blur
 CONVERT_MODE = "cut" # scale | cut
@@ -100,8 +100,8 @@ class CropperApp:
         self.img_off = (0, 0)
         self.disp_size = (0, 0)
 
-        self.target_size = TARGET_SIZE  # will be updated dynamically
-        self.ratio = RATIO
+        self.target_size = DEFAULT_TARGET_SIZE  # will be updated dynamically
+        self.ratio = DEFAULT_RATIO
         self.rect_w = 0
         self.rect_h = 0
         self.rect_center = (0, 0)
@@ -450,11 +450,11 @@ class CropperApp:
 
     def update_targetsize_and_ratio(self):
         if self.direction == "portrait":
-            self.ratio = TARGET_SIZE[1] / TARGET_SIZE[0]
-            self.target_size = (TARGET_SIZE[1], TARGET_SIZE[0])
+            self.ratio = DEFAULT_TARGET_SIZE[1] / DEFAULT_TARGET_SIZE[0]
+            self.target_size = (DEFAULT_TARGET_SIZE[1], DEFAULT_TARGET_SIZE[0])
         else:
-            self.ratio = TARGET_SIZE[0] / TARGET_SIZE[1]
-            self.target_size = TARGET_SIZE
+            self.ratio = DEFAULT_TARGET_SIZE[0] / DEFAULT_TARGET_SIZE[1]
+            self.target_size = DEFAULT_TARGET_SIZE
 
     # ---------- Coordinate helpers ----------
     def rect_in_image_coords_raw(self):
@@ -581,8 +581,8 @@ class CropperApp:
             f"rect_ny1={ny1:.6f}",
             f"rect_nx2={nx2:.6f}",
             f"rect_ny2={ny2:.6f}",
-            f"target_w={TARGET_SIZE[0]}",
-            f"target_h={TARGET_SIZE[1]}",
+            f"target_w={self.target_size[0]}",
+            f"target_h={self.target_size[1]}",
             f"ratio={self.ratio:.6f}",
             f"fill_mode={self.fill_mode}",
             f"direction={self.direction}",
