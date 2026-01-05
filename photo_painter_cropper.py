@@ -108,8 +108,8 @@ class CropperApp:
         self.load_folder()
 
     def update_title(self):
-        TS = self.current_target_size()
-        self.root.title(f"Photo Painter – Crop {TS[0]}x{TS[1]} (JPG, {self.fill_mode} fill) + state")
+        w, h = self.target_size
+        self.root.title(f"{APP_TITLE} – Crop {w}x{h} (JPG, {self.fill_mode} fill) + state")
 
     def update_mode_label(self):
         fill_label_value = "WHITE" if self.fill_mode == "white" else "BLUR"
@@ -140,6 +140,33 @@ class CropperApp:
 
         self.show_image()
 
+    def show_image(self):
+        if self.idx >= len(self.image_paths):
+            messagebox.showinfo("Done", "All images have been processed.")
+            self.root.after(50, self.root.quit)
+            return
+
+        path = self.image_paths[self.idx]
+
+        try:
+            #self.img = Image.open(path).convert("RGB")
+            self.img = self.load_image_with_exif(path) # EXIF auto-rotate
+        except Exception as e:
+            messagebox.showwarning("Image error", f"Unable to open:\n{path}\n{e}\nWe move on to the next one.")
+            self.idx += 1
+            self.show_image()
+            return
+
+        self.layout_image()
+
+        # restore state if it exists; otherwise initial pane
+        if not self.apply_saved_state(path):
+            self.init_rect()
+
+        self.update_mode_label()
+        self.update_title() # after loading state
+        self.redraw()
+
     def load_image_with_exif(self, path: str) -> Image:
         """
         Loads an image and applies EXIF orientation correction (auto-rotate).
@@ -169,32 +196,6 @@ class CropperApp:
         except Exception as e:
             print("EXIF load/rotation failed:", e)
             return Image.open(path).convert("RGB")
-
-    def show_image(self):
-        if self.idx >= len(self.image_paths):
-            messagebox.showinfo("Done", "All images have been processed.")
-            self.root.after(50, self.root.quit)
-            return
-
-        path = self.image_paths[self.idx]
-
-        try:
-            #self.img = Image.open(path).convert("RGB")
-            self.img = self.load_image_with_exif(path) # EXIF auto-rotate
-        except Exception as e:
-            messagebox.showwarning("Image error", f"Unable to open:\n{path}\n{e}\nWe move on to the next one.")
-            self.idx += 1
-            self.show_image()
-            return
-
-        self.layout_image()
-
-        # restore state if it exists; otherwise initial pane
-        if not self.apply_saved_state(path):
-            self.init_rect()
-
-        self.update_title() # after loading state
-        self.redraw()
 
     # ---------- Layout & Drawing ----------
 #    def canvas_size(self):
@@ -392,11 +393,8 @@ class CropperApp:
         # Switch internal state
         self.direction = "portrait" if self.direction == "landscape" else "landscape"
 
-        # Update ratio for new direction
-        if self.direction == "portrait":
-            self.ratio = TARGET_SIZE[1] / TARGET_SIZE[0]
-        else:
-            self.ratio = TARGET_SIZE[0] / TARGET_SIZE[1]
+        # Update target_size and ratio for new direction
+        self.update_targetsize_and_ratio()
 
         # Resize crop rect to respect the new ratio
         old_h = self.rect_h  # preserve height (stable dimension)
@@ -427,6 +425,14 @@ class CropperApp:
         self.update_title()
         self.update_mode_label()
         self.redraw()
+
+    def update_targetsize_and_ratio(self):
+        if self.direction == "portrait":
+            self.ratio = TARGET_SIZE[1] / TARGET_SIZE[0]
+            self.target_size = (TARGET_SIZE[1], TARGET_SIZE[0])
+        else:
+            self.ratio = TARGET_SIZE[0] / TARGET_SIZE[1]
+            self.target_size = TARGET_SIZE
 
     # ---------- Coordinate helpers ----------
     def rect_in_image_coords_raw(self):
@@ -466,9 +472,8 @@ class CropperApp:
         iy2 = min(ih, math.ceil(y2i))
 
         # 3) scala orig->target
-        TS = self.current_target_size()
-        sx = TS[0] / sel_w_orig
-        sy = TS[1] / sel_h_orig
+        sx = self.target_size[0] / sel_w_orig
+        sy = self.target_size[1] / sel_h_orig
 
         # 4) background base (white or blur) + paste sharp part if intersection exists
         if ix2 <= ix1 or iy2 <= iy1:
@@ -489,8 +494,8 @@ class CropperApp:
             dst_x1 = max(0, dx_tgt)
             dst_y1 = max(0, dy_tgt)
 
-            width  = min(TS[0] - dst_x1, region_scaled.width  - src_x1)
-            height = min(TS[1] - dst_y1, region_scaled.height - src_y1)
+            width  = min(self.target_size[0] - dst_x1, region_scaled.width  - src_x1)
+            height = min(self.target_size[1] - dst_y1, region_scaled.height - src_y1)
 
             if width > 0 and height > 0:
                 sub = region_scaled.crop((src_x1, src_y1, src_x1 + width, src_y1 + height))
@@ -508,22 +513,14 @@ class CropperApp:
         # 8) next image
         self.next_image()
 
-    def current_target_size(self):
-        if self.direction == "landscape":
-            return TARGET_SIZE
-        else:
-            return (TARGET_SIZE[1], TARGET_SIZE[0])
-
     def export_folder_with_direction(self):
         return EXPORT_FOLDER + '_' + self.direction
     
     def background_only(self, region_scaled_or_none):
-        TS = self.current_target_size()
-
         if self.fill_mode == "white" or region_scaled_or_none is None:
-            return Image.new("RGB", TS, "white")
+            return Image.new("RGB", self.target_size, "white")
         else:
-            base = region_scaled_or_none.resize(TS, Image.LANCZOS)
+            base = region_scaled_or_none.resize(self.target_size, Image.LANCZOS)
             return base.filter(ImageFilter.GaussianBlur(radius=25))
 
     def save_output(self, out_img):
@@ -624,11 +621,9 @@ class CropperApp:
             # 1) apply direction from state file
             self.direction = kv["direction"]
 
-            # 2) update aspect ratio immediately
-            if self.direction == "portrait":
-                self.ratio = TARGET_SIZE[1] / TARGET_SIZE[0]
-            else:
-                self.ratio = TARGET_SIZE[0] / TARGET_SIZE[1]
+
+            # 2) Update target_size and ratio for new direction
+            self.update_targetsize_and_ratio()
 
             # 3) update label
             self.update_mode_label()
