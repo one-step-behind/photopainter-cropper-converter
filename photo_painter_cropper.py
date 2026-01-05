@@ -1,10 +1,12 @@
+#encoding: utf-8
+#!/usr/bin/env python3
+
 import os
 import math
 import time
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from PIL import Image, ImageTk, ImageFilter # pyright: ignore[reportMissingImports]
-import subprocess
 
 # ====== CONFIG ======
 TARGET_SIZE = (800, 480)           # exact JPG output
@@ -26,6 +28,8 @@ SCALE_FACTOR_FAST = 1.10            # zoom step with Shift
 EXPORT_FOLDER = "cropped" # folder where to store cropped images
 EXPORT_FILENAME_SUFFIX = "_pp"
 STATE_SUFFIX = "_ppcrop.txt"        # file status next to the source image
+CONVERT_FOLDER = "pic" # folder where to store converted images
+DEVICE_FOLDER = "device" # folder where to store real-world RGB to device RGB images
 
 class CropperApp:
     def __init__(self, root):
@@ -33,6 +37,10 @@ class CropperApp:
         self.root = root
         self.root.title(f"{APP_TITLE}")
         self.root.minsize(*WINDOW_MIN)
+
+        self.status_var = tk.StringVar(value="")
+        self.status_label = tk.Label(self.root, textvariable=self.status_var, anchor="w")
+        self.status_label.pack(fill="x", side="bottom")
 
         top = tk.Frame(root)
         top.pack(fill=tk.X, side=tk.TOP)
@@ -120,6 +128,17 @@ class CropperApp:
             "Arrows=move (Shift=+fast)  •  +/-=resize (Shift=+fast)  •  Enter/S=save  •  Esc=skip"
         ))
 
+    def set_status(self, msg):
+        """Set status message immediately."""
+        self.status_var.set(msg)
+        self.root.update_idletasks()  # forces GUI update
+
+    def flash_status(self, msg, duration=1200):
+        """Show a temporary message then clear it."""
+        self.status_var.set(msg)
+        self.root.update_idletasks()
+        self.root.after(duration, lambda: self.status_var.set(""))
+
     # ---------- File loading ----------
     def load_folder(self):
         folder = filedialog.askdirectory(title="Select source folder with photos")
@@ -166,6 +185,7 @@ class CropperApp:
         self.update_mode_label()
         self.update_title() # after loading state
         self.redraw()
+        self.set_status(f"Loaded: {path}")
 
     def load_image_with_exif(self, path: str) -> Image:
         """
@@ -571,12 +591,28 @@ class CropperApp:
             print(f"[WARN] Unable to save state: {e}")
 
     def convert_to_bmp(self, in_path: str):
+        def progress(step, msg):
+            self.set_status(f"[{step}/5] {msg}")
+
         base = os.path.splitext(os.path.basename(in_path))[0]
         out_dir = os.path.join(os.path.dirname(in_path), f"{self.export_folder_with_direction()}")
         out_path = os.path.join(out_dir, f"{base}{EXPORT_FILENAME_SUFFIX}_{self.direction}.jpg").replace('\\', '/') # complete source path & file of cropped image for convert
-        # Execute called script with arguments
-        os.system(f'python convert.py --dir {self.direction} --mode {CONVERT_MODE} --dither {CONVERT_DITHER} "{out_path}"')
-        print(f"- - -")
+
+        self.set_status("Starting conversion…")        # <— start message
+        self.root.update_idletasks()          # <— force GUI update before blocking
+        conv = Converter()
+
+        try:
+            preview_path, device_path = conv.convert(
+                in_path=out_path,
+                direction=self.direction,
+                dither=CONVERT_DITHER,
+                progress_callback=progress
+            )
+            #self.flash_status(f"Done: {os.path.basename(device_path)}")
+        except Exception as e:
+            self.set_status(f"Conversion failed: {e}")
+            raise
 
     def load_kv(self, path: str):
         """
@@ -689,6 +725,156 @@ class CropperApp:
     def on_skip(self, _e=None):
         print(f"skipped: {self.image_paths[self.idx]}")
         self.next_image()
+
+# =======================
+#  IMAGE CONVERTER
+# =======================
+
+class Converter:
+    """
+    Integrated converter for ESP32-S3 PhotoPainter.
+    No CLI, no sys.exit(), completely embeddable.
+    Call Converter.convert() directly from your Tkinter app.
+    Supports progress callbacks.
+    """
+
+    ACEP_REAL_WORLD_RGB = [
+        (25, 30, 33), # BLACK
+        (241, 241, 241), # WHITE
+        (243, 207, 17), # YELLOW
+        (210, 14, 19),# RED
+        (49, 49, 143),# BLUE
+        (83, 164, 40), # GREEN
+        (184, 94, 28), # ORANGE
+    ]
+
+    ACEP_DEVICE_RGB = [
+        (0, 0, 0), # BLACK
+        (255, 255, 255), # WHITE
+        (255, 255, 0), # YELLOW
+        (255, 0, 0), # RED
+        (0, 0, 255), # BLUE
+        (0, 255, 0), # GREEN
+        (255, 128, 0) # ORANGE
+    ]
+
+    # ⚠️ Raw values are hardware-defined, not arbitrary. If your panel uses different codes, adjust accordingly.
+    ACEP_DEVICE_INDEX_TO_RAW = [
+        0,  # BLACK
+        1,  # WHITE
+        2,  # YELLOW
+        3,  # RED
+        4,  # BLUE
+        5,  # GREEN
+        6,  # ORANGE
+    ]
+
+    def __init__(self):
+        # constant-time lookup table: Faster mapping: real_world_color → index
+        self._rgb_to_index = {
+            rgb: i for i, rgb in enumerate(self.ACEP_REAL_WORLD_RGB)
+        }
+
+        # prebuild palette
+        palette = (
+            tuple(v for rgb in self.ACEP_REAL_WORLD_RGB for v in rgb) + self.ACEP_REAL_WORLD_RGB[0] * 249
+        )
+        self._palette_image = Image.new("P", (1, 1))
+        self._palette_image.putpalette(palette)
+
+    # -----------------------
+    # load image (no EXIF)
+    # -----------------------
+    def load_image(self, path):
+        """
+        Load image exactly as stored on disk.
+        No EXIF correction here — image was auto-rotated earlier.
+        """
+        return Image.open(path).convert("RGB")
+
+    # -----------------------
+    # main API
+    # -----------------------
+    def convert(self, in_path, direction=DIRECTION, dither=Image.FLOYDSTEINBERG, progress_callback=None):
+        """
+        Converts one RGB image into:
+        - quantized preview BMP
+        - quantized device BMP
+        Returns (preview_bmp_path, device_bmp_path)
+        progress_callback(step:int, message:str) is optional.
+        """
+
+        def report(step, msg):
+            if progress_callback:
+                progress_callback(step, msg)
+
+        # -----------------------------------------
+        # 1. Loading
+        # -----------------------------------------
+        report(1, "Loading image…")
+        img = self.load_image(in_path)
+
+        # -------------------
+        # Palette quantization
+        # -------------------
+        report(2, "Quantizing to palette…")
+        quant = img.quantize(dither=dither, palette=self._palette_image)
+        quant_rgb = quant.convert("RGB")
+
+        # -------------------
+        # Build output paths and save quantized image
+        # -------------------
+        report(3, "Save BMP…")
+        basedir = os.path.dirname(in_path)
+        output_basename_without_ext = os.path.splitext(os.path.basename(in_path))[0]
+
+        pic_dir = os.path.join(basedir, f"{CONVERT_FOLDER}")
+        dev_dir = os.path.join(pic_dir, f"{DEVICE_FOLDER}")
+
+        bmp_out = os.path.join(pic_dir, f"{output_basename_without_ext}_{direction}.bmp")
+        dev_out = os.path.join(dev_dir, f"{output_basename_without_ext}_{direction}.bmp")
+
+        os.makedirs(pic_dir, exist_ok=True)
+        os.makedirs(dev_dir, exist_ok=True)
+
+        # save preview
+        quant_rgb.save(bmp_out)
+
+        # -------------------
+        # Device BMP mapping
+        # -------------------
+        report(4, "Packing device BMP…")
+        px = quant_rgb.load()
+        width, height = quant_rgb.size
+
+        raw_bytes = bytearray()
+        odd = False
+        pending = 0
+
+        for y in reversed(range(height)):
+            for x in reversed(range(width)):
+                rgb = px[x, y]
+                idx = self._rgb_to_index[rgb]
+                px[x, y] = self.ACEP_DEVICE_RGB[idx]
+                raw = self.ACEP_DEVICE_INDEX_TO_RAW[idx]
+
+                if not odd:
+                    pending = raw
+                    odd = True
+                else:
+                    raw_bytes.append((pending << 4) | raw)
+                    odd = False
+
+        # save device BMP
+        quant_rgb.save(dev_out)
+
+        print(f"✔ Converted: {in_path}")
+        print(f"   → Preview BMP: {bmp_out}")
+        print(f"   → Device BMP : {dev_out}")
+
+        report(5, f"Done: {dev_out}")
+
+        return bmp_out, dev_out
 
 if __name__ == "__main__":
     root = tk.Tk()
