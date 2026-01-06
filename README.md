@@ -1,29 +1,16 @@
-# PhotoPainter Cropper (macOS)
+# PhotoPainter Cropper (macOS & Windows)
 
-Interactive cropper for the **Waveshare PhotoPainter** (7.3" ACeP,
-800×480).
+Interactive cropper for the **Waveshare PhotoPainter** (7.3" ACeP, 800×480).
 
-This tool helps you frame the most important area of each photo with a
-fixed **800:480** ratio. The crop rectangle may extend **outside** the
-image; the empty area is filled with **White** or an auto-generated
-**Blurred background**. It was written for my personal workflow on
-**macOS**.
+This tool helps you frame the most important area of each photo with a fixed **800:480** (landscape) or **480:800** (portrait) ratio. The crop rectangle may extend **outside** of the image; the empty area is filled with **White** or an auto-generated **Blurred background**. It was written for my personal workflow on **macOS**.
 
-The app exports **JPG 800×480** (landscape). For the final device format
-(**24-bit BMP**), I use Waveshare’s **official converter**, which
-provides better color/tonal results on the 7-color panel than a plain
-BMP export.
+The app exports **JPG 800×480** (landscape) or **480:800** (portrait) by setting the direction in the app. For the final device format (**24-bit BMP**), I use Waveshare’s **official converter** with a color map from [epdoptimize](https://github.com/Utzel-Butzel/epdoptimize), which provides way better color/tonal results on the 7-color panel than a plain BMP export.
+
+Sample image:
 
 <figure class="align-center">
-<img src="screenshot/0001_terminal.png" width="900"
-alt="screenshot/0001_terminal.png" />
-<figcaption>Batch run: every Save creates a JPG and a per-image state
-file (<code>*_ppcrop.txt</code>).</figcaption>
-</figure>
-
-<figure class="align-center">
-<img src="screenshot/002_choose_folder.png" width="700"
-alt="screenshot/002_choose_folder.png" />
+<img src="sample/sample.jpg" width="900"
+alt="sample/sample.jpg" />
 </figure>
 
 If you crop beyond the border, the image looks like this:
@@ -36,82 +23,67 @@ alt="screenshot/003_chooseFrameVerticalPicture.png" />
 Which becomes:
 
 <figure class="align-center">
-<img src="_export_photopainter_jpg/062be376-85a9-4c0c-b176-43ed1da19620_pp.jpg" width="900"
-alt="screenshot/003_chooseFrameVerticalPicture.png" />
+<img src="sample/cropped_landscape/sample_pp_landscape.jpg" width="900"
+alt="sample/cropped_landscape/sample_pp_landscape.jpg" />
 </figure>
 
-an the results after cnversion is something like this (obviously is different seen from the photopainter):
+The result after conversion is something like this (obviously is different seen from the PhotoPainter):
 
 <figure class="align-center">
-<img src="_export_photopainter_jpg/062be376-85a9-4c0c-b176-43ed1da19620_pp_scale_output_the_results.jpg" width="900"
-alt="screenshot/003_chooseFrameVerticalPicture.png" />
+<img src="sample/cropped_landscape/pic/sample_pp_landscape_landscape.bmp" width="900"
+alt="sample/cropped_landscape/pic/sample_pp_landscape_landscape.bmp" />
 </figure>
 
-Obviously image inside the rectangle remain as they are, just zoommed:
-
+And the device specific (Waveshare PhotoPainter Pico ACeP 7-color) converted image:
 <figure class="align-center">
-<img src="screenshot/004_rememberFrameOnNextPass.png" width="900"
-alt="screenshot/004_rememberFrameOnNextPass.png" />
-</figure>
-
-<figure class="align-center">
-<img src="screenshot/005_chooseFrameHorizontal.png" width="900"
-alt="screenshot/005_chooseFrameHorizontal.png" />
-</figure>
-
-<figure class="align-center">
-<img src="screenshot/006_AllPicutureDone.png" width="700"
-alt="screenshot/006_AllPicutureDone.png" />
+<img src="sample/cropped_landscape/pic/device/sample_pp_landscape_landscape.bmp" width="900"
+alt="sample/cropped_landscape/pic/device/sample_pp_landscape_landscape.bmp" />
 </figure>
 
 ## Key Features
 
-- Fixed **800:480** crop ratio (landscape).
-- Crop can go **out of image bounds**; fill with **White** or **Blur**
+- Fixed **800x480** (landscape) or **480x800** (portrait) crop ratio.
+- Crop can go **out of image bounds** and fill with **White** or **Blur** background
   (toggle `F`).
-- **Per-image state**: saving writes `*_ppcrop.txt` next to the original
-  image; running again restores the exact rectangle automatically (great
+- **Per-image state**: a sidecar file with `*_ppcrop.txt` next to the original
+  image is saved; running the app again restores the exact rectangle automatically (great
   for large batches).
-- **Mouse**: drag to move, scroll to resize.
+- **Mouse**: drag to move, scroll to resize (hold **Shift** = faster).
 - **Keyboard**:
   - Arrows = move (hold **Shift** = faster)
   - `+` / `-` = resize (hold **Shift** = faster)
-  - **Enter**, **Tab**, or **A** = save current and go to next
+  - **Enter** or **S** = process & save current image and go to next
   - **F** = toggle fill (White ↔ Blur)
-  - **Esc** = skip image
+  - **D** = toggle direction (landscape ↔ portrait)
+  - **ESC** = skip current image
+  - **PAGE_UP** = previous image without processing current image
+  - **PAGE_DOWN** = next image without processing current image
 - Crisp grid lines aligned to device pixels (look straight on Retina).
 
 ## Why JPG first, then BMP?
 
 I tested direct BMP export that follows the device format, but the
 images looked a bit **flat**. The official Waveshare converter applies
-**dithering** and other processing, and it **looks better on the
+**dithering** and other processing, and it **looks a lot better on the
 PhotoPainter**.
 
-Typical workflow:
+Using this app does the following:
 
-1.  Use this app to export **JPG 800×480**.
-2.  Convert JPG → **24-bit BMP** using the official Waveshare converter.
-3.  Copy BMPs to the SD card.
+1. Scale and Crop with export to **JPG 800×480 / 480x800**.
+2. Convert JPG → **24-bit BMP** using the internal converter.
+3. Convert 24-bit BMP → Real world ePaper Screen RGB with color map from epdoptimize
 
-## Samples and Outputs Included
+## Samples and Outputs included
 
-- Example **input** photos (both portrait and landscape) live under
-  `samples/`.
-- Example **outputs** from this tool (JPG 800×480) are available under
-  `_export_photopainter_jpg/`.
-- For convenience, this repository may also include **BMP files**
-  created with Waveshare’s converter inside the same
-  `_export_photopainter_jpg/` folder, so testers can copy them directly
-  to the device.
+- Example **input** photo and **outputs** from this tool (JPG 800×480) are available in `sample` folder.
+- For convenience, this repository also includes **BMP files** created with Waveshare’s converter in `sample/cropped_landscape/pic/device` folder, so testers can copy them directly to the device.
 
-## Device SD Card Layout
+## Device SD Card layout
 
 - Create a folder named `pic` at the **root** of the SD card.
-- Copy all **24-bit BMP** files inside `pic`.
+- Copy all **24-bit BMP** files into this `pic` folder.
 - Stock firmware expects fewer than ~100 images in `pic`.
-- I personally use a **custom firmware** (not mine) by `@tcellerier`
-  that supports **up to 2000 photos**.
+- I personally use a **custom firmware** (not mine) by `@tcellerier` that supports **up to 2000 photos**.
 
 ## Install (macOS)
 
@@ -126,15 +98,40 @@ pip install -r requirements.txt
 
 ## Run
 
+### MacOS
+
 ``` bash
 source ~/ppainter-venv/bin/activate
 python photo_painter_cropper.py
 ```
 
+### Windows
+``` bash
+# git clone, jump into directory and install requirements
+git clone https://github.com/geegeek/photopainter-cropper.git
+cd photopainter-cropper
+# create virtual environment for project (also creates folder by name)
+python -m venv .venv
+# create .venv\.gitignore with content "*"
+# install and update PIP
+python -m pip install --upgrade pip
+# install requirements
+python -m pip install -r requirements.txt
+.\.venv\Scripts\activate
+# it now says
+(.venv) PS patzh\to\photopainter-cropper>
+# run script
+python photo_painter_cropper.py
+# build executable
+pyinstaller photo_painter_cropper.spec
+# quit venv
+deactivate
+```
+
 - Supported inputs: `.jpg`, `.jpeg`, `.png`, `.bmp`, `.tif`, `.webp`.
-- Use mouse/keyboard to position and size the rectangle.
-- Press **Enter / Tab / A** to save and go to the next.
-- Output JPGs go to `_export_photopainter_jpg/` next to your originals.
+- Use mouse/keyboard to position and size the crop rectangle.
+- Press **Enter / S** to save and go to the next image.
+- Output JPGs go to `cropped_landscape/pic/device` next to your originals.
 - A `*_ppcrop.txt` file is written next to each original to **remember**
   the crop.
 

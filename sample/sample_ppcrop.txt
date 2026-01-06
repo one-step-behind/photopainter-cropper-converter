@@ -1,0 +1,18 @@
+# PhotoPainter crop state
+timestamp=1767649215
+image_name=sample.jpg
+image_w=1000
+image_h=1000
+rect_x1=-245.0980
+rect_y1=56.0224
+rect_x2=1242.2969
+rect_y2=946.7787
+rect_nx1=-0.245098
+rect_ny1=0.056022
+rect_nx2=1.242297
+rect_ny2=0.946779
+target_w=800
+target_h=480
+ratio=1.666667
+fill_mode=blur
+direction=landscape
