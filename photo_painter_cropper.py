@@ -5,25 +5,31 @@ import os
 import math
 import time
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import ttk, filedialog, messagebox
 from PIL import Image, ImageTk, ImageFilter # pyright: ignore[reportMissingImports]
 
 # ====== CONFIG ======
+APP_TITLE = "PhotoPainterCropper"
 DEFAULT_TARGET_SIZE = (800, 480)           # exact JPG output
 DEFAULT_RATIO = DEFAULT_TARGET_SIZE[0] / DEFAULT_TARGET_SIZE[1]
 WINDOW_MIN = (1024, 768)
 JPEG_QUALITY = 90
 DIRECTION = "landscape" # landscape | portrait
 FILL_MODE = "blur" # white | blur
-CONVERT_MODE = "cut" # scale | cut
 CONVERT_DITHER = 3 # NONE(0) or FLOYDSTEINBERG(3)
-CROP_BORDER_COLOR = "#00ff88"
-APP_TITLE = "PhotoPainterCropper"
+
+CROP_BORDER_COLOR = "#00ff00"   # green rectangle border
+GRID_COLOR = "#00ff00"          # grid lines
+MASK_COLOR = "#000000"          # mask outside crop region
+MASK_STIPPLE = "gray50"
+WINDOW_BACKGROUND_COLOR = "#222222"
 
 ARROW_STEP = 1                      # px for step with arrows
 ARROW_STEP_FAST = 10                # px with Shift pressed
 SCALE_FACTOR = 1.01                 # zoom step with normal +/-
 SCALE_FACTOR_FAST = 1.10            # zoom step with Shift
+
+LABEL_PADDINGS = (5, 5)
 
 EXPORT_FOLDER = "cropped" # folder where to store cropped images
 EXPORT_FILENAME_SUFFIX = "_pp"
@@ -35,22 +41,77 @@ class CropperApp:
     def __init__(self, root):
         self._resize_pending = False
         self.root = root
-        self.root.title(f"{APP_TITLE}")
         self.root.minsize(*WINDOW_MIN)
+        self.root.title(f"{APP_TITLE} – "
+            "Drag/Arrows=move (Shift=+fast)  •  "
+            "Scroll/+/-=resize (Shift=+fast)  •  "
+            "Esc=skip"
+        )
 
-        self.status_var = tk.StringVar(value="")
-        self.status_label = tk.Label(self.root, textvariable=self.status_var, anchor="w")
-        self.status_label.pack(fill="x", side="bottom")
-
-        top = tk.Frame(root)
+        top = ttk.Frame(root)
         top.pack(fill=tk.X, side=tk.TOP)
-        self.mode_lbl = tk.Label(top, text="") # mode_lbl: top bar
-        self.mode_lbl.pack(padx=10, pady=6, anchor="w")
 
-        self.canvas = tk.Canvas(root, bg="#111")
+        self.canvas = tk.Canvas(root, bg=WINDOW_BACKGROUND_COLOR)
         self.canvas.pack(fill=tk.BOTH, expand=True)
 
-        # Mouse
+        # Button UI
+        self.button_bar = ttk.Frame(top)
+        self.button_bar.pack(padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1], anchor=tk.W, fill=tk.X, side=tk.TOP)
+
+        self.btn_fillmode_default_text = "Fill Mode"
+        self.btn_fillmode_var = tk.StringVar(value=self.btn_fillmode_default_text)
+        self.btn_fillmode = ttk.Button(self.button_bar, textvariable=self.btn_fillmode_var, takefocus=0, width=22, underline=0, command=self.toggle_fill_mode)
+        self.btn_fillmode.pack(side=tk.LEFT)
+        self.btn_fillmode.bind('<Enter>', lambda e: self.show_tip("Toggle Fill mode (F)"))
+        self.btn_fillmode.bind('<Leave>', lambda e: self.show_tip())
+
+        self.btn_direction_default_text = "Direction"
+        self.btn_direction_var = tk.StringVar(value=self.btn_direction_default_text)
+        self.btn_direction = ttk.Button(self.button_bar, textvariable=self.btn_direction_var, takefocus=0, width=22, underline=0, command=self.toggle_direction)
+        self.btn_direction.pack(side=tk.LEFT)
+        self.btn_direction.bind('<Enter>', lambda e: self.show_tip("Toggle Direction (D)"))
+        self.btn_direction.bind('<Leave>', lambda e: self.show_tip())
+
+        self.btn_prev_default_text = "<< Prev"
+        self.btn_prev_var = tk.StringVar(value=self.btn_prev_default_text)
+        self.btn_prev = ttk.Button(self.button_bar, textvariable=self.btn_prev_var, takefocus=0, command=self.prev_image)
+        self.btn_prev.pack(side=tk.LEFT)
+        self.btn_prev.bind('<Enter>', lambda e: self.show_tip("Previous Image (PAGE_UP)"))
+        self.btn_prev.bind('<Leave>', lambda e: self.show_tip())
+
+        self.btn_next_default_text = "Next >>"
+        self.btn_next_var = tk.StringVar(value=self.btn_next_default_text)
+        self.btn_next = ttk.Button(self.button_bar, textvariable=self.btn_next_var, takefocus=0, command=self.next_image)
+        self.btn_next.pack(side=tk.LEFT)
+        self.btn_next.bind('<Enter>', lambda e: self.show_tip("Next Image (PAGE_DOWN)"))
+        self.btn_next.bind('<Leave>', lambda e: self.show_tip())
+
+        style = ttk.Style()
+        style.configure('accept.TButton', foreground='green')
+        self.btn_accept_default_text = "✓ Accept"
+        self.btn_accept_var = tk.StringVar(value=self.btn_accept_default_text)
+        self.btn_accept = ttk.Button(self.button_bar, textvariable=self.btn_accept_var, takefocus=0, style='accept.TButton', command=self.on_confirm)
+        self.btn_accept.pack(side=tk.LEFT)
+        self.btn_accept.bind('<Enter>', lambda e: self.show_tip("Accept Crop and Convert (Enter/S)"))
+        self.btn_accept.bind('<Leave>', lambda e: self.show_tip())
+
+        self.status_var_default_text = "Ready"
+        self.status_var = tk.StringVar(value=self.status_var_default_text)
+        self.status = ttk.Label(self.button_bar, textvariable=self.status_var, anchor=tk.W)
+        self.status.pack(side=tk.RIGHT)
+        self.status_previous = None
+
+        # Output dimension size label
+        self.size_lbl_var = tk.StringVar(value="")
+        self.size_lbl = ttk.Label(self.button_bar, textvariable=self.size_lbl_var)
+        self.size_lbl.pack(padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1], anchor=tk.W)
+
+        # Status bars
+        self.status_label_var = tk.StringVar(value="Select folder with images…")
+        self.status_label = ttk.Label(self.root, textvariable=self.status_label_var, anchor=tk.W)
+        self.status_label.pack(padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1], anchor=tk.W, fill=tk.X, side=tk.BOTTOM)
+        
+        # Mouse events
         self.canvas.bind("<Button-1>", self.on_click)
         self.canvas.bind("<B1-Motion>", self.on_drag)
         self.canvas.bind("<ButtonRelease-1>", self.on_release)
@@ -58,7 +119,7 @@ class CropperApp:
         self.canvas.bind("<Button-4>", self.on_wheel_linux) # linux up
         self.canvas.bind("<Button-5>", self.on_wheel_linux) # linux down
 
-        # Keyboard (confirm)
+        # Keyboard events
         self.root.bind("<Return>", self.on_confirm)
         self.root.bind_all("<Tab>", self.on_confirm_tab)    # Tab intercept (prevent focus change)
         self.root.bind("<s>", self.on_confirm)
@@ -67,13 +128,13 @@ class CropperApp:
         self.root.bind("<Next>", self.next_image) # PAGE DOWN
         self.root.bind("<Escape>", self.on_skip)
 
-        # Keyboard (movement)
+        # Keyboard events (movement)
         self.root.bind("<Left>",  lambda e: self.on_arrow(e, -1,  0))
         self.root.bind("<Right>", lambda e: self.on_arrow(e,  1,  0))
         self.root.bind("<Up>",    lambda e: self.on_arrow(e,  0, -1))
         self.root.bind("<Down>",  lambda e: self.on_arrow(e,  0,  1))
 
-        # Keyboard (resize)
+        # Keyboard events (resize)
         for ks in ("<plus>", "<KP_Add>", "<equal>"):  # '+' It's often Shift+'='; include '=' for convenience
             self.root.bind(ks, self.on_plus)
         for ks in ("<minus>", "<KP_Subtract>"):
@@ -81,8 +142,8 @@ class CropperApp:
 
         # Various
         self.root.bind("<Configure>", self.on_resize)
-        self.root.bind("<f>", self.toggle_fill)
-        self.root.bind("<F>", self.toggle_fill)
+        self.root.bind("<f>", self.toggle_fill_mode)
+        self.root.bind("<F>", self.toggle_fill_mode)
         self.root.bind("<d>", self.toggle_direction)
         self.root.bind("<D>", self.toggle_direction)
 
@@ -117,33 +178,31 @@ class CropperApp:
         self.canvas.focus_set()       # keyboard focus works now
         self.load_folder()
 
-    def update_title(self):
+    def update_size_lbl(self):
         w, h = self.target_size
-        self.root.title(f"{APP_TITLE} – Crop {w}x{h} (JPG, {self.fill_mode} fill) + state")
+        self.size_lbl_var.set(f"Crop {w}x{h}")
 
-    def update_mode_label(self):
-        fill_label_value = "WHITE" if self.fill_mode == "white" else "BLUR"
-        direction_label_value = "PORTRAIT" if self.direction == "portrait" else "LANDSCAPE"
-        self.mode_lbl.config(text=(
-            f"Fill mode (F): {fill_label_value}  •  "
-            f"Direction (D): {direction_label_value}  •  "
-            "Drag/Arrows=move (Shift=+fast)  •  "
-            "Scroll/+/-=resize (Shift=+fast)  •  "
-            "Enter/S=process  •  "
-            "Esc=skip  •  "
-            "PGUP/DOWN=prev/next"
-        ))
+    def update_button_text(self, button, value):
+        # Construct the full variable names
+        btn_default_text = f"btn_{button}_default_text"
+        btn_var = f"btn_{button}_var"
+        # Get the attributes
+        var_default_text = getattr(self, btn_default_text)
+        var_var = getattr(self, btn_var)
+        # Set the value
+        var_var.set(f"{var_default_text}: {value.upper()}")
 
+    def show_tip(self, msg: str = ""):
+        if not msg:
+            self.status_var.set(self.status_var_default_text)
+            return
+
+        self.status_var.set(msg)
+    
     def set_status(self, msg):
         """Set status message immediately."""
-        self.status_var.set(msg)
+        self.status_label_var.set(msg)
         self.root.update_idletasks()  # forces GUI update
-
-    def flash_status(self, msg, duration=1200):
-        """Show a temporary message then clear it."""
-        self.status_var.set(msg)
-        self.root.update_idletasks()
-        self.root.after(duration, lambda: self.status_var.set(""))
 
     # ---------- File loading ----------
     def load_folder(self):
@@ -171,13 +230,13 @@ class CropperApp:
             self.root.after(50, self.root.quit)
             return
 
-        path = self.image_paths[self.idx]
+        current_image_path = self.image_paths[self.idx]
 
         try:
             #self.img = Image.open(path).convert("RGB")
-            self.img = self.load_image_with_exif(path) # EXIF auto-rotate
+            self.img = self.load_image_with_exif(current_image_path) # EXIF auto-rotate
         except Exception as e:
-            messagebox.showwarning("Image error", f"Unable to open:\n{path}\n{e}\nWe move on to the next one.")
+            messagebox.showwarning("Image error", f"Unable to open:\n{current_image_path}\n{e}\nWe move on to the next one.")
             self.idx += 1
             self.show_image()
             return
@@ -185,13 +244,12 @@ class CropperApp:
         self.layout_image()
 
         # restore state if it exists; otherwise initial pane
-        if not self.apply_saved_state(path):
+        if not self.apply_saved_state(current_image_path):
             self.init_rect()
 
-        self.update_mode_label()
-        self.update_title() # after loading state
+        self.update_size_lbl() # after loading state
         self.draw_crop_marker_grid()
-        self.set_status(f"Loaded: {path}")
+        self.set_status(f"{current_image_path}")
 
     def load_image_with_exif(self, path: str) -> Image:
         """
@@ -297,10 +355,10 @@ class CropperApp:
 
         # off-crop mask
         w, h = self.canvas_size()
-        self.canvas.create_rectangle(0, 0, w, y1, fill="#000", stipple="gray50", width=0)
-        self.canvas.create_rectangle(0, y2, w, h, fill="#000", stipple="gray50", width=0)
-        self.canvas.create_rectangle(0, y1, x1, y2, fill="#000", stipple="gray50", width=0)
-        self.canvas.create_rectangle(x2, y1, w, y2, fill="#000", stipple="gray50", width=0)
+        self.canvas.create_rectangle(0, 0, w, y1, fill=MASK_COLOR, stipple=MASK_STIPPLE, width=0)
+        self.canvas.create_rectangle(0, y2, w, h, fill=MASK_COLOR, stipple=MASK_STIPPLE, width=0)
+        self.canvas.create_rectangle(0, y1, x1, y2, fill=MASK_COLOR, stipple=MASK_STIPPLE, width=0)
+        self.canvas.create_rectangle(x2, y1, w, y2, fill=MASK_COLOR, stipple=MASK_STIPPLE, width=0)
 
         # crop edge
         self.canvas.create_rectangle(x1, y1, x2, y2, outline=CROP_BORDER_COLOR, width=1)
@@ -311,10 +369,10 @@ class CropperApp:
         h1 = snap(y1 + (y2 - y1) / 3.0)
         h2 = snap(y1 + 2 * (y2 - y1) / 3.0)
         dash_pat = (3, 3)
-        self.canvas.create_line(v1, y1, v1, y2, fill=CROP_BORDER_COLOR, dash=dash_pat, width=1, capstyle="butt", joinstyle="miter")
-        self.canvas.create_line(v2, y1, v2, y2, fill=CROP_BORDER_COLOR, dash=dash_pat, width=1, capstyle="butt", joinstyle="miter")
-        self.canvas.create_line(x1, h1, x2, h1, fill=CROP_BORDER_COLOR, dash=dash_pat, width=1, capstyle="butt", joinstyle="miter")
-        self.canvas.create_line(x1, h2, x2, h2, fill=CROP_BORDER_COLOR, dash=dash_pat, width=1, capstyle="butt", joinstyle="miter")
+        self.canvas.create_line(v1, y1, v1, y2, fill=GRID_COLOR, dash=dash_pat, width=1, capstyle="butt", joinstyle="miter")
+        self.canvas.create_line(v2, y1, v2, y2, fill=GRID_COLOR, dash=dash_pat, width=1, capstyle="butt", joinstyle="miter")
+        self.canvas.create_line(x1, h1, x2, h1, fill=GRID_COLOR, dash=dash_pat, width=1, capstyle="butt", joinstyle="miter")
+        self.canvas.create_line(x1, h2, x2, h2, fill=GRID_COLOR, dash=dash_pat, width=1, capstyle="butt", joinstyle="miter")
 
     # ---------- Mouse ----------
     def on_click(self, e):
@@ -412,9 +470,9 @@ class CropperApp:
         self.clamp_rect_to_canvas()
         self.draw_crop_marker_grid()
 
-    def toggle_fill(self, _e=None):
+    def toggle_fill_mode(self, _e=None):
         self.fill_mode = "blur" if self.fill_mode == "white" else "white"
-        self.update_mode_label()
+        self.update_button_text("fillmode", self.fill_mode)
 
     def toggle_direction(self, _e=None):
         # Switch internal state
@@ -449,8 +507,8 @@ class CropperApp:
         self.clamp_rect_to_canvas()
 
         # Update title + label + redraw
-        self.update_title()
-        self.update_mode_label()
+        self.update_size_lbl() # after direction toggle
+        self.update_button_text("direction", self.direction)
         self.draw_crop_marker_grid()
 
     def update_targetsize_and_ratio(self):
@@ -473,6 +531,7 @@ class CropperApp:
         y1i = (y1d - oy) / self.scale
         x2i = (x2d - ox) / self.scale
         y2i = (y2d - oy) / self.scale
+
         return (x1i, y1i, x2i, y2i)
 
     # ---------- Crop & Save ----------
@@ -551,14 +610,14 @@ class CropperApp:
             return base.filter(ImageFilter.GaussianBlur(radius=25))
 
     def save_output(self, out_img):
-        print(f"Source: {self.image_paths[self.idx]}")
+        print(f"→ Source: {self.image_paths[self.idx]}")
         in_path = self.image_paths[self.idx]
         base = os.path.splitext(os.path.basename(in_path))[0]
         out_dir = os.path.join(os.path.dirname(in_path), f"{self.export_folder_with_direction()}")
         os.makedirs(out_dir, exist_ok=True)
         out_path = os.path.join(out_dir, f"{base}{EXPORT_FILENAME_SUFFIX}_{self.direction}.jpg")
         out_img.save(out_path, format="JPEG", quality=JPEG_QUALITY, optimize=True, progressive=True)
-        print(f"Crop saved: {out_path}")
+        print(f"✔ Crop saved: {out_path}")
 
     # ---------- Persistent state ----------
     def state_path_for_image(self, img_path: str) -> str:
@@ -596,7 +655,7 @@ class CropperApp:
         try:
             with open(path, "w", encoding="utf-8") as f:
                 f.write("\n".join(lines) + "\n")
-            print(f"State saved: {path}")
+            print(f"✔ State saved: {path}")
             return img_path
         except Exception as e:
             print(f"[WARN] Unable to save state: {e}")
@@ -604,6 +663,7 @@ class CropperApp:
     def convert_to_bmp(self, in_path: str):
         def progress(step, msg):
             self.set_status(f"[{step}/5] {msg}")
+            self.root.update_idletasks()
 
         base = os.path.splitext(os.path.basename(in_path))[0]
         out_dir = os.path.join(os.path.dirname(in_path), f"{self.export_folder_with_direction()}")
@@ -669,12 +729,12 @@ class CropperApp:
             self.update_targetsize_and_ratio()
 
             # 3) update label
-            self.update_mode_label()
+            self.update_button_text("direction", self.direction)
 
         # reports fill mode if present
         if kv.get("fill_mode") in ("white", "blur"):
             self.fill_mode = kv["fill_mode"]
-            self.update_mode_label()
+            self.update_button_text("fillmode", self.fill_mode)
 
         # prefer absolute coordinates if the dimensions match
         try:
