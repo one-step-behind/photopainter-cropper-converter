@@ -231,7 +231,7 @@ class CropperApp:
 
     def update_size_lbl(self):
         w, h = self.target_size
-        self.size_lbl_var.set(f"Crop {w}x{h}")
+        self.size_lbl_var.set(f"Crop target: {w}x{h}")
 
     def create_buttons(self):
         # Create buttons dynamically
