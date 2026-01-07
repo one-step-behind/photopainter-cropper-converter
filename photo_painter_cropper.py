@@ -18,6 +18,11 @@ JPEG_QUALITY = 90
 DIRECTION = "landscape" # landscape | portrait
 FILL_MODE = "blur" # white | blur
 CONVERT_DITHER = 3 # NONE(0) or FLOYDSTEINBERG(3)
+TARGET_DEVICE = "acep" # ACEP | SPECTRA6
+
+AVAILABLE_DIRECTIONS = ("landscape", "portrait")
+AVAILABLE_FILL_MODES = ("blur", "white")
+AVAILABLE_TARGET_DEVICES = ("acep", "spectra6")
 
 CROP_BORDER_COLOR = "#00ff00"   # green rectangle border
 GRID_COLOR = "#00ff00"          # grid lines
@@ -41,11 +46,6 @@ RAW_FOLDER = "raw" # folder where to store raw images
 EXPORT_RAW = False # should export raw image suitable for SPECTRA6 use?
 
 def resource_path(relative_path):    
-    #try:
-    #    base_path = sys.prefix
-    #except Exception:
-    #    base_path = os.path.abspath(".")
-
     if not hasattr(sys, "frozen"):
         base_path = os.path.dirname(__file__)
     else:
@@ -96,14 +96,21 @@ class CropperApp:
                 "command": self.toggle_direction,
                 "enter_tip": "Toggle Direction (D)",
                 "width": 22,
-                "underline": 0, 
+                "underline": 0,
             },
             "fillmode": {
                 "default_text": "Fill Mode",
                 "command": self.toggle_fill_mode,
                 "enter_tip": "Toggle Fill mode (F)",
                 "width": 22,
-                "underline": 0, 
+                "underline": 0,
+            },
+            "targetdevice": {
+                "default_text": "Target device",
+                "command": self.toggle_target_device,
+                "enter_tip": "Toggle Target device (T)",
+                "width": 22,
+                "underline": 0,
             },
             "prev": {
                 "default_text": "<< Prev",
@@ -187,10 +194,13 @@ class CropperApp:
         self.root.bind("<F>", self.toggle_fill_mode)
         self.root.bind("<d>", self.toggle_direction)
         self.root.bind("<D>", self.toggle_direction)
+        self.root.bind("<t>", self.toggle_target_device)
+        self.root.bind("<T>", self.toggle_target_device)
 
         # State
         self.direction = DIRECTION
         self.fill_mode = FILL_MODE
+        self.target_device = AVAILABLE_TARGET_DEVICES[0]
 
         self.img: Image = None
         self.disp_img = None
@@ -251,7 +261,7 @@ class CropperApp:
             # 3) Create the button
             #    COMMAND MUST BE PASSED DIRECTLY!!!
             btn = ttk.Button(self.button_bar, command=info["command"], **btn_kwargs)
-            btn.pack(side=tk.LEFT, padx=5)
+            btn.pack(side=tk.LEFT)
             self.buttons[name] = btn
 
             # 4) Bind hover tooltip events if enter_tip exists
@@ -575,13 +585,9 @@ class CropperApp:
         self.draw_crop_marker_grid()
 
     # ---------- Toggles ----------
-    def toggle_fill_mode(self, _e=None):
-        self.fill_mode = "blur" if self.fill_mode == "white" else "white"
-        self.update_button_text("fillmode", self.fill_mode)
-
     def toggle_direction(self, _e=None):
         # Switch internal state
-        self.direction = "portrait" if self.direction == "landscape" else "landscape"
+        self.direction = AVAILABLE_DIRECTIONS[0] if self.direction == AVAILABLE_DIRECTIONS[1] else AVAILABLE_DIRECTIONS[1]
 
         # Update target_size and ratio for new direction
         self.update_targetsize_and_ratio()
@@ -615,6 +621,14 @@ class CropperApp:
         self.update_size_lbl() # after direction toggle
         self.update_button_text("direction", self.direction)
         self.draw_crop_marker_grid()
+
+    def toggle_fill_mode(self, _e=None):
+        self.fill_mode = AVAILABLE_FILL_MODES[0] if self.fill_mode == AVAILABLE_FILL_MODES[1] else AVAILABLE_FILL_MODES[1]
+        self.update_button_text("fillmode", self.fill_mode)
+
+    def toggle_target_device(self, _e=None):
+        self.target_device = AVAILABLE_TARGET_DEVICES[0] if self.target_device == AVAILABLE_TARGET_DEVICES[1] else AVAILABLE_TARGET_DEVICES[1]
+        self.update_button_text("targetdevice", self.target_device)
 
     def update_targetsize_and_ratio(self):
         if self.direction == "portrait":
@@ -756,6 +770,7 @@ class CropperApp:
             f"ratio={self.ratio:.6f}",
             f"fill_mode={self.fill_mode}",
             f"direction={self.direction}",
+            f"target_device={self.target_device}",
         ]
 
         try:
@@ -781,9 +796,10 @@ class CropperApp:
         conv = Converter() # instantiate Converter class
 
         try:
-            preview_path, device_path = conv.convert(
+            conv.convert(
                 in_path=out_path,
                 direction=self.direction,
+                target_device=self.target_device,
                 dither=CONVERT_DITHER,
                 progress_callback=progress
             )
@@ -831,21 +847,25 @@ class CropperApp:
         iw, ih = self.img.size
 
         # reports direction if present
-        if keyvalues.get("direction") in ("landscape", "portrait"):
+        if keyvalues.get("direction") in AVAILABLE_DIRECTIONS:
             # 1) apply direction from state file
             self.direction = keyvalues["direction"]
-
 
             # 2) Update target_size and ratio for new direction
             self.update_targetsize_and_ratio()
 
             # 3) update label
-            self.update_button_text("direction", self.direction)
+        self.update_button_text("direction", self.direction)
 
         # reports fill mode if present
-        if keyvalues.get("fill_mode") in ("white", "blur"):
+        if keyvalues.get("fill_mode") in AVAILABLE_FILL_MODES:
             self.fill_mode = keyvalues["fill_mode"]
-            self.update_button_text("fillmode", self.fill_mode)
+        self.update_button_text("fillmode", self.fill_mode)
+
+        # reports device target if present
+        if keyvalues.get("target_device") in AVAILABLE_TARGET_DEVICES:
+            self.target_device = keyvalues["target_device"]
+        self.update_button_text("targetdevice", self.target_device)
 
         # prefer absolute coordinates if the dimensions match
         try:
@@ -925,55 +945,98 @@ class Converter:
     Supports progress callbacks.
     """
 
-    ACEP_REAL_WORLD_RGB = [
-        (25, 30, 33), # BLACK #191E21
-        (241, 241, 241), # WHITE #F1F1F1
-        (243, 207, 17), # YELLOW #F3CF11
-        (210, 14, 19),# RED #D20E13
-        (49, 49, 143),# BLUE #31318F
-        (83, 164, 40), # GREEN #53A428
-        (184, 94, 28), # ORANGE #B85E1C
-    ]
-
-    ACEP_DEVICE_RGB = [
-        (0, 0, 0), # BLACK
-        (255, 255, 255), # WHITE
-        (255, 255, 0), # YELLOW
-        (255, 0, 0), # RED
-        (0, 0, 255), # BLUE
-        (0, 255, 0), # GREEN
-        (255, 128, 0) # ORANGE
-    ]
-
-    # ⚠️ Raw values are hardware-defined, not arbitrary. If your panel uses different codes, adjust accordingly.
-    ACEP_DEVICE_INDEX_TO_RAW = [
-        0,  # BLACK
-        1,  # WHITE
-        2,  # YELLOW
-        3,  # RED
-        4,  # BLUE
-        5,  # GREEN
-        6,  # ORANGE
-    ]
-
     def __init__(self):
-        # constant-time lookup table: Faster mapping: real_world_color → index
-        self._rgb_to_index = {
-            rgb: i for i, rgb in enumerate(self.ACEP_REAL_WORLD_RGB)
+        # Get target device map based on TARGET_DEVICE
+        TARGET_DEVICE_MAP = {
+            "acep": {
+                "real_world_rgb": [
+                    (25, 30, 33),    # BLACK #191E21
+                    (241, 241, 241), # WHITE #F1F1F1
+                    (243, 207, 17),  # YELLOW #F3CF11
+                    (210, 14, 19),   # RED #D20E13
+                    (49, 49, 143),   # BLUE #31318F
+                    (83, 164, 40),   # GREEN #53A428
+                    (184, 94, 28),   # ORANGE #B85E1C
+                ],
+
+                "device_rgb": [
+                    (0, 0, 0),       # BLACK
+                    (255, 255, 255), # WHITE
+                    (255, 255, 0),   # YELLOW
+                    (255, 0, 0),     # RED
+                    (0, 0, 255),     # BLUE
+                    (0, 255, 0),     # GREEN
+                    (255, 128, 0),   # ORANGE
+                ],
+
+                # ⚠️ Raw values are hardware-defined, not arbitrary.
+                # If your panel uses different codes, adjust accordingly.
+                "device_index_to_raw": [
+                    0, # BLACK
+                    1, # WHITE
+                    2, # YELLOW
+                    3, # RED
+                    4, # BLUE
+                    5, # GREEN
+                    6, # ORANGE
+                ],
+            },
+
+            "spectra6": {
+                "real_world_rgb": [
+                    (25, 30, 33),    # BLACK #191E21
+                    (232, 232, 232), # WHITE #E8E8E8
+                    (239, 222, 68),  # YELLOW #EFDE44
+                    (178, 19, 24),   # RED #B21318
+                    (33, 87, 186),   # BLUE #2157BA
+                    (18, 95, 32),    # GREEN #125F20
+                ],
+
+                "device_rgb": [
+                    (0, 0, 0),        # BLACK
+                    (255, 255, 255),  # WHITE
+                    (255, 255, 0),    # YELLOW
+                    (255, 0, 0),      # RED
+                    (0, 0, 255),      # BLUE
+                    (0, 255, 0),      # GREEN
+                ],
+
+                # ⚠️ Raw values are hardware-defined, not arbitrary.
+                # If your panel uses different codes, adjust accordingly.
+                "device_index_to_raw": [
+                    0, # BLACK
+                    1, # WHITE
+                    2, # YELLOW
+                    3, # RED
+                    5, # BLUE
+                    6, # GREEN
+                ],
+            }
         }
+        
+        self.flag=False
+        try:
+            self.target_device_map = TARGET_DEVICE_MAP[TARGET_DEVICE]
+            # constant-time lookup table: Faster mapping: real_world_color → index
+            self._rgb_to_index = {
+                rgb: i for i, rgb in enumerate(self.target_device_map["real_world_rgb"])
+            }
 
-        # prebuild palette
-        palette = (
-            tuple(v for rgb in self.ACEP_REAL_WORLD_RGB for v in rgb) + self.ACEP_REAL_WORLD_RGB[0] * 249
-        )
+            # prebuild palette
+            palette = (
+                tuple(v for rgb in self.target_device_map["real_world_rgb"] for v in rgb) + self.target_device_map["real_world_rgb"][0] * 249
+            )
 
-        self._palette_image = Image.new("P", (1, 1))
-        self._palette_image.putpalette(palette)
+            self._palette_image = Image.new("P", (1, 1))
+            self._palette_image.putpalette(palette)
+        except Exception as e:
+            messagebox.showwarning("Target device palette error", f"The given device ({TARGET_DEVICE}) does not exist in config.\nSkipping device target conversion.")
+            self.flag=True
 
     # -----------------------
     # main API
     # -----------------------
-    def convert(self, in_path: str, direction: str=DIRECTION, dither=Image.FLOYDSTEINBERG, progress_callback=None):
+    def convert(self, in_path: str, direction: str=DIRECTION, target_device: str=TARGET_DEVICE, dither=Image.FLOYDSTEINBERG, progress_callback=None):
         """
         Converts one RGB image into:
         - quantized preview BMP
@@ -991,6 +1054,9 @@ class Converter:
         :param dither: dither method
         :param progress_callback: callback for progress
         """
+
+        if self.flag:
+            return
 
         def report(step, msg):
             if progress_callback:
@@ -1021,7 +1087,7 @@ class Converter:
         convert_out_dir = os.path.join(convert_dir, f"{output_basename_without_ext}_{direction}.bmp")
         os.makedirs(convert_dir, exist_ok=True)
 
-        device_dir = os.path.join(convert_dir, f"{DEVICE_FOLDER}")
+        device_dir = os.path.join(convert_dir, f"{DEVICE_FOLDER}", target_device)
         device_out_dir = os.path.join(device_dir, f"{output_basename_without_ext}_{direction}.bmp")
         os.makedirs(device_dir, exist_ok=True)
 
@@ -1059,8 +1125,8 @@ class Converter:
             for x in reversed(range(width)):
                 rgb = px[x, y]
                 idx = self._rgb_to_index[rgb]
-                px[x, y] = self.ACEP_DEVICE_RGB[idx]
-                raw = self.ACEP_DEVICE_INDEX_TO_RAW[idx]
+                px[x, y] = self.target_device_map["device_rgb"][idx]
+                raw = self.target_device_map["device_index_to_raw"][idx]
 
                 if not odd:
                     if EXPORT_RAW:
