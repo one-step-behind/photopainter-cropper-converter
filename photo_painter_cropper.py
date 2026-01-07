@@ -48,6 +48,8 @@ class CropperApp:
             "Esc=skip"
         )
 
+        self.style = ttk.Style()
+
         top = ttk.Frame(root)
         top.pack(fill=tk.X, side=tk.TOP)
 
@@ -58,42 +60,72 @@ class CropperApp:
         self.button_bar = ttk.Frame(top)
         self.button_bar.pack(padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1], anchor=tk.W, fill=tk.X, side=tk.TOP)
 
-        self.btn_fillmode_default_text = "Fill Mode"
-        self.btn_fillmode_var = tk.StringVar(value=self.btn_fillmode_default_text)
-        self.btn_fillmode = ttk.Button(self.button_bar, textvariable=self.btn_fillmode_var, takefocus=0, width=22, underline=0, command=self.toggle_fill_mode)
-        self.btn_fillmode.pack(side=tk.LEFT)
-        self.btn_fillmode.bind('<Enter>', lambda e: self.show_tip("Toggle Fill mode (F)"))
-        self.btn_fillmode.bind('<Leave>', lambda e: self.show_tip())
+        # Store the actual Button widgets
+        self.buttons = {}
+        # Define buttons with text variable, callback, optional params, and optional hover tip
+        self.btn_defs = {
+            "fillmode": {
+                "default_text": "Fill Mode",
+                "var": tk.StringVar(value="Fill Mode"), 
+                "width": 22,
+                "underline": 0, 
+                "callback": self.toggle_fill_mode,
+                "enter_tip": "Toggle Fill mode (F)"
+            },
+            "direction": {
+                "default_text": "Direction",
+                "var": tk.StringVar(value="Direction"), 
+                "width": 22,
+                "underline": 0, 
+                "callback": self.toggle_direction,
+                "enter_tip": "Toggle Direction (D)"
+            },
+            "prev": {
+                "default_text": "<< Prev",
+                "var": tk.StringVar(value="<< Prev"),
+                "callback": self.prev_image,
+                "enter_tip": "Previous Image (PAGE_UP)"
+            },
+            "next": {
+                "default_text": "Next >>",
+                "var": tk.StringVar(value="Next >>"),
+                "callback": self.next_image,
+                "enter_tip": "Next Image (PAGE_DOWN)",
+            },
+            "save": {
+                "default_text": "Save",
+                "var": tk.StringVar(value="Save"),
+                "callback": self.on_confirm,
+                "enter_tip": "Crop and Convert (Enter/S)",
+                "style_config": {"foreground": "green"}
+            },
+        }
+        # Create buttons dynamically
+        for name, info in self.btn_defs.items():
+            # Prepare kwargs for Button, excluding 'var', 'callback', 'enter_tip'
+            btn_kwargs = {k: v for k, v in info.items() if k not in ("var", "callback", "enter_tip", "default_text", "style_name", "style_config")}
+            
+            # If style_config exists, configure the style
+            if "style_config" in info:
+                style_name = f"{name}.TButton"
+                self.style.configure(style_name, **info["style_config"])
+                btn_kwargs["style"] = style_name
 
-        self.btn_direction_default_text = "Direction"
-        self.btn_direction_var = tk.StringVar(value=self.btn_direction_default_text)
-        self.btn_direction = ttk.Button(self.button_bar, textvariable=self.btn_direction_var, takefocus=0, width=22, underline=0, command=self.toggle_direction)
-        self.btn_direction.pack(side=tk.LEFT)
-        self.btn_direction.bind('<Enter>', lambda e: self.show_tip("Toggle Direction (D)"))
-        self.btn_direction.bind('<Leave>', lambda e: self.show_tip())
+            # Create the button
+            btn = ttk.Button(
+                self.button_bar,
+                textvariable=info["var"],
+                command=info["callback"],
+                takefocus=0,
+                **btn_kwargs
+            )
+            btn.pack(side=tk.LEFT, padx=5)
+            self.buttons[name] = btn
 
-        self.btn_prev_default_text = "<< Prev"
-        self.btn_prev_var = tk.StringVar(value=self.btn_prev_default_text)
-        self.btn_prev = ttk.Button(self.button_bar, textvariable=self.btn_prev_var, takefocus=0, command=self.prev_image)
-        self.btn_prev.pack(side=tk.LEFT)
-        self.btn_prev.bind('<Enter>', lambda e: self.show_tip("Previous Image (PAGE_UP)"))
-        self.btn_prev.bind('<Leave>', lambda e: self.show_tip())
-
-        self.btn_next_default_text = "Next >>"
-        self.btn_next_var = tk.StringVar(value=self.btn_next_default_text)
-        self.btn_next = ttk.Button(self.button_bar, textvariable=self.btn_next_var, takefocus=0, command=self.next_image)
-        self.btn_next.pack(side=tk.LEFT)
-        self.btn_next.bind('<Enter>', lambda e: self.show_tip("Next Image (PAGE_DOWN)"))
-        self.btn_next.bind('<Leave>', lambda e: self.show_tip())
-
-        style = ttk.Style()
-        style.configure('accept.TButton', foreground='green')
-        self.btn_accept_default_text = "✓ Accept"
-        self.btn_accept_var = tk.StringVar(value=self.btn_accept_default_text)
-        self.btn_accept = ttk.Button(self.button_bar, textvariable=self.btn_accept_var, takefocus=0, style='accept.TButton', command=self.on_confirm)
-        self.btn_accept.pack(side=tk.LEFT)
-        self.btn_accept.bind('<Enter>', lambda e: self.show_tip("Accept Crop and Convert (Enter/S)"))
-        self.btn_accept.bind('<Leave>', lambda e: self.show_tip())
+            # Bind hover events if enter_tip exists
+            if "enter_tip" in info:
+                btn.bind("<Enter>", lambda e, tip=info["enter_tip"]: self.show_tip(tip))
+                btn.bind("<Leave>", lambda e: self.show_tip())
 
         self.status_var_default_text = "Ready"
         self.status_var = tk.StringVar(value=self.status_var_default_text)
@@ -187,22 +219,32 @@ class CropperApp:
         w, h = self.target_size
         self.size_lbl_var.set(f"Crop {w}x{h}")
 
-    def update_button_text(self, button, value):
-        # Construct the full variable names
-        btn_default_text = f"btn_{button}_default_text"
-        btn_var = f"btn_{button}_var"
-        # Get the attributes
-        var_default_text = getattr(self, btn_default_text)
-        var_var = getattr(self, btn_var)
-        # Set the value
-        var_var.set(f"{var_default_text}: {value.upper()}")
+    def update_button_text(self, button_name, extra_text):
+        """
+        Update button text dynamically, preserving base text
+        
+        :param self: Beschreibung
+        :param button_name: Beschreibung
+        :param extra_text: Beschreibung
+        """
+        if button_name in self.btn_defs:
+            default_text = self.btn_defs[button_name]["default_text"]
+            self.btn_defs[button_name]["var"].set(f"{default_text}: {extra_text.upper()}")
+        else:
+            print(f"No button variable found for '{button_name}'")
 
     def show_tip(self, msg: str = ""):
-        if not msg:
+        """
+        Show tooltip text (hover)
+        
+        :param self: Beschreibung
+        :param msg: Beschreibung
+        :type msg: str
+        """
+        if msg:
+            self.status_var.set(msg)
+        else:
             self.status_var.set(self.status_var_default_text)
-            return
-
-        self.status_var.set(msg)
     
     def set_status(self, msg):
         """Set status message immediately."""
