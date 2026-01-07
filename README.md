@@ -2,42 +2,52 @@
 
 Interactive cropper for the **Waveshare PhotoPainter** (7.3" ACeP, 800×480).
 
-This tool helps you frame the most important area of each photo with a fixed **800:480** (landscape) or **480:800** (portrait) ratio. The crop rectangle may extend **outside** of the image; the empty area is filled with **White** or an auto-generated **Blurred background**. It was written for my personal workflow on **macOS**.
+This project is a fork of [@geegeek](https://github.com/geegeek)/[photopainter-cropper](https://github.com/geegeek/photopainter-cropper). Much improved.
 
-The app exports **JPG 800×480** (landscape) or **480:800** (portrait) by setting the direction in the app. For the final device format (**24-bit BMP**), I use Waveshare’s **official converter** with a color map from [epdoptimize](https://github.com/Utzel-Butzel/epdoptimize), which provides way better color/tonal results on the 7-color panel than a plain BMP export.
+This tool helps you frame the most important area of each photo in a given folder with a fixed **800x480** (landscape) or **480x800** (portrait) ratio. The crop rectangle may extend **outside** of the image and the empty area is filled with **white** or an auto-generated **blurred background**. It was written for the personal workflow by **@geegeek** on **macOS** and improved with additional features. It now works on **Windows**, too.
 
-Sample image:
+The app exports **JPG 800×480** (landscape) or **480:800** (portrait) by setting the direction in the app. For the final **24-bit BMP** device format, it uses some modified code of a Gist by **@quark-zju** with a color map from [epdoptimize](https://github.com/Utzel-Butzel/epdoptimize), which provides way better color/tonal results on the 7-color panel than a plain BMP export by the original Waveshare converter.
+
+## How it works
+
+A sample image:
 
 <figure class="align-center">
 <img src="sample/sample.jpg" width="900"
 alt="sample/sample.jpg" />
 </figure>
 
-If you crop beyond the border, the image looks like this:
+...cropped beyond the border:
 
 <figure class="align-center">
-<img src="screenshot/003_chooseFrameVerticalPicture.png" width="900"
-alt="screenshot/003_chooseFrameVerticalPicture.png" />
+<img src="screenshot/001_chooseFrameVerticalPicture.jpg" width="900"
+alt="screenshot/001_chooseFrameVerticalPicture.jpg" />
 </figure>
 
-Which becomes:
+...becomes this image as JPG:
 
 <figure class="align-center">
 <img src="sample/cropped_landscape/sample_pp_landscape.jpg" width="900"
 alt="sample/cropped_landscape/sample_pp_landscape.jpg" />
 </figure>
 
-The result after conversion is something like this (obviously is different seen from the PhotoPainter):
+...converts to a index BMP (obviously is different seen from the PhotoPainter):
 
 <figure class="align-center">
 <img src="sample/cropped_landscape/pic/sample_pp_landscape_landscape.bmp" width="900"
 alt="sample/cropped_landscape/pic/sample_pp_landscape_landscape.bmp" />
 </figure>
 
-And the device specific (Waveshare PhotoPainter Pico ACeP 7-color) converted image:
+...and finally maps to the device specific (Waveshare PhotoPainter Pico ACeP 7-color) color palette:
 <figure class="align-center">
 <img src="sample/cropped_landscape/pic/device/sample_pp_landscape_landscape.bmp" width="900"
 alt="sample/cropped_landscape/pic/device/sample_pp_landscape_landscape.bmp" />
+</figure>
+
+...which looks like this on the PhotoPainter:
+<figure class="align-center">
+<img src="screenshot/002_PhotoPainterRealWorld.jpg" width="900"
+alt="screenshot/002_PhotoPainterRealWorld.jpg" />
 </figure>
 
 ## Key Features
@@ -59,6 +69,15 @@ alt="sample/cropped_landscape/pic/device/sample_pp_landscape_landscape.bmp" />
   - **PAGE_UP** = previous image without processing current image
   - **PAGE_DOWN** = next image without processing current image
 - Crisp grid lines aligned to device pixels (look straight on Retina).
+
+---
+- Supported image types: `.jpg`, `.jpeg`, `.png`, `.bmp`, `.tif`, `.tiff`, `.webp`.
+- Use **mouse/keyboard** to position and size the crop rectangle.
+- Press **Enter / S** to save and go to the next image.
+- A `*_ppcrop.txt` file is written next to each original to **remember** the crop.
+- **Cropped JPGs** are saved to `cropped_landscape|cropped_portrait` next to your originals.
+- **Converted BMP** images are saved to `cropped_landscape|cropped_portrait/converted` next to your originals.
+- **Converted Real-color BMP** images are saved to `cropped_landscape|cropped_portrait/converted/device` next to your originals.
 
 ## Why JPG first, then BMP?
 
@@ -122,18 +141,13 @@ python -m pip install -r requirements.txt
 (.venv) PS patzh\to\photopainter-cropper>
 # run script
 python photo_painter_cropper.py
-# build executable
-pyinstaller photo_painter_cropper.spec
+# build executable and generate `.spec` file
+pyinstaller --onefile --windowed -i='.\_source\icon.ico' --add-data "_source/icon.ico;_source" --name "PhotoPainterCropper" ".\photo_painter_cropper.py"
+# later you can run compilation with:
+pyinstaller PhotoPainterCropper.spec
 # quit venv
 deactivate
 ```
-
-- Supported inputs: `.jpg`, `.jpeg`, `.png`, `.bmp`, `.tif`, `.webp`.
-- Use mouse/keyboard to position and size the crop rectangle.
-- Press **Enter / S** to save and go to the next image.
-- Output JPGs go to `cropped_landscape/pic/device` next to your originals.
-- A `*_ppcrop.txt` file is written next to each original to **remember**
-  the crop.
 
 ## Project Type (GitHub Topics)
 
@@ -143,16 +157,15 @@ Desktop GUI **application** (Tkinter) for macOS. Suggested topics:
 
 ## References
 
-- Waveshare **PhotoPainter wiki** (specs, formats, conversion tools)
-  <https://www.waveshare.com/wiki/PhotoPainter>
-- Official **JPEG→BMP converter** (PhotoPainter_B)
-  <https://github.com/waveshareteam/PhotoPainter_B>
-- Custom firmware (not mine) by **@tcellerier** — up to **2000** photos
-  <https://github.com/tcellerier/Pico_ePaper_73>
-- My site <https://geegeek.github.io/>
+- Waveshare [PhotoPainter wiki](https://www.waveshare.com/wiki/PhotoPainter) (specs, formats, conversion tools)
+- Official **JPEG→BMP converter** [@waveshareteam](https://github.com/waveshareteam)/[PhotoPainter_B](https://github.com/waveshareteam/PhotoPainter_B)
+- **UI/App** forked from [@geegeek](https://github.com/geegeek)/[photopainter-cropper](https://github.com/geegeek/photopainter-cropper)
+- inspired from [@quark-zju](https://gist.github.com/quark-zju)/[epd-dither-resize-spectra6.py](https://gist.github.com/quark-zju/e488eb206ba66925dc23692170ba49f9) image processor Gist
+- Usage of [device color palette](https://github.com/Utzel-Butzel/epdoptimize/blob/main/src/dither/data/default-palettes.json) from [@Utzel-Butzel](https://github.com/Utzel-Butzel)/[epdoptimize](https://github.com/Utzel-Butzel/epdoptimize/)
+- **Custom firmware** by [@tcellerier](https://github.com/tcellerier)/[Pico_ePaper](https://github.com/tcellerier/Pico_ePaper_73) — up to **2000** photos
 
 ## License & Credits
 
-- License: **MIT**.
+- License: **MIT**
 - Not affiliated with Waveshare. All trademarks belong to their owners.
 - Firmware credit: **@tcellerier** (see link above).
