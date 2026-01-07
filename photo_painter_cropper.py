@@ -223,7 +223,6 @@ class CropperApp:
         w, h = self.target_size
         self.size_lbl_var.set(f"Crop {w}x{h}")
 
-
     def create_buttons(self):
         # Create buttons dynamically
         for name, info in self.btn_defs.items():
@@ -286,13 +285,18 @@ class CropperApp:
         else:
             self.status_var.set(self.status_var_default_text)
     
-    def set_status(self, msg):
+    def update_status_label(self, msg):
         """Set status message immediately."""
         self.status_label_var.set(msg)
-        self.root.update_idletasks()  # forces GUI update
+        #self.root.update_idletasks()  # forces GUI update
 
     # ---------- File loading ----------
     def load_folder(self):
+        """
+        Load images from given folder. Called once on app start.
+        
+        :param self: instance
+        """
         folder = filedialog.askdirectory(title="Select source folder with photos")
 
         if not folder:
@@ -323,7 +327,6 @@ class CropperApp:
         current_image_path = self.image_paths[self.idx]
 
         try:
-            #self.img = Image.open(path).convert("RGB")
             self.img = self.load_image_by_exif_orientation(current_image_path) # EXIF auto-rotate
         except Exception as e:
             messagebox.showwarning("Image error", f"Unable to open:\n{current_image_path}\n{e}\nWe move on to the next one.")
@@ -337,10 +340,10 @@ class CropperApp:
         if not self.load_saved_state(current_image_path):
             self.init_rect()
 
-        self.update_size_lbl() # after loading state
-        self.draw_crop_marker_grid()
-        self.set_status(f"{current_image_path}")
         self.status_count.config(text=f"{self.idx+1}/{len(self.image_paths)}")
+        self.update_size_lbl() # after loading state
+        self.update_status_label(f"{current_image_path}")
+        self.draw_crop_marker_grid()
 
     def load_image_by_exif_orientation(self, path: str) -> Image:
         """
@@ -393,10 +396,10 @@ class CropperApp:
         Initialize crop rectangle
         """
         dw, dh = self.disp_size
-        rw = int(dw * 0.8)
+        rw = int(dw)# * 0.8) # cropper size 80% of image size
         rh = int(rw / self.ratio)
         if rh > dh:
-            rh = int(dh * 0.8)
+            rh = int(dh)# * 0.8) # cropper size 80% of image size
             rw = int(rh * self.ratio)
         self.rect_w, self.rect_h = max(20, rw), max(20, rh)
         cx = self.img_off[0] + dw // 2
@@ -445,11 +448,11 @@ class CropperApp:
         y2: int = snap(y2f)
 
         # off-crop mask
-        w, h = self.canvas_size()
-        self.canvas.create_rectangle(0, 0, w, y1, fill=MASK_COLOR, stipple=MASK_STIPPLE, width=0)
-        self.canvas.create_rectangle(0, y2, w, h, fill=MASK_COLOR, stipple=MASK_STIPPLE, width=0)
+        cw, ch = self.canvas_size()
+        self.canvas.create_rectangle(0, 0, cw, y1, fill=MASK_COLOR, stipple=MASK_STIPPLE, width=0)
+        self.canvas.create_rectangle(0, y2, cw, ch, fill=MASK_COLOR, stipple=MASK_STIPPLE, width=0)
         self.canvas.create_rectangle(0, y1, x1, y2, fill=MASK_COLOR, stipple=MASK_STIPPLE, width=0)
-        self.canvas.create_rectangle(x2, y1, w, y2, fill=MASK_COLOR, stipple=MASK_STIPPLE, width=0)
+        self.canvas.create_rectangle(x2, y1, cw, y2, fill=MASK_COLOR, stipple=MASK_STIPPLE, width=0)
 
         # crop edge
         self.canvas.create_rectangle(x1, y1, x2, y2, outline=CROP_BORDER_COLOR, width=1)
@@ -533,6 +536,11 @@ class CropperApp:
         self.draw_crop_marker_grid()
 
     def on_resize(self, _e):
+        """
+        Window resize
+        
+        :param self: instance
+        """
         if self.img is None:
             return
 
@@ -543,6 +551,11 @@ class CropperApp:
         self.root.after(30, self._apply_resize)
 
     def _apply_resize(self):
+        """
+        Apply resize
+        
+        :param self: instance
+        """
         self._resize_pending = False
 
         if self.img is None:
@@ -561,6 +574,7 @@ class CropperApp:
         self.clamp_rect_to_canvas()
         self.draw_crop_marker_grid()
 
+    # ---------- Toggles ----------
     def toggle_fill_mode(self, _e=None):
         self.fill_mode = "blur" if self.fill_mode == "white" else "white"
         self.update_button_text("fillmode", self.fill_mode)
@@ -573,26 +587,26 @@ class CropperApp:
         self.update_targetsize_and_ratio()
 
         # Resize crop rect to respect the new ratio
-        old_h = self.rect_h  # preserve height (stable dimension)
-        new_w = int(old_h * self.ratio)
-        new_h = old_h
+        old_rect_h = self.rect_h  # preserve height (stable dimension)
+        new_rect_w = int(old_rect_h * self.ratio)
+        new_rect_h = old_rect_h
 
         # Clamp to canvas
         cw, ch = self.canvas_size()
         
-        # If new width is too large → shrink using height
-        if new_w > cw:
-            new_w = int(cw * 0.8)
-            new_h = int(new_w / self.ratio)
+        # If new crop rect width is larger than canvas → shrink using height
+        if new_rect_w > cw:
+            new_rect_w = int(cw * 0.8)
+            new_rect_h = int(new_rect_w / self.ratio)
 
-        # If new height too large → shrink using width
-        if new_h > ch:
-            new_h = int(ch * 0.8)
-            new_w = int(new_h * self.ratio)
+        # If new crop rect height larger than canvas → shrink using width
+        if new_rect_h > ch:
+            new_rect_h = int(ch * 0.8)
+            new_rect_w = int(new_rect_h * self.ratio)
 
         # Apply new dims
-        self.rect_w = new_w
-        self.rect_h = new_h
+        self.rect_w = new_rect_w
+        self.rect_h = new_rect_h
 
         # Keep centered and inside canvas
         self.clamp_rect_to_canvas()
@@ -690,9 +704,6 @@ class CropperApp:
         # 8) next image
         self.next_image()
 
-    def export_folder_with_direction(self):
-        return EXPORT_FOLDER + '_' + self.direction
-    
     def background_only(self, region_scaled_or_none):
         if self.fill_mode == "white" or region_scaled_or_none is None:
             return Image.new("RGB", self.target_size, "white")
@@ -700,6 +711,9 @@ class CropperApp:
             base = region_scaled_or_none.resize(self.target_size, Image.LANCZOS)
             return base.filter(ImageFilter.GaussianBlur(radius=25))
 
+    def export_folder_with_direction(self):
+        return EXPORT_FOLDER + '_' + self.direction
+    
     def save_output(self, out_img):
         print(f"→ Source: {self.image_paths[self.idx]}")
         in_path = self.image_paths[self.idx]
@@ -710,7 +724,7 @@ class CropperApp:
         out_img.save(out_path, format="JPEG", quality=JPEG_QUALITY, optimize=True, progressive=True)
         print(f"✔ Crop saved: {out_path}")
 
-    # ---------- Persistent state ----------
+    # ---------- Persist state ----------
     def image_state_path(self, img_path: str) -> str:
         dirname = os.path.dirname(img_path)
         basename = os.path.splitext(os.path.basename(img_path))[0]
@@ -754,16 +768,17 @@ class CropperApp:
 
     def convert_to_bmp(self, in_path: str):
         def progress(step, msg):
-            self.set_status(f"[{step}/5] {msg}")
+            self.update_status_label(f"[{step}/5] {msg}")
             self.root.update_idletasks()
 
         base = os.path.splitext(os.path.basename(in_path))[0]
         out_dir = os.path.join(os.path.dirname(in_path), f"{self.export_folder_with_direction()}")
         out_path = os.path.join(out_dir, f"{base}{EXPORT_FILENAME_SUFFIX}_{self.direction}.jpg").replace('\\', '/') # complete source path & file of cropped image for convert
 
-        self.set_status("Starting conversion…")        # <— start message
+        self.update_status_label("Starting conversion…")        # <— start message
         self.root.update_idletasks()          # <— force GUI update before blocking
-        conv = Converter()
+
+        conv = Converter() # instantiate Converter class
 
         try:
             preview_path, device_path = conv.convert(
@@ -774,10 +789,10 @@ class CropperApp:
             )
             #self.flash_status(f"Done: {os.path.basename(device_path)}")
         except Exception as e:
-            self.set_status(f"Conversion failed: {e}")
+            self.update_status_label(f"Conversion failed: {e}")
             raise
 
-    def load_kv(self, path: str):
+    def load_keyvalues(self, path: str):
         """
         loads crops state from sidecar file
         
@@ -786,16 +801,20 @@ class CropperApp:
         :type path: str
         """
         data = {}
+
         try:
             with open(path, "r", encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
+
                     if not line or line.startswith("#") or "=" not in line:
                         continue
+
                     k, v = line.split("=", 1)
                     data[k.strip()] = v.strip()
         except Exception:
             return None
+
         return data
 
     def load_saved_state(self, img_path: str) -> bool:
@@ -804,17 +823,17 @@ class CropperApp:
         if not os.path.exists(kv_path):
             return False
 
-        kv = self.load_kv(kv_path)
+        keyvalues = self.load_keyvalues(kv_path)
 
-        if not kv:
+        if not keyvalues:
             return False
 
         iw, ih = self.img.size
 
         # reports direction if present
-        if kv.get("direction") in ("landscape", "portrait"):
+        if keyvalues.get("direction") in ("landscape", "portrait"):
             # 1) apply direction from state file
-            self.direction = kv["direction"]
+            self.direction = keyvalues["direction"]
 
 
             # 2) Update target_size and ratio for new direction
@@ -824,27 +843,27 @@ class CropperApp:
             self.update_button_text("direction", self.direction)
 
         # reports fill mode if present
-        if kv.get("fill_mode") in ("white", "blur"):
-            self.fill_mode = kv["fill_mode"]
+        if keyvalues.get("fill_mode") in ("white", "blur"):
+            self.fill_mode = keyvalues["fill_mode"]
             self.update_button_text("fillmode", self.fill_mode)
 
         # prefer absolute coordinates if the dimensions match
         try:
-            saved_w = int(kv.get("image_w", iw))
-            saved_h = int(kv.get("image_h", ih))
+            saved_w = int(keyvalues.get("image_w", iw))
+            saved_h = int(keyvalues.get("image_h", ih))
         except ValueError:
             saved_w, saved_h = iw, ih
 
         if saved_w == iw and saved_h == ih:
             try:
-                x1i: float = float(kv["rect_x1"])
-                y1i: float = float(kv["rect_y1"])
-                x2i: float = float(kv["rect_x2"])
-                y2i: float = float(kv["rect_y2"])
+                x1i: float = float(keyvalues["rect_x1"])
+                y1i: float = float(keyvalues["rect_y1"])
+                x2i: float = float(keyvalues["rect_x2"])
+                y2i: float = float(keyvalues["rect_y2"])
             except Exception:
-                x1i, y1i, x2i, y2i = self._coords_from_normalized(kv, iw, ih)
+                x1i, y1i, x2i, y2i = self._coords_from_normalized(keyvalues, iw, ih)
         else:
-            x1i, y1i, x2i, y2i = self._coords_from_normalized(kv, iw, ih)
+            x1i, y1i, x2i, y2i = self._coords_from_normalized(keyvalues, iw, ih)
 
         if None in (x1i, y1i, x2i, y2i):
             return False
@@ -947,18 +966,9 @@ class Converter:
         palette = (
             tuple(v for rgb in self.ACEP_REAL_WORLD_RGB for v in rgb) + self.ACEP_REAL_WORLD_RGB[0] * 249
         )
+
         self._palette_image = Image.new("P", (1, 1))
         self._palette_image.putpalette(palette)
-
-    # -----------------------
-    # load image (no EXIF)
-    # -----------------------
-    def load_image(self, path):
-        """
-        Load image exactly as stored on disk.
-        No EXIF correction here — image was auto-rotated earlier.
-        """
-        return Image.open(path).convert("RGB")
 
     # -----------------------
     # main API
@@ -973,13 +983,13 @@ class Converter:
 
         progress_callback(step:int, message:str) is optional.
         
-        :param self: image path
-        :param in_path: Beschreibung
+        :param self: instance
+        :param in_path: image path
         :type in_path: str
-        :param direction: Beschreibung
+        :param direction: landscape | portrait
         :type direction: str
-        :param dither: Beschreibung
-        :param progress_callback: Beschreibung
+        :param dither: dither method
+        :param progress_callback: callback for progress
         """
 
         def report(step, msg):
@@ -990,7 +1000,7 @@ class Converter:
         # 1. Loading
         # -----------------------------------------
         report(1, "Loading image…")
-        img = self.load_image(in_path)
+        img = Image.open(in_path).convert("RGB")
 
         # -------------------
         # Palette quantization
@@ -1006,23 +1016,23 @@ class Converter:
         basedir = os.path.dirname(in_path)
         output_basename_without_ext = os.path.splitext(os.path.basename(in_path))[0]
 
-        pic_dir = os.path.join(basedir, f"{CONVERT_FOLDER}")
-        dev_dir = os.path.join(pic_dir, f"{DEVICE_FOLDER}")
-        if EXPORT_RAW:
-            raw_dir = os.path.join(pic_dir, f"{RAW_FOLDER}")
+        # Prepare folders if not exist
+        convert_dir = os.path.join(basedir, f"{CONVERT_FOLDER}")
+        convert_out_dir = os.path.join(convert_dir, f"{output_basename_without_ext}_{direction}.bmp")
+        os.makedirs(convert_dir, exist_ok=True)
 
-        bmp_out = os.path.join(pic_dir, f"{output_basename_without_ext}_{direction}.bmp")
-        dev_out = os.path.join(dev_dir, f"{output_basename_without_ext}_{direction}.bmp")
-        if EXPORT_RAW:
-            raw_out = os.path.join(raw_dir, f"{output_basename_without_ext}_{direction}.sp6")
+        device_dir = os.path.join(convert_dir, f"{DEVICE_FOLDER}")
+        device_out_dir = os.path.join(device_dir, f"{output_basename_without_ext}_{direction}.bmp")
+        os.makedirs(device_dir, exist_ok=True)
 
-        os.makedirs(pic_dir, exist_ok=True)
-        os.makedirs(dev_dir, exist_ok=True)
+        raw_out_dir: str = ""
         if EXPORT_RAW:
+            raw_dir = os.path.join(convert_dir, f"{RAW_FOLDER}")
+            raw_out_dir = os.path.join(raw_dir, f"{output_basename_without_ext}_{direction}.sp6")
             os.makedirs(raw_dir, exist_ok=True)
 
         # save preview
-        quant_rgb.save(bmp_out)
+        quant_rgb.save(convert_out_dir)
 
         # -------------------
         # Device BMP mapping
@@ -1050,8 +1060,7 @@ class Converter:
                 rgb = px[x, y]
                 idx = self._rgb_to_index[rgb]
                 px[x, y] = self.ACEP_DEVICE_RGB[idx]
-                if EXPORT_RAW:
-                    raw = self.ACEP_DEVICE_INDEX_TO_RAW[idx]
+                raw = self.ACEP_DEVICE_INDEX_TO_RAW[idx]
 
                 if not odd:
                     if EXPORT_RAW:
@@ -1067,7 +1076,7 @@ class Converter:
         # They look bad on computer, but should look regular on e-ink screens.
         # For example, with the waveshare stock PhotoPainter firmware, you can copy
         # the BMP files to the SD card.
-        quant_rgb.save(dev_out)
+        quant_rgb.save(device_out_dir)
 
         # Produce raw image suitable for SPECTRA6 use.
         # Raw data (1 pixel = 4 bits, 2 pixels = 1 byte) to be used by
@@ -1076,18 +1085,18 @@ class Converter:
         # time and memory usage, and are more reliable to transmit over Wi-Fi.
         if EXPORT_RAW:
             report(5, "Saving RAW bytes…")
-            with open(raw_out, "wb") as f:
+            with open(raw_out_dir, "wb") as f:
                 f.write(raw_bytes)
 
         print(f"✔ Converted: {in_path}")
-        print(f"   → Preview BMP: {bmp_out}")
-        print(f"   → Device BMP : {dev_out}")
+        print(f"   → Preview BMP: {convert_out_dir}")
+        print(f"   → Device BMP : {device_out_dir}")
         if EXPORT_RAW:
-            print(f"   → Raw image data : {raw_out}")
+            print(f"   → Raw image data : {raw_out_dir}")
 
-        report(6 if EXPORT_RAW else 5, f"Done: {dev_out}")
+        report(6 if EXPORT_RAW else 5, f"Done: {device_out_dir}")
 
-        return bmp_out, dev_out
+        return convert_out_dir, device_out_dir
 
 if __name__ == "__main__":
     root = tk.Tk()
