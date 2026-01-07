@@ -9,4 +9,4 @@ env/
 venv/
 build/
 dist/
-*.spec
+#*.spec
