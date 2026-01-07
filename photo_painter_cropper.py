@@ -905,13 +905,13 @@ class Converter:
     """
 
     ACEP_REAL_WORLD_RGB = [
-        (25, 30, 33), # BLACK
-        (241, 241, 241), # WHITE
-        (243, 207, 17), # YELLOW
-        (210, 14, 19),# RED
-        (49, 49, 143),# BLUE
-        (83, 164, 40), # GREEN
-        (184, 94, 28), # ORANGE
+        (25, 30, 33), # BLACK #191E21
+        (241, 241, 241), # WHITE #F1F1F1
+        (243, 207, 17), # YELLOW #F3CF11
+        (210, 14, 19),# RED #D20E13
+        (49, 49, 143),# BLUE #31318F
+        (83, 164, 40), # GREEN #53A428
+        (184, 94, 28), # ORANGE #B85E1C
     ]
 
     ACEP_DEVICE_RGB = [
