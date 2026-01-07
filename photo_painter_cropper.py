@@ -2,6 +2,7 @@
 #!/usr/bin/env python3
 
 import os
+import sys
 import math
 import time
 import tkinter as tk
@@ -37,6 +38,19 @@ STATE_SUFFIX = "_ppcrop.txt"        # file status next to the source image
 CONVERT_FOLDER = "converted" # folder where to store converted images
 DEVICE_FOLDER = "device" # folder where to store real-world RGB to device RGB images
 
+def resource_path(relative_path):    
+    #try:
+    #    base_path = sys.prefix
+    #except Exception:
+    #    base_path = os.path.abspath(".")
+
+    if not hasattr(sys, "frozen"):
+        base_path = os.path.dirname(__file__)
+    else:
+        base_path = sys.prefix
+
+    return os.path.join(base_path, relative_path)
+
 class DynamicButtonVar:
     def __init__(self, default_text):
         self.default_text = default_text
@@ -54,6 +68,7 @@ class CropperApp:
         self._resize_pending = False
         self.root = root
         self.root.minsize(*WINDOW_MIN)
+        self.root.iconbitmap(default=resource_path("./_source/icon.ico"))
         self.root.title(f"{APP_TITLE} – "
             "Drag/Arrows=move (Shift=+fast)  •  "
             "Scroll/+/-=resize (Shift=+fast)  •  "
