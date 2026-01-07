@@ -1,6 +1,6 @@
 # PhotoPainter Cropper (macOS & Windows)
 
-Interactive cropper for the **Waveshare PhotoPainter** (7.3" ACeP, 800×480).
+Interactive cropper for the **Waveshare PhotoPainter** 7.3" ACeP and Spectra6, 800×480.
 
 This project is a fork of [@geegeek](https://github.com/geegeek)/[photopainter-cropper](https://github.com/geegeek/photopainter-cropper). Much improved.
 
@@ -34,14 +34,14 @@ alt="sample/cropped_landscape/sample_pp_landscape.jpg" />
 ...converts to a dithered BMP:
 
 <figure class="align-center">
-<img src="sample/cropped_landscape/pic/sample_pp_landscape_landscape.bmp" width="900"
-alt="sample/cropped_landscape/pic/sample_pp_landscape_landscape.bmp" />
+<img src="sample/cropped_landscape/dithered/sample_pp_landscape_landscape.bmp" width="900"
+alt="sample/cropped_landscape/dithered/sample_pp_landscape_landscape.bmp" />
 </figure>
 
 ...and finally maps to a device specific color palette (Waveshare PhotoPainter Pico ACeP 7-color):
 <figure class="align-center">
-<img src="sample/cropped_landscape/pic/device/sample_pp_landscape_landscape.bmp" width="900"
-alt="sample/cropped_landscape/pic/device/sample_pp_landscape_landscape.bmp" />
+<img src="sample/cropped_landscape/dithered/device/acep/sample_pp_landscape_landscape.bmp" width="900"
+alt="sample/cropped_landscape/dithered/device/acep/sample_pp_landscape_landscape.bmp" />
 </figure>
 
 ...which looks like this on the PhotoPainter:
@@ -54,6 +54,7 @@ alt="screenshot/002_PhotoPainterRealWorld.jpg" />
 
 - Load image by **EXIF** orientation
 - Fixed **800x480** (landscape) or **480x800** (portrait) crop ratio.
+- **ACeP** or **Spectra6** optimized output.
 - Crop can go **out of image bounds** and fill with **White** or **Blur** background
   (toggle `F`).
 - **Per-image state**: a sidecar file with `*_ppcrop.txt` next to the original
@@ -77,8 +78,8 @@ alt="screenshot/002_PhotoPainterRealWorld.jpg" />
 - Press **Enter / S** to save and go to the next image.
 - A `*_ppcrop.txt` file is written next to each original to **remember** the crop.
 - **Cropped JPGs** are saved to `cropped_landscape|cropped_portrait` next to your originals.
-- **Converted BMP** images are saved to `cropped_landscape|cropped_portrait/converted` next to your originals.
-- **Converted Real-color BMP** images are saved to `cropped_landscape|cropped_portrait/converted/device` next to your originals.
+- **Converted BMP** images are saved to `cropped_landscape|cropped_portrait/dithered` next to your originals.
+- **Converted Real-color BMP** images are saved to `cropped_landscape|cropped_portrait/dithered/device/[acep|spectra6]` next to your originals.
 
 ## Why JPG first, then BMP?
 
@@ -96,12 +97,12 @@ Using this app does the following:
 ## Samples and Outputs included
 
 - Example **input** photo and **outputs** from this tool (JPG 800×480) are available in `sample` folder.
-- For convenience, this repository also includes **BMP files** created with Waveshare’s converter in `sample/cropped_landscape/pic/device` folder, so testers can copy them directly to the device.
+- For convenience, this repository also includes **BMP files** created with this converter in `sample/cropped_landscape/dithered/device/acep` folder, so testers can copy them directly to the device.
 
 ## Device SD Card layout
 
 - Create a folder named `pic` at the **root** of the SD card.
-- Copy all **24-bit BMP** files into this `pic` folder.
+- Copy all **24-bit BMP** files from your desired target device folder into this `pic` folder.
 - Stock firmware expects fewer than ~100 images in `pic`.
 - I personally use a **custom firmware** (not mine) by `@tcellerier` that supports **up to 2000 photos**.
 
@@ -152,7 +153,7 @@ deactivate
 
 ## Project Type (GitHub Topics)
 
-Desktop GUI **application** (Tkinter) for macOS. Suggested topics:
+Desktop GUI **application** (Tkinter) for macOS and Windows. Suggested topics:
 `app`, `desktop`, `gui`, `tkinter`, `pillow`, `macos`,
 `image-processing`, `photopainter`, `waveshare`, `e-paper`.
 
