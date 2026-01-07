@@ -52,6 +52,7 @@ alt="screenshot/002_PhotoPainterRealWorld.jpg" />
 
 ## Key Features
 
+- Load image by **EXIF** orientation
 - Fixed **800x480** (landscape) or **480x800** (portrait) crop ratio.
 - Crop can go **out of image bounds** and fill with **White** or **Blur** background
   (toggle `F`).
