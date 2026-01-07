@@ -34,7 +34,7 @@ LABEL_PADDINGS = (5, 5)
 EXPORT_FOLDER = "cropped" # folder where to store cropped images
 EXPORT_FILENAME_SUFFIX = "_pp"
 STATE_SUFFIX = "_ppcrop.txt"        # file status next to the source image
-CONVERT_FOLDER = "pic" # folder where to store converted images
+CONVERT_FOLDER = "converted" # folder where to store converted images
 DEVICE_FOLDER = "device" # folder where to store real-world RGB to device RGB images
 
 class CropperApp:
@@ -99,17 +99,22 @@ class CropperApp:
         self.status_var = tk.StringVar(value=self.status_var_default_text)
         self.status = ttk.Label(self.button_bar, textvariable=self.status_var, anchor=tk.W)
         self.status.pack(side=tk.RIGHT)
-        self.status_previous = None
 
         # Output dimension size label
         self.size_lbl_var = tk.StringVar(value="")
         self.size_lbl = ttk.Label(self.button_bar, textvariable=self.size_lbl_var)
         self.size_lbl.pack(padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1], anchor=tk.W)
 
-        # Status bars
+        # Status bar elements
+        self.bottom_bar = ttk.Frame(self.root)
+        self.bottom_bar.pack(fill=tk.X, side=tk.BOTTOM)
+
         self.status_label_var = tk.StringVar(value="Select folder with images…")
-        self.status_label = ttk.Label(self.root, textvariable=self.status_label_var, anchor=tk.W)
-        self.status_label.pack(padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1], anchor=tk.W, fill=tk.X, side=tk.BOTTOM)
+        self.status_label = ttk.Label(self.bottom_bar, textvariable=self.status_label_var, anchor=tk.W)
+        self.status_label.pack(padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1], anchor=tk.W, fill=tk.X, side=tk.LEFT)
+
+        self.status_count = ttk.Label(self.bottom_bar, text="0/0")
+        self.status_count.pack(padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1], side=tk.RIGHT)
         
         # Mouse events
         self.canvas.bind("<Button-1>", self.on_click)
@@ -230,11 +235,14 @@ class CropperApp:
             self.root.after(50, self.root.quit)
             return
 
+        if self.idx < 0:
+            self.idx = len(self.image_paths)-1
+
         current_image_path = self.image_paths[self.idx]
 
         try:
             #self.img = Image.open(path).convert("RGB")
-            self.img = self.load_image_with_exif(current_image_path) # EXIF auto-rotate
+            self.img = self.load_image_by_exif_orientation(current_image_path) # EXIF auto-rotate
         except Exception as e:
             messagebox.showwarning("Image error", f"Unable to open:\n{current_image_path}\n{e}\nWe move on to the next one.")
             self.idx += 1
@@ -244,14 +252,15 @@ class CropperApp:
         self.layout_image()
 
         # restore state if it exists; otherwise initial pane
-        if not self.apply_saved_state(current_image_path):
+        if not self.load_saved_state(current_image_path):
             self.init_rect()
 
         self.update_size_lbl() # after loading state
         self.draw_crop_marker_grid()
         self.set_status(f"{current_image_path}")
+        self.status_count.config(text=f"{self.idx+1}/{len(self.image_paths)}")
 
-    def load_image_with_exif(self, path: str) -> Image:
+    def load_image_by_exif_orientation(self, path: str) -> Image:
         """
         Loads an image and applies EXIF orientation correction (auto-rotate).
         Returns an RGB image with correct orientation.
@@ -620,12 +629,13 @@ class CropperApp:
         print(f"✔ Crop saved: {out_path}")
 
     # ---------- Persistent state ----------
-    def state_path_for_image(self, img_path: str) -> str:
+    def image_state_path(self, img_path: str) -> str:
         dirname = os.path.dirname(img_path)
         basename = os.path.splitext(os.path.basename(img_path))[0]
         return os.path.join(dirname, f"{basename}{STATE_SUFFIX}")
 
     def save_state(self, img_path: str, x1i: int, y1i: int, x2i: int, y2i: int):
+        path = self.image_state_path(img_path)
         iw, ih = self.img.size
         nx1 = x1i / iw
         ny1 = y1i / ih
@@ -651,7 +661,7 @@ class CropperApp:
             f"fill_mode={self.fill_mode}",
             f"direction={self.direction}",
         ]
-        path = self.state_path_for_image(img_path)
+
         try:
             with open(path, "w", encoding="utf-8") as f:
                 f.write("\n".join(lines) + "\n")
@@ -706,8 +716,8 @@ class CropperApp:
             return None
         return data
 
-    def apply_saved_state(self, img_path: str) -> bool:
-        kv_path = self.state_path_for_image(img_path)
+    def load_saved_state(self, img_path: str) -> bool:
+        kv_path = self.image_state_path(img_path)
 
         if not os.path.exists(kv_path):
             return False
@@ -776,6 +786,7 @@ class CropperApp:
         self.rect_h = h
         self.rect_center = (cx, cy)
         self.clamp_rect_to_canvas()
+
         return True
 
     def _coords_from_normalized(self, kv, iw: float, ih: float):
