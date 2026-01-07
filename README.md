@@ -55,6 +55,7 @@ alt="screenshot/002_PhotoPainterRealWorld.jpg" />
 - Load image by **EXIF** orientation
 - Fixed **800x480** (landscape) or **480x800** (portrait) crop ratio.
 - **ACeP** or **Spectra6** optimized output.
+- **Color** or **Black&White**
 - Crop can go **out of image bounds** and fill with **White** or **Blur** background
   (toggle `F`).
 - **Per-image state**: a sidecar file with `*_ppcrop.txt` next to the original
@@ -97,7 +98,7 @@ Using this app does the following:
 ## Samples and Outputs included
 
 - Example **input** photo and **outputs** from this tool (JPG 800×480) are available in `sample` folder.
-- For convenience, this repository also includes **BMP files** created with this converter in `sample/cropped_landscape/dithered/device/acep` folder, so testers can copy them directly to the device.
+- For convenience, this repository also includes **BMP files** created with this converter in `sample/cropped_landscape/dithered/device/acep` folder, so you can copy them directly to the device.
 
 ## Device SD Card layout
 
@@ -106,7 +107,9 @@ Using this app does the following:
 - Stock firmware expects fewer than ~100 images in `pic`.
 - I personally use a **custom firmware** (not mine) by `@tcellerier` that supports **up to 2000 photos**.
 
-## Install (macOS)
+## Install & Run
+
+### MacOS
 
 Use the **official** Python for macOS (includes Tkinter).
 
@@ -117,19 +120,22 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-## Run
-
-### MacOS
-
 ``` bash
 source ~/ppainter-venv/bin/activate
 python photo_painter_cropper.py
 ```
 
 ### Windows
+
+GIT clone:
+
 ``` bash
-# git clone, jump into directory and install requirements
 git clone https://github.com/geegeek/photopainter-cropper.git
+```
+
+Virtual env & install requirements:
+
+``` bash
 cd photopainter-cropper
 # create virtual environment for project (also creates folder by name)
 python -m venv .venv
@@ -138,15 +144,29 @@ python -m venv .venv
 python -m pip install --upgrade pip
 # install requirements
 python -m pip install -r requirements.txt
+```
+
+Run script:
+
+``` bash
 .\.venv\Scripts\activate
 # it now says
-(.venv) PS patzh\to\photopainter-cropper>
+(.venv) PS path\to\photopainter-cropper>
 # run script
 python photo_painter_cropper.py
+```
+
+You can create a standalone executable:
+
+``` bash
 # build executable and generate `.spec` file
 pyinstaller --onefile --windowed -i='.\_source\icon.ico' --add-data "_source/icon.ico;_source" --name "PhotoPainterCropper" ".\photo_painter_cropper.py"
 # later you can run compilation with:
 pyinstaller PhotoPainterCropper.spec
+```
+
+Quit virtual env:
+``` bash
 # quit venv
 deactivate
 ```
