@@ -35,8 +35,10 @@ LABEL_PADDINGS = (5, 5)
 EXPORT_FOLDER = "cropped" # folder where to store cropped images
 EXPORT_FILENAME_SUFFIX = "_pp"
 STATE_SUFFIX = "_ppcrop.txt"        # file status next to the source image
-CONVERT_FOLDER = "converted" # folder where to store converted images
+CONVERT_FOLDER = "dithered" # folder where to store converted/dithered images
 DEVICE_FOLDER = "device" # folder where to store real-world RGB to device RGB images
+RAW_FOLDER = "raw" # folder where to store raw images
+EXPORT_RAW = False # should export raw image suitable for SPECTRA6 use?
 
 def resource_path(relative_path):    
     #try:
@@ -961,13 +963,23 @@ class Converter:
     # -----------------------
     # main API
     # -----------------------
-    def convert(self, in_path, direction=DIRECTION, dither=Image.FLOYDSTEINBERG, progress_callback=None):
+    def convert(self, in_path: str, direction: str=DIRECTION, dither=Image.FLOYDSTEINBERG, progress_callback=None):
         """
         Converts one RGB image into:
         - quantized preview BMP
         - quantized device BMP
-        Returns (preview_bmp_path, device_bmp_path)
+
+        Returns (bmp_out, dev_out)
+
         progress_callback(step:int, message:str) is optional.
+        
+        :param self: image path
+        :param in_path: Beschreibung
+        :type in_path: str
+        :param direction: Beschreibung
+        :type direction: str
+        :param dither: Beschreibung
+        :param progress_callback: Beschreibung
         """
 
         def report(step, msg):
@@ -996,12 +1008,18 @@ class Converter:
 
         pic_dir = os.path.join(basedir, f"{CONVERT_FOLDER}")
         dev_dir = os.path.join(pic_dir, f"{DEVICE_FOLDER}")
+        if EXPORT_RAW:
+            raw_dir = os.path.join(pic_dir, f"{RAW_FOLDER}")
 
         bmp_out = os.path.join(pic_dir, f"{output_basename_without_ext}_{direction}.bmp")
         dev_out = os.path.join(dev_dir, f"{output_basename_without_ext}_{direction}.bmp")
+        if EXPORT_RAW:
+            raw_out = os.path.join(raw_dir, f"{output_basename_without_ext}_{direction}.sp6")
 
         os.makedirs(pic_dir, exist_ok=True)
         os.makedirs(dev_dir, exist_ok=True)
+        if EXPORT_RAW:
+            os.makedirs(raw_dir, exist_ok=True)
 
         # save preview
         quant_rgb.save(bmp_out)
@@ -1009,6 +1027,16 @@ class Converter:
         # -------------------
         # Device BMP mapping
         # -------------------
+        """
+        This code:
+            1. Iterates over an image pixel by pixel, starting from the bottom-right corner and moving leftwards and upwards.
+            2. Converts each pixel’s RGB value from a “real world” color palette to a device-specific color palette.
+            3. Encodes each pixel as a 3-bit value (0–7).
+            4. Packs two pixels into one byte (each pixel stored in 4 bits / a nibble).
+            5. Appends those bytes to a list called raw_bytes.
+        In short:
+            👉 It recolors an image using a device palette and serializes the pixels into packed raw bytes suitable for a low-color device (likely embedded hardware or a display).
+        """
         report(4, "Packing device BMP…")
         px = quant_rgb.load()
         width, height = quant_rgb.size
@@ -1022,23 +1050,42 @@ class Converter:
                 rgb = px[x, y]
                 idx = self._rgb_to_index[rgb]
                 px[x, y] = self.ACEP_DEVICE_RGB[idx]
-                raw = self.ACEP_DEVICE_INDEX_TO_RAW[idx]
+                if EXPORT_RAW:
+                    raw = self.ACEP_DEVICE_INDEX_TO_RAW[idx]
 
                 if not odd:
-                    pending = raw
+                    if EXPORT_RAW:
+                        pending = raw
                     odd = True
                 else:
-                    raw_bytes.append((pending << 4) | raw)
+                    if EXPORT_RAW:
+                        raw_bytes.append((pending << 4) | raw)
                     odd = False
 
         # save device BMP
+        # BMP images intended to be used on devices that takes BMP.
+        # They look bad on computer, but should look regular on e-ink screens.
+        # For example, with the waveshare stock PhotoPainter firmware, you can copy
+        # the BMP files to the SD card.
         quant_rgb.save(dev_out)
+
+        # Produce raw image suitable for SPECTRA6 use.
+        # Raw data (1 pixel = 4 bits, 2 pixels = 1 byte) to be used by
+        # low-level device functions. Requires need some coding skills to use they
+        # properly. They are 6x smaller than BMPs so they can reduce ESP32 processing
+        # time and memory usage, and are more reliable to transmit over Wi-Fi.
+        if EXPORT_RAW:
+            report(5, "Saving RAW bytes…")
+            with open(raw_out, "wb") as f:
+                f.write(raw_bytes)
 
         print(f"✔ Converted: {in_path}")
         print(f"   → Preview BMP: {bmp_out}")
         print(f"   → Device BMP : {dev_out}")
+        if EXPORT_RAW:
+            print(f"   → Raw image data : {raw_out}")
 
-        report(5, f"Done: {dev_out}")
+        report(6 if EXPORT_RAW else 5, f"Done: {dev_out}")
 
         return bmp_out, dev_out
 
