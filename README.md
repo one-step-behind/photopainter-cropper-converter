@@ -31,14 +31,14 @@ alt="screenshot/001_chooseFrameVerticalPicture.jpg" />
 alt="sample/cropped_landscape/sample_pp_landscape.jpg" />
 </figure>
 
-...converts to a index BMP (obviously is different seen from the PhotoPainter):
+...converts to a dithered BMP:
 
 <figure class="align-center">
 <img src="sample/cropped_landscape/pic/sample_pp_landscape_landscape.bmp" width="900"
 alt="sample/cropped_landscape/pic/sample_pp_landscape_landscape.bmp" />
 </figure>
 
-...and finally maps to the device specific (Waveshare PhotoPainter Pico ACeP 7-color) color palette:
+...and finally maps to a device specific color palette (Waveshare PhotoPainter Pico ACeP 7-color):
 <figure class="align-center">
 <img src="sample/cropped_landscape/pic/device/sample_pp_landscape_landscape.bmp" width="900"
 alt="sample/cropped_landscape/pic/device/sample_pp_landscape_landscape.bmp" />
