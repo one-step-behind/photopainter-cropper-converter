@@ -15,16 +15,19 @@ DEFAULT_TARGET_SIZE = (800, 480)           # exact JPG output
 DEFAULT_RATIO = DEFAULT_TARGET_SIZE[0] / DEFAULT_TARGET_SIZE[1]
 WINDOW_MIN = (1024, 768)
 JPEG_QUALITY = 90
-DIRECTION = "landscape" # landscape | portrait
-FILL_MODE = "blur" # white | blur
+DIRECTION = "landscape" # AVAILABLE_DIRECTIONS
+FILL_MODE = "blur" # AVAILABLE_FILL_MODES
+COLOR_MODE = "color" # AVAILABLE_COLOR_MODES
 CONVERT_DITHER = 3 # NONE(0) or FLOYDSTEINBERG(3)
 TARGET_DEVICE = "acep" # ACEP | SPECTRA6
 
 AVAILABLE_DIRECTIONS = ("landscape", "portrait")
 AVAILABLE_FILL_MODES = ("blur", "white")
+AVAILABLE_COLOR_MODES = ("color", "bw")
 AVAILABLE_TARGET_DEVICES = ("acep", "spectra6")
 
 CROP_BORDER_COLOR = "#00ff00"   # green rectangle border
+DEFAULT_CROP_SIZE = 1 # between 0.1 ... 1
 GRID_COLOR = "#00ff00"          # grid lines
 MASK_COLOR = "#000000"          # mask outside crop region
 MASK_STIPPLE = "gray50"
@@ -95,21 +98,28 @@ class CropperApp:
                 "default_text": "Direction",
                 "command": self.toggle_direction,
                 "enter_tip": "Toggle Direction (D)",
-                "width": 22,
+                "width": 20,
                 "underline": 0,
             },
             "fillmode": {
                 "default_text": "Fill Mode",
                 "command": self.toggle_fill_mode,
                 "enter_tip": "Toggle Fill mode (F)",
-                "width": 22,
+                "width": 20,
+                "underline": 0,
+            },
+            "colormode": {
+                "default_text": "Color Mode",
+                "command": self.toggle_color_mode,
+                "enter_tip": "Toggle Color mode (C)",
+                "width": 20,
                 "underline": 0,
             },
             "targetdevice": {
                 "default_text": "Target device",
                 "command": self.toggle_target_device,
                 "enter_tip": "Toggle Target device (T)",
-                "width": 22,
+                "width": 20,
                 "underline": 0,
             },
             "prev": {
@@ -190,21 +200,25 @@ class CropperApp:
 
         # Various
         self.root.bind("<Configure>", self.on_resize)
-        self.root.bind("<f>", self.toggle_fill_mode)
-        self.root.bind("<F>", self.toggle_fill_mode)
         self.root.bind("<d>", self.toggle_direction)
         self.root.bind("<D>", self.toggle_direction)
+        self.root.bind("<f>", self.toggle_fill_mode)
+        self.root.bind("<F>", self.toggle_fill_mode)
+        self.root.bind("<c>", self.toggle_color_mode)
+        self.root.bind("<C>", self.toggle_color_mode)
         self.root.bind("<t>", self.toggle_target_device)
         self.root.bind("<T>", self.toggle_target_device)
 
         # State
         self.direction = DIRECTION
         self.fill_mode = FILL_MODE
+        self.color_mode = COLOR_MODE
         self.target_device = AVAILABLE_TARGET_DEVICES[0]
 
+        self.saved_preferences = None
         self.img: Image = None
-        self.disp_img = None
-        self.tk_img = None
+        self.disp_img: Image = None # image to display in window
+        self.tk_img: ImageTk.PhotoImage = None
         self.image_paths = []
         self.idx = 0
 
@@ -231,7 +245,7 @@ class CropperApp:
 
     def update_size_lbl(self):
         w, h = self.target_size
-        self.size_lbl_var.set(f"Crop target: {w}x{h}")
+        self.size_lbl_var.set(f"Crop: {w}x{h}")
 
     def create_buttons(self):
         # Create buttons dynamically
@@ -336,19 +350,27 @@ class CropperApp:
 
         current_image_path = self.image_paths[self.idx]
 
+        # Load saved preferences BEFORE loading the image
+        pref_loaded = self.load_saved_preferences(current_image_path)
+
         try:
             self.img = self.load_image_by_exif_orientation(current_image_path) # EXIF auto-rotate
         except Exception as e:
             messagebox.showwarning("Image error", f"Unable to open:\n{current_image_path}\n{e}\nWe move on to the next one.")
+            # jump to next image
             self.idx += 1
             self.show_image()
             return
 
-        self.layout_image()
+        self.center_image_in_window()
 
-        # restore state if it exists; otherwise initial pane
-        if not self.load_saved_state(current_image_path):
-            self.init_rect()
+        # restore state if exists; otherwise initial pane
+        if not pref_loaded or not self.apply_saved_state():
+            self.update_button_text("direction", self.direction)
+            self.update_button_text("fillmode", self.fill_mode)
+            self.update_button_text("colormode", self.color_mode)
+            self.update_button_text("targetdevice", self.target_device)
+            self.init_crop_rectangle()
 
         self.status_count.config(text=f"{self.idx+1}/{len(self.image_paths)}")
         self.update_size_lbl() # after loading state
@@ -361,36 +383,36 @@ class CropperApp:
         Returns an RGB image with correct orientation.
         """
         try:
-            im = Image.open(path)
+            image = Image.open(path)
 
             try:
                 # modern Pillow: .getexif()
-                exif = im.getexif()
+                exif = image.getexif()
                 orientation = exif.get(0x0112, 1)  # EXIF Orientation
             except Exception:
                 orientation = 1
 
             # Rotate according to EXIF orientation tag
             if orientation == 3:
-                im = im.rotate(180, expand=True)
+                image = image.rotate(180, expand=True)
             elif orientation == 6:
-                im = im.rotate(270, expand=True)  # 90° CW
+                image = image.rotate(270, expand=True)  # 90° CW
             elif orientation == 8:
-                im = im.rotate(90, expand=True)   # 90° CCW
+                image = image.rotate(90, expand=True)   # 90° CCW
 
             # Convert only after orientation repair
-            return im.convert("RGB")
+            return image #.convert("RGB") if self.color_mode == "color" else image.convert("L")
 
         except Exception as e:
             print("EXIF load/rotation failed:", e)
-            return Image.open(path).convert("RGB")
+            return Image.open(path) #.convert("RGB") if self.color_mode == "color" else Image.open(path).convert("L")
 
     # ---------- Layout & Drawing ----------
     def canvas_size(self):
         # Return REAL canvas size (never force minimum)
         return (self.canvas.winfo_width(), self.canvas.winfo_height())
 
-    def layout_image(self):
+    def center_image_in_window(self):
         cw, ch = self.canvas_size()
         iw, ih = self.img.size
         self.scale = min(cw / iw, ch / ih)
@@ -398,24 +420,28 @@ class CropperApp:
         disp_h = max(1, int(ih * self.scale))
         self.disp_size = (disp_w, disp_h)
         self.disp_img = self.img.resize((disp_w, disp_h), Image.LANCZOS)
+        if self.color_mode == "bw":
+            self.disp_img = self.disp_img.convert('L')
         self.tk_img = ImageTk.PhotoImage(self.disp_img)
         self.img_off = ((cw - disp_w) // 2, (ch - disp_h) // 2)
 
-    def init_rect(self):
+    def init_crop_rectangle(self):
         """
         Initialize crop rectangle
         """
         dw, dh = self.disp_size
-        rw = int(dw)# * 0.8) # cropper size 80% of image size
+        rw = int(dw * DEFAULT_CROP_SIZE) # default cropper size
         rh = int(rw / self.ratio)
+
         if rh > dh:
-            rh = int(dh)# * 0.8) # cropper size 80% of image size
+            rh = int(dh * DEFAULT_CROP_SIZE) # default cropper size
             rw = int(rh * self.ratio)
+
         self.rect_w, self.rect_h = max(20, rw), max(20, rh)
         cx = self.img_off[0] + dw // 2
         cy = self.img_off[1] + dh // 2
         self.rect_center = (cx, cy)
-        self.clamp_rect_to_canvas()
+        self.clamp_crop_rectangle_to_canvas()
 
     def rect_coords(self):
         cx, cy = self.rect_center
@@ -424,7 +450,7 @@ class CropperApp:
 
         return (cx - w2, cy - h2, cx + w2, cy + h2)
 
-    def clamp_rect_to_canvas(self):
+    def clamp_crop_rectangle_to_canvas(self):
         # Keep the rectangle within the edges of the canvas (it can go outside the PHOTO)
         x1, y1, x2, y2 = self.rect_coords()
         cw, ch = self.canvas_size()
@@ -447,7 +473,7 @@ class CropperApp:
 
         self.canvas.delete("all") # remove previous grid
 
-        # image
+        # Draw image into window
         self.canvas.create_image(self.img_off[0], self.img_off[1], anchor="nw", image=self.tk_img)
 
         # crop rectangle
@@ -486,7 +512,7 @@ class CropperApp:
             self.drag_offset = (e.x - self.rect_center[0], e.y - self.rect_center[1])
         else:
             self.rect_center = (e.x, e.y)
-            self.clamp_rect_to_canvas()
+            self.clamp_crop_rectangle_to_canvas()
             self.draw_crop_marker_grid()
 
     def on_drag(self, e):
@@ -494,7 +520,7 @@ class CropperApp:
             return
 
         self.rect_center = (e.x - self.drag_offset[0], e.y - self.drag_offset[1])
-        self.clamp_rect_to_canvas()
+        self.clamp_crop_rectangle_to_canvas()
         self.draw_crop_marker_grid()
 
     def on_release(self, _e):
@@ -522,7 +548,7 @@ class CropperApp:
     def on_arrow(self, e, dx, dy):
         step = ARROW_STEP_FAST if (e.state & 0x0001) else ARROW_STEP  # Shift accelerates
         self.rect_center = (self.rect_center[0] + dx*step, self.rect_center[1] + dy*step)
-        self.clamp_rect_to_canvas()
+        self.clamp_crop_rectangle_to_canvas()
         self.draw_crop_marker_grid()
 
     def on_plus(self, e):
@@ -542,7 +568,7 @@ class CropperApp:
         new_w = max(64, min(new_w, max_w))
         self.rect_w = new_w
         self.rect_h = int(self.rect_w / self.ratio)
-        self.clamp_rect_to_canvas()
+        self.clamp_crop_rectangle_to_canvas()
         self.draw_crop_marker_grid()
 
     def on_resize(self, _e):
@@ -572,17 +598,36 @@ class CropperApp:
             return
         
         rect_img_raw = self.rect_in_image_coords_raw()
-        self.layout_image()
+        self.center_image_in_window()
         x1i, y1i, x2i, y2i = rect_img_raw
+        self.calculate_display_coordiantes(x1i, y1i, x2i, y2i)
+        self.clamp_crop_rectangle_to_canvas()
+        self.draw_crop_marker_grid()
+
+    def calculate_display_coordiantes(self, x1i, y1i, x2i, y2i):
         x1d = self.img_off[0] + int(x1i * self.scale)
         y1d = self.img_off[1] + int(y1i * self.scale)
         x2d = self.img_off[0] + int(x2i * self.scale)
         y2d = self.img_off[1] + int(y2i * self.scale)
-        self.rect_w = max(1, x2d - x1d)
-        self.rect_h = int(self.rect_w / self.ratio)
-        self.rect_center = ((x1d + x2d)//2, (y1d + y2d)//2)
-        self.clamp_rect_to_canvas()
-        self.draw_crop_marker_grid()
+
+        #self.rect_w = max(1, x2d - x1d)
+        #self.rect_h = int(self.rect_w / self.ratio)
+        #self.rect_center = ((x1d + x2d)//2, (y1d + y2d)//2)
+
+        # reconstruct rectangle while maintaining a fixed ratio
+        w = x2d - x1d
+        h = y2d - y1d
+        # ensure based on ratio
+        if abs(w / h - self.ratio) > 0.001:
+            h = int(w / self.ratio)
+
+        self.rect_w = w
+        self.rect_h = h
+        cx = (x1d + x2d) // 2
+        cy = (y1d + y2d) // 2
+        self.rect_center = (cx, cy)
+
+        return x1d, y1d, x2d, y2d
 
     # ---------- Toggles ----------
     def toggle_direction(self, _e=None):
@@ -615,7 +660,7 @@ class CropperApp:
         self.rect_h = new_rect_h
 
         # Keep centered and inside canvas
-        self.clamp_rect_to_canvas()
+        self.clamp_crop_rectangle_to_canvas()
 
         # Update title + label + redraw
         self.update_size_lbl() # after direction toggle
@@ -625,6 +670,12 @@ class CropperApp:
     def toggle_fill_mode(self, _e=None):
         self.fill_mode = AVAILABLE_FILL_MODES[0] if self.fill_mode == AVAILABLE_FILL_MODES[1] else AVAILABLE_FILL_MODES[1]
         self.update_button_text("fillmode", self.fill_mode)
+
+    def toggle_color_mode(self, _e=None):
+        self.color_mode = AVAILABLE_COLOR_MODES[0] if self.color_mode == AVAILABLE_COLOR_MODES[1] else AVAILABLE_COLOR_MODES[1]
+        self.update_button_text("colormode", self.color_mode)
+        self.center_image_in_window()
+        self.draw_crop_marker_grid()
 
     def toggle_target_device(self, _e=None):
         self.target_device = AVAILABLE_TARGET_DEVICES[0] if self.target_device == AVAILABLE_TARGET_DEVICES[1] else AVAILABLE_TARGET_DEVICES[1]
@@ -735,6 +786,10 @@ class CropperApp:
         out_dir = os.path.join(os.path.dirname(in_path), f"{self.export_folder_with_direction()}")
         os.makedirs(out_dir, exist_ok=True)
         out_path = os.path.join(out_dir, f"{base}{EXPORT_FILENAME_SUFFIX}_{self.direction}.jpg")
+
+        if self.color_mode == "bw":
+            out_img = out_img.convert("L").convert("RGB")
+
         out_img.save(out_path, format="JPEG", quality=JPEG_QUALITY, optimize=True, progressive=True)
         print(f"✔ Crop saved: {out_path}")
 
@@ -768,15 +823,18 @@ class CropperApp:
             f"target_w={self.target_size[0]}",
             f"target_h={self.target_size[1]}",
             f"ratio={self.ratio:.6f}",
-            f"fill_mode={self.fill_mode}",
             f"direction={self.direction}",
+            f"fill_mode={self.fill_mode}",
+            f"color_mode={self.color_mode}",
             f"target_device={self.target_device}",
         ]
 
         try:
             with open(path, "w", encoding="utf-8") as f:
                 f.write("\n".join(lines) + "\n")
+
             print(f"✔ State saved: {path}")
+
             return img_path
         except Exception as e:
             print(f"[WARN] Unable to save state: {e}")
@@ -793,10 +851,10 @@ class CropperApp:
         self.update_status_label("Starting conversion…")        # <— start message
         self.root.update_idletasks()          # <— force GUI update before blocking
 
-        conv = Converter() # instantiate Converter class
+        converter = Converter() # instantiate Converter class
 
         try:
-            conv.convert(
+            converter.convert(
                 in_path=out_path,
                 direction=self.direction,
                 target_device=self.target_device,
@@ -833,89 +891,95 @@ class CropperApp:
 
         return data
 
-    def load_saved_state(self, img_path: str) -> bool:
+    def load_saved_preferences(self, img_path: str) -> bool:
+        """Load only direction / fill_mode / color_mode / target_device
+        BEFORE opening the image."""
         kv_path = self.image_state_path(img_path)
 
         if not os.path.exists(kv_path):
             return False
 
-        keyvalues = self.load_keyvalues(kv_path)
+        self.saved_preferences = self.load_keyvalues(kv_path)
 
-        if not keyvalues:
+        if not self.saved_preferences:
             return False
 
-        iw, ih = self.img.size
-
         # reports direction if present
-        if keyvalues.get("direction") in AVAILABLE_DIRECTIONS:
+        if self.saved_preferences.get("direction") in AVAILABLE_DIRECTIONS:
             # 1) apply direction from state file
-            self.direction = keyvalues["direction"]
+            self.direction = self.saved_preferences["direction"]
 
             # 2) Update target_size and ratio for new direction
             self.update_targetsize_and_ratio()
 
             # 3) update label
-        self.update_button_text("direction", self.direction)
+            self.update_button_text("direction", self.direction)
 
         # reports fill mode if present
-        if keyvalues.get("fill_mode") in AVAILABLE_FILL_MODES:
-            self.fill_mode = keyvalues["fill_mode"]
-        self.update_button_text("fillmode", self.fill_mode)
+        if self.saved_preferences.get("fill_mode") in AVAILABLE_FILL_MODES:
+            self.fill_mode = self.saved_preferences["fill_mode"]
+            self.update_button_text("fillmode", self.fill_mode)
+
+        # reports color mode if present
+        if self.saved_preferences.get("color_mode") in AVAILABLE_COLOR_MODES:
+            self.color_mode = self.saved_preferences["color_mode"]
+            self.update_button_text("colormode", self.color_mode)
 
         # reports device target if present
-        if keyvalues.get("target_device") in AVAILABLE_TARGET_DEVICES:
-            self.target_device = keyvalues["target_device"]
-        self.update_button_text("targetdevice", self.target_device)
+        if self.saved_preferences.get("target_device") in AVAILABLE_TARGET_DEVICES:
+            self.target_device = self.saved_preferences["target_device"]
+            self.update_button_text("targetdevice", self.target_device)
+
+        return True
+
+    def apply_saved_state(self) -> bool:
+        keyvalues = self.saved_preferences
 
         # prefer absolute coordinates if the dimensions match
+        iw, ih = self.img.size
+
         try:
             saved_w = int(keyvalues.get("image_w", iw))
             saved_h = int(keyvalues.get("image_h", ih))
         except ValueError:
             saved_w, saved_h = iw, ih
 
-        if saved_w == iw and saved_h == ih:
+        if saved_w == iw and saved_h == ih: # saved values matches real values
             try:
                 x1i: float = float(keyvalues["rect_x1"])
                 y1i: float = float(keyvalues["rect_y1"])
                 x2i: float = float(keyvalues["rect_x2"])
                 y2i: float = float(keyvalues["rect_y2"])
             except Exception:
-                x1i, y1i, x2i, y2i = self._coords_from_normalized(keyvalues, iw, ih)
+                x1i, y1i, x2i, y2i = self._coords_from_relative_values(keyvalues, iw, ih)
         else:
-            x1i, y1i, x2i, y2i = self._coords_from_normalized(keyvalues, iw, ih)
+            x1i, y1i, x2i, y2i = self._coords_from_relative_values(keyvalues, iw, ih)
 
         if None in (x1i, y1i, x2i, y2i):
             return False
 
         # convert to display coordinates
-        x1d = self.img_off[0] + int(x1i * self.scale)
-        y1d = self.img_off[1] + int(y1i * self.scale)
-        x2d = self.img_off[0] + int(x2i * self.scale)
-        y2d = self.img_off[1] + int(y2i * self.scale)
-
-        # reconstruct rectangle while maintaining a fixed ratio
-        w = x2d - x1d
-        h = y2d - y1d
-        # ensure based on ratio
-        if abs(w / h - self.ratio) > 0.001:
-            h = int(w / self.ratio)
-        cx = (x1d + x2d) // 2
-        cy = (y1d + y2d) // 2
-
-        self.rect_w = w
-        self.rect_h = h
-        self.rect_center = (cx, cy)
-        self.clamp_rect_to_canvas()
+        self.calculate_display_coordiantes(x1i, y1i, x2i, y2i)
+        self.clamp_crop_rectangle_to_canvas()
 
         return True
 
-    def _coords_from_normalized(self, kv, iw: float, ih: float):
+    def _coords_from_relative_values(self, keyvalues, iw: float, ih: float):
+        """
+        Get percentage values from saved preferences, otherwise return None
+        
+        :param self: instance
+        :param keyvalues: key/values
+        :param iw: real image witdh
+        :type iw: float
+        :param ih: real image height
+        :type ih: float
+        """
         try:
-            nx1: float = float(kv["rect_nx1"])
-            ny1: float = float(kv["rect_ny1"])
-            nx2: float = float(kv["rect_nx2"])
-            ny2: float = float(kv["rect_ny2"])
+            nx1: float = float(keyvalues["rect_nx1"])
+            ny1: float = float(keyvalues["rect_ny1"])
+            nx2: float = float(keyvalues["rect_nx2"])
+            ny2: float = float(keyvalues["rect_ny2"])
             return (nx1 * iw, ny1 * ih, nx2 * iw, ny2 * ih)
         except Exception:
             return (None, None, None, None)
