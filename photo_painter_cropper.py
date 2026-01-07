@@ -37,6 +37,18 @@ STATE_SUFFIX = "_ppcrop.txt"        # file status next to the source image
 CONVERT_FOLDER = "converted" # folder where to store converted images
 DEVICE_FOLDER = "device" # folder where to store real-world RGB to device RGB images
 
+class DynamicButtonVar:
+    def __init__(self, default_text):
+        self.default_text = default_text
+        self.var = tk.StringVar(value=default_text)
+
+    def update(self, extra_text):
+        """Set button text to: Base: extra"""
+        if extra_text is None or extra_text == "":
+            self.var.set(self.default_text)
+        else:
+            self.var.set(f"{self.default_text}: {extra_text.upper()}")
+
 class CropperApp:
     def __init__(self, root):
         self._resize_pending = False
@@ -56,77 +68,52 @@ class CropperApp:
         self.canvas = tk.Canvas(root, bg=WINDOW_BACKGROUND_COLOR)
         self.canvas.pack(fill=tk.BOTH, expand=True)
 
-        # Button UI
+        # ---------- Button UI ----------
         self.button_bar = ttk.Frame(top)
         self.button_bar.pack(padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1], anchor=tk.W, fill=tk.X, side=tk.TOP)
 
-        # Store the actual Button widgets
-        self.buttons = {}
-        # Define buttons with text variable, callback, optional params, and optional hover tip
+        # Define buttons with text variable, command, optional params, styling, and optional hover tip
         self.btn_defs = {
-            "fillmode": {
-                "default_text": "Fill Mode",
-                "var": tk.StringVar(value="Fill Mode"), 
-                "width": 22,
-                "underline": 0, 
-                "callback": self.toggle_fill_mode,
-                "enter_tip": "Toggle Fill mode (F)"
-            },
             "direction": {
                 "default_text": "Direction",
-                "var": tk.StringVar(value="Direction"), 
+                "command": self.toggle_direction,
+                "enter_tip": "Toggle Direction (D)",
                 "width": 22,
                 "underline": 0, 
-                "callback": self.toggle_direction,
-                "enter_tip": "Toggle Direction (D)"
+            },
+            "fillmode": {
+                "default_text": "Fill Mode",
+                "command": self.toggle_fill_mode,
+                "enter_tip": "Toggle Fill mode (F)",
+                "width": 22,
+                "underline": 0, 
             },
             "prev": {
                 "default_text": "<< Prev",
-                "var": tk.StringVar(value="<< Prev"),
-                "callback": self.prev_image,
-                "enter_tip": "Previous Image (PAGE_UP)"
+                "command": self.prev_image,
+                "enter_tip": "Previous Image (PAGE_UP)",
             },
             "next": {
                 "default_text": "Next >>",
-                "var": tk.StringVar(value="Next >>"),
-                "callback": self.next_image,
+                "command": self.next_image,
                 "enter_tip": "Next Image (PAGE_DOWN)",
             },
             "save": {
                 "default_text": "Save",
-                "var": tk.StringVar(value="Save"),
-                "callback": self.on_confirm,
+                "command": self.on_confirm,
                 "enter_tip": "Crop and Convert (Enter/S)",
-                "style_config": {"foreground": "green"}
+                "style_config": {"foreground": "green"},
             },
         }
-        # Create buttons dynamically
-        for name, info in self.btn_defs.items():
-            # Prepare kwargs for Button, excluding 'var', 'callback', 'enter_tip'
-            btn_kwargs = {k: v for k, v in info.items() if k not in ("var", "callback", "enter_tip", "default_text", "style_name", "style_config")}
-            
-            # If style_config exists, configure the style
-            if "style_config" in info:
-                style_name = f"{name}.TButton"
-                self.style.configure(style_name, **info["style_config"])
-                btn_kwargs["style"] = style_name
 
-            # Create the button
-            btn = ttk.Button(
-                self.button_bar,
-                textvariable=info["var"],
-                command=info["callback"],
-                takefocus=0,
-                **btn_kwargs
-            )
-            btn.pack(side=tk.LEFT, padx=5)
-            self.buttons[name] = btn
+        # Store the actual Button widgets
+        self.button_vars = {} # DynamicButtonVar objects
+        self.buttons = {}
 
-            # Bind hover events if enter_tip exists
-            if "enter_tip" in info:
-                btn.bind("<Enter>", lambda e, tip=info["enter_tip"]: self.show_tip(tip))
-                btn.bind("<Leave>", lambda e: self.show_tip())
+        # Build buttons
+        self.create_buttons()
 
+        # Status and button hover text
         self.status_var_default_text = "Ready"
         self.status_var = tk.StringVar(value=self.status_var_default_text)
         self.status = ttk.Label(self.button_bar, textvariable=self.status_var, anchor=tk.W)
@@ -219,6 +206,43 @@ class CropperApp:
         w, h = self.target_size
         self.size_lbl_var.set(f"Crop {w}x{h}")
 
+
+    def create_buttons(self):
+        # Create buttons dynamically
+        for name, info in self.btn_defs.items():
+
+            # 1) Create helper var object
+            dyn = DynamicButtonVar(info["default_text"])
+            self.button_vars[name] = dyn
+
+            # 2) Collect optional settings for ttk.Button
+            btn_kwargs = {
+                "textvariable": dyn.var,
+                "takefocus": 0,
+            }
+
+            if "width" in info:
+                btn_kwargs["width"] = info["width"]
+
+            if "underline" in info:
+                btn_kwargs["underline"] = info["underline"]
+
+            if "style_config" in info:
+                style_name = f"{name}.Custom.TButton"
+                self.style.configure(style_name, **info["style_config"])
+                btn_kwargs["style"] = style_name
+
+            # 3) Create the button
+            #    COMMAND MUST BE PASSED DIRECTLY!!!
+            btn = ttk.Button(self.button_bar, command=info["command"], **btn_kwargs)
+            btn.pack(side=tk.LEFT, padx=5)
+            self.buttons[name] = btn
+
+            # 4) Bind hover tooltip events if enter_tip exists
+            if "enter_tip" in info:
+                btn.bind("<Enter>", lambda e, tip=info["enter_tip"]: self.show_tip(tip))
+                btn.bind("<Leave>", lambda e: self.show_tip())
+
     def update_button_text(self, button_name, extra_text):
         """
         Update button text dynamically, preserving base text
@@ -228,8 +252,7 @@ class CropperApp:
         :param extra_text: Beschreibung
         """
         if button_name in self.btn_defs:
-            default_text = self.btn_defs[button_name]["default_text"]
-            self.btn_defs[button_name]["var"].set(f"{default_text}: {extra_text.upper()}")
+            self.button_vars[button_name].update(extra_text)
         else:
             print(f"No button variable found for '{button_name}'")
 
