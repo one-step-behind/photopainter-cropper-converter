@@ -327,9 +327,10 @@ class CropperApp:
             self.root.after(50, self.root.quit)
             return
 
+        supported_formats = (".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff", ".webp")
         self.image_paths = [
             os.path.join(folder, f) for f in sorted(os.listdir(folder))
-            if f.lower().endswith((".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"))
+            if f.lower().endswith(supported_formats)
         ]
 
         if not self.image_paths:
