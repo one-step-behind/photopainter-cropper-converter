@@ -38,13 +38,13 @@ alt="sample/cropped_landscape/sample_pp_landscape.jpg" />
 alt="sample/cropped_landscape/dithered/sample_pp_landscape_landscape.bmp" />
 </figure>
 
-...and finally maps to a device specific color palette (Waveshare PhotoPainter Pico ACeP 7-color):
+...and finally maps to a device specific color palette (Waveshare PhotoPainter Pico ACeP 7-color) which looks much punchier on your computer screen:
 <figure class="align-center">
 <img src="sample/cropped_landscape/dithered/device/acep/sample_pp_landscape_landscape.bmp" width="900"
 alt="sample/cropped_landscape/dithered/device/acep/sample_pp_landscape_landscape.bmp" />
 </figure>
 
-...which looks like this on the PhotoPainter:
+...but much right when displayed on the PhotoPainter itself:
 <figure class="align-center">
 <img src="screenshot/002_PhotoPainterRealWorld.jpg" width="900"
 alt="screenshot/002_PhotoPainterRealWorld.jpg" />
@@ -154,6 +154,12 @@ Run script:
 (.venv) PS path\to\photopainter-cropper>
 # run script
 python photo_painter_cropper.py
+
+# VSCode
+1. `Ctrl+Shift+P`
+2. enter "Python: Select Interpreter"
+3. select ".\.venv\Scripts\python.exe"
+4. click Run button to run the script
 ```
 
 You can create a standalone executable:
