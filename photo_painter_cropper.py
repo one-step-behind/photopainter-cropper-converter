@@ -1036,6 +1036,7 @@ class Converter:
 
                 # ⚠️ Raw values are hardware-defined, not arbitrary.
                 # If your panel uses different codes, adjust accordingly.
+                # can be found via "Color Index" in EPD_7in3f.h
                 "device_index_to_raw": [
                     0, # BLACK
                     1, # WHITE
