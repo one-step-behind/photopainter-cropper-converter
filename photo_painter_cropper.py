@@ -7,7 +7,8 @@ import math
 import time
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-from PIL import Image, ImageTk, ImageFilter # pyright: ignore[reportMissingImports]
+from PIL import Image, ImageTk, ImageFilter
+from converter import Converter
 
 # ====== CONFIG ======
 APP_TITLE = "PhotoPainterCropper"
@@ -18,7 +19,7 @@ JPEG_QUALITY = 90
 ORIENTATION = "landscape" # AVAILABLE_ORIENTATIONS
 FILL_MODE = "blur" # AVAILABLE_FILL_MODES
 COLOR_MODE = "color" # AVAILABLE_COLOR_MODES
-CONVERT_DITHER = 3 # NONE(0) or FLOYDSTEINBERG(3)
+DITHER_METHOD = 3 # NONE(0) or FLOYDSTEINBERG(3)
 TARGET_DEVICE = "acep" # ACEP | SPECTRA6
 
 AVAILABLE_ORIENTATIONS = ("landscape", "portrait")
@@ -44,7 +45,6 @@ EXPORT_FOLDER = "cropped" # folder where to store cropped images
 EXPORT_FILENAME_SUFFIX = "_pp"
 STATE_SUFFIX = "_ppcrop.txt"        # file status next to the source image
 CONVERT_FOLDER = "dithered" # folder where to store converted/dithered images
-DEVICE_FOLDER = "device" # folder where to store real-world RGB to device RGB images
 RAW_FOLDER = "raw" # folder where to store raw images
 EXPORT_RAW = False # should export raw image suitable for SPECTRA6 use?
 
@@ -860,8 +860,11 @@ class CropperApp:
                 in_path=out_path,
                 orientation=self.orientation,
                 target_device=self.target_device,
-                dither=CONVERT_DITHER,
-                progress_callback=progress
+                dither_method=DITHER_METHOD,
+                convert_folder=CONVERT_FOLDER,
+                raw_folder=RAW_FOLDER,
+                export_raw=EXPORT_RAW,
+                progress_callback=progress,
             )
             #self.flash_status(f"Done: {os.path.basename(device_path)}")
         except Exception as e:
@@ -998,238 +1001,6 @@ class CropperApp:
     def on_skip(self, _e=None):
         print(f"skipped: {self.image_paths[self.idx]}")
         self.next_image()
-
-# =======================
-#  IMAGE CONVERTER
-# =======================
-
-class Converter:
-    """
-    Integrated converter for ESP32-S3 PhotoPainter.
-    No CLI, no sys.exit(), completely embeddable.
-    Call Converter.convert() directly from your Tkinter app.
-    Supports progress callbacks.
-    """
-
-    def __init__(self):
-        # Get target device map based on TARGET_DEVICE
-        TARGET_DEVICE_MAP = {
-            "acep": {
-                "real_world_rgb": [
-                    (25, 30, 33),    # BLACK #191E21
-                    (241, 241, 241), # WHITE #F1F1F1
-                    (243, 207, 17),  # YELLOW #F3CF11
-                    (210, 14, 19),   # RED #D20E13
-                    (49, 49, 143),   # BLUE #31318F
-                    (83, 164, 40),   # GREEN #53A428
-                    (184, 94, 28),   # ORANGE #B85E1C
-                ],
-
-                "device_rgb": [
-                    (0, 0, 0),       # BLACK
-                    (255, 255, 255), # WHITE
-                    (255, 255, 0),   # YELLOW
-                    (255, 0, 0),     # RED
-                    (0, 0, 255),     # BLUE
-                    (0, 255, 0),     # GREEN
-                    (255, 128, 0),   # ORANGE
-                ],
-
-                # ⚠️ Raw values are hardware-defined, not arbitrary.
-                # If your panel uses different codes, adjust accordingly.
-                # can be found via "Color Index" in EPD_7in3f.h
-                "device_index_to_raw": [
-                    0, # BLACK
-                    1, # WHITE
-                    2, # YELLOW
-                    3, # RED
-                    4, # BLUE
-                    5, # GREEN
-                    6, # ORANGE
-                ],
-            },
-
-            "spectra6": {
-                "real_world_rgb": [
-                    (25, 30, 33),    # BLACK #191E21
-                    (232, 232, 232), # WHITE #E8E8E8
-                    (239, 222, 68),  # YELLOW #EFDE44
-                    (178, 19, 24),   # RED #B21318
-                    (33, 87, 186),   # BLUE #2157BA
-                    (18, 95, 32),    # GREEN #125F20
-                ],
-
-                "device_rgb": [
-                    (0, 0, 0),        # BLACK
-                    (255, 255, 255),  # WHITE
-                    (255, 255, 0),    # YELLOW
-                    (255, 0, 0),      # RED
-                    (0, 0, 255),      # BLUE
-                    (0, 255, 0),      # GREEN
-                ],
-
-                # ⚠️ Raw values are hardware-defined, not arbitrary.
-                # If your panel uses different codes, adjust accordingly.
-                "device_index_to_raw": [
-                    0, # BLACK
-                    1, # WHITE
-                    2, # YELLOW
-                    3, # RED
-                    5, # BLUE
-                    6, # GREEN
-                ],
-            }
-        }
-        
-        self.flag=False
-        try:
-            self.target_device_map = TARGET_DEVICE_MAP[TARGET_DEVICE]
-            # constant-time lookup table: Faster mapping: real_world_color → index
-            self._rgb_to_index = {
-                rgb: i for i, rgb in enumerate(self.target_device_map["real_world_rgb"])
-            }
-
-            # prebuild palette
-            palette = (
-                tuple(v for rgb in self.target_device_map["real_world_rgb"] for v in rgb) + self.target_device_map["real_world_rgb"][0] * 249
-            )
-
-            self._palette_image = Image.new("P", (1, 1))
-            self._palette_image.putpalette(palette)
-        except Exception as e:
-            messagebox.showwarning("Target device palette error", f"The given device ({TARGET_DEVICE}) does not exist in config.\nSkipping device target conversion.")
-            self.flag=True
-
-    # -----------------------
-    # main API
-    # -----------------------
-    def convert(self, in_path: str, orientation: str=ORIENTATION, target_device: str=TARGET_DEVICE, dither=Image.FLOYDSTEINBERG, progress_callback=None):
-        """
-        Converts one RGB image into:
-        - quantized preview BMP
-        - quantized device BMP
-
-        Returns (bmp_out, dev_out)
-
-        progress_callback(step:int, message:str) is optional.
-        
-        :param self: instance
-        :param in_path: image path
-        :type in_path: str
-        :param orientation: landscape | portrait
-        :type orientation: str
-        :param dither: dither method
-        :param progress_callback: callback for progress
-        """
-
-        if self.flag:
-            return
-
-        def report(step, msg):
-            if progress_callback:
-                progress_callback(step, msg)
-
-        # -----------------------------------------
-        # 1. Loading
-        # -----------------------------------------
-        report(1, "Loading image…")
-        img = Image.open(in_path).convert("RGB")
-
-        # -------------------
-        # Palette quantization
-        # -------------------
-        report(2, "Quantizing to palette…")
-        quant = img.quantize(dither=dither, palette=self._palette_image)
-        quant_rgb = quant.convert("RGB")
-
-        # -------------------
-        # Build output paths and save quantized image
-        # -------------------
-        report(3, "Save BMP…")
-        basedir = os.path.dirname(in_path)
-        output_basename_without_ext = os.path.splitext(os.path.basename(in_path))[0]
-
-        # Prepare folders if not exist
-        convert_dir = os.path.join(basedir, f"{CONVERT_FOLDER}")
-        convert_out_dir = os.path.join(convert_dir, f"{output_basename_without_ext}_{orientation}.bmp")
-        os.makedirs(convert_dir, exist_ok=True)
-
-        device_dir = os.path.join(convert_dir, f"{DEVICE_FOLDER}", target_device)
-        device_out_dir = os.path.join(device_dir, f"{output_basename_without_ext}_{orientation}.bmp")
-        os.makedirs(device_dir, exist_ok=True)
-
-        raw_out_dir: str = ""
-        if EXPORT_RAW:
-            raw_dir = os.path.join(convert_dir, f"{RAW_FOLDER}")
-            raw_out_dir = os.path.join(raw_dir, f"{output_basename_without_ext}_{orientation}.sp6")
-            os.makedirs(raw_dir, exist_ok=True)
-
-        # save preview
-        quant_rgb.save(convert_out_dir)
-
-        # -------------------
-        # Device BMP mapping
-        # -------------------
-        """
-        This code:
-            1. Iterates over an image pixel by pixel, starting from the bottom-right corner and moving leftwards and upwards.
-            2. Converts each pixel’s RGB value from a “real world” color palette to a device-specific color palette.
-            3. Encodes each pixel as a 3-bit value (0–7).
-            4. Packs two pixels into one byte (each pixel stored in 4 bits / a nibble).
-            5. Appends those bytes to a list called raw_bytes.
-        In short:
-            👉 It recolors an image using a device palette and serializes the pixels into packed raw bytes suitable for a low-color device (likely embedded hardware or a display).
-        """
-        report(4, "Packing device BMP…")
-        px = quant_rgb.load()
-        width, height = quant_rgb.size
-
-        raw_bytes = bytearray()
-        odd = False
-        pending = 0
-
-        for y in reversed(range(height)):
-            for x in reversed(range(width)):
-                rgb = px[x, y]
-                idx = self._rgb_to_index[rgb]
-                px[x, y] = self.target_device_map["device_rgb"][idx]
-                raw = self.target_device_map["device_index_to_raw"][idx]
-
-                if not odd:
-                    if EXPORT_RAW:
-                        pending = raw
-                    odd = True
-                else:
-                    if EXPORT_RAW:
-                        raw_bytes.append((pending << 4) | raw)
-                    odd = False
-
-        # save device BMP
-        # BMP images intended to be used on devices that takes BMP.
-        # They look bad on computer, but should look regular on e-ink screens.
-        # For example, with the waveshare stock PhotoPainter firmware, you can copy
-        # the BMP files to the SD card.
-        quant_rgb.save(device_out_dir)
-
-        # Produce raw image suitable for SPECTRA6 use.
-        # Raw data (1 pixel = 4 bits, 2 pixels = 1 byte) to be used by
-        # low-level device functions. Requires need some coding skills to use they
-        # properly. They are 6x smaller than BMPs so they can reduce ESP32 processing
-        # time and memory usage, and are more reliable to transmit over Wi-Fi.
-        if EXPORT_RAW:
-            report(5, "Saving RAW bytes…")
-            with open(raw_out_dir, "wb") as f:
-                f.write(raw_bytes)
-
-        print(f"✔ Converted: {in_path}")
-        print(f"   → Preview BMP: {convert_out_dir}")
-        print(f"   → Device BMP : {device_out_dir}")
-        if EXPORT_RAW:
-            print(f"   → Raw image data : {raw_out_dir}")
-
-        report(6 if EXPORT_RAW else 5, f"Done: {device_out_dir}")
-
-        return convert_out_dir, device_out_dir
 
 def on_closing():
     if messagebox.askokcancel("Quit", "Do you really want to quit?"):
