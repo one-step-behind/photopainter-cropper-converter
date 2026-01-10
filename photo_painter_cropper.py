@@ -324,7 +324,7 @@ class CropperApp:
         folder = filedialog.askdirectory(title="Select source folder with photos")
 
         if not folder:
-            self.root.after(50, self.root.quit)
+            self.root.after(50, self.root.destroy) #quit)
             return
 
         supported_formats = (".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff", ".webp")
@@ -335,16 +335,17 @@ class CropperApp:
 
         if not self.image_paths:
             messagebox.showerror("No image", "The folder contains no images.")
-            self.root.after(50, self.root.quit)
+            self.root.after(50, self.root.destroy) #quit)
             return
 
         self.show_image()
 
     def show_image(self):
         if self.idx >= len(self.image_paths):
-            messagebox.showinfo("Done", "All images have been processed.")
-            self.root.after(50, self.root.quit)
-            return
+        #    messagebox.showinfo("Done", "All images have been processed.")
+        #    self.root.after(50, self.root.destroy) #quit)
+        #    return
+            self.idx = 0
 
         if self.idx < 0:
             self.idx = len(self.image_paths)-1
@@ -1230,7 +1231,22 @@ class Converter:
 
         return convert_out_dir, device_out_dir
 
+def on_closing():
+    if messagebox.askokcancel("Quit", "Do you really want to quit?"):
+        root.destroy()
+
 if __name__ == "__main__":
     root = tk.Tk()
     app = CropperApp(root)
+    root.protocol("WM_DELETE_WINDOW", on_closing)
     root.mainloop()
+
+    # For future reference:
+    # If you want to exit and close the program completely, you should use 
+    # root.destroy(), as it stops the mainloop() and destroys the window
+    # and all its widgets.
+    # If you want to run some infinite loop and don't want to destroy your Tkinter 
+    # window and want to execute some code after the root.mainloop() line, you should use
+    # root.quit()
+
+    # do something
