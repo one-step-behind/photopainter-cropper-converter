@@ -15,15 +15,15 @@ DEFAULT_TARGET_SIZE = (800, 480)           # exact JPG output
 DEFAULT_RATIO = DEFAULT_TARGET_SIZE[0] / DEFAULT_TARGET_SIZE[1]
 WINDOW_MIN = (1024, 768)
 JPEG_QUALITY = 90
-DIRECTION = "landscape" # AVAILABLE_DIRECTIONS
+ORIENTATION = "landscape" # AVAILABLE_ORIENTATIONS
 FILL_MODE = "blur" # AVAILABLE_FILL_MODES
 COLOR_MODE = "color" # AVAILABLE_COLOR_MODES
 CONVERT_DITHER = 3 # NONE(0) or FLOYDSTEINBERG(3)
 TARGET_DEVICE = "acep" # ACEP | SPECTRA6
 
-AVAILABLE_DIRECTIONS = ("landscape", "portrait")
+AVAILABLE_ORIENTATIONS = ("landscape", "portrait")
 AVAILABLE_FILL_MODES = ("blur", "white")
-AVAILABLE_COLOR_MODES = ("color", "bw")
+AVAILABLE_COLOR_MODES = ("color", "monochrome")
 AVAILABLE_TARGET_DEVICES = ("acep", "spectra6")
 
 CROP_BORDER_COLOR = "#00ff00"   # green rectangle border
@@ -94,32 +94,32 @@ class CropperApp:
 
         # Define buttons with text variable, command, optional params, styling, and optional hover tip
         self.btn_defs = {
-            "direction": {
-                "default_text": "Direction",
-                "command": self.toggle_direction,
-                "enter_tip": "Toggle Direction (D)",
-                "width": 20,
+            "orientation": {
+                "default_text": "Orientation",
+                "command": self.toggle_orientation,
+                "enter_tip": "Toggle Orientation (D)",
+                "width": 23,
                 "underline": 0,
             },
             "fillmode": {
-                "default_text": "Fill Mode",
+                "default_text": "Fill",
                 "command": self.toggle_fill_mode,
                 "enter_tip": "Toggle Fill mode (F)",
-                "width": 20,
+                "width": 10,
                 "underline": 0,
             },
             "colormode": {
-                "default_text": "Color Mode",
+                "default_text": "Color",
                 "command": self.toggle_color_mode,
                 "enter_tip": "Toggle Color mode (C)",
-                "width": 20,
+                "width": 21,
                 "underline": 0,
             },
             "targetdevice": {
-                "default_text": "Target device",
+                "default_text": "Device",
                 "command": self.toggle_target_device,
                 "enter_tip": "Toggle Target device (T)",
-                "width": 20,
+                "width": 17,
                 "underline": 0,
             },
             "prev": {
@@ -200,8 +200,8 @@ class CropperApp:
 
         # Various
         self.root.bind("<Configure>", self.on_resize)
-        self.root.bind("<d>", self.toggle_direction)
-        self.root.bind("<D>", self.toggle_direction)
+        self.root.bind("<d>", self.toggle_orientation)
+        self.root.bind("<D>", self.toggle_orientation)
         self.root.bind("<f>", self.toggle_fill_mode)
         self.root.bind("<F>", self.toggle_fill_mode)
         self.root.bind("<c>", self.toggle_color_mode)
@@ -210,7 +210,7 @@ class CropperApp:
         self.root.bind("<T>", self.toggle_target_device)
 
         # State
-        self.direction = DIRECTION
+        self.orientation = ORIENTATION
         self.fill_mode = FILL_MODE
         self.color_mode = COLOR_MODE
         self.target_device = AVAILABLE_TARGET_DEVICES[0]
@@ -367,7 +367,7 @@ class CropperApp:
 
         # restore state if exists; otherwise initial pane
         if not pref_loaded or not self.apply_saved_state():
-            self.update_button_text("direction", self.direction)
+            self.update_button_text("orientation", self.orientation)
             self.update_button_text("fillmode", self.fill_mode)
             self.update_button_text("colormode", self.color_mode)
             self.update_button_text("targetdevice", self.target_device)
@@ -421,7 +421,7 @@ class CropperApp:
         disp_h = max(1, int(ih * self.scale))
         self.disp_size = (disp_w, disp_h)
         self.disp_img = self.img.resize((disp_w, disp_h), Image.LANCZOS)
-        if self.color_mode == "bw":
+        if self.color_mode == "monochrome":
             self.disp_img = self.disp_img.convert('L')
         self.tk_img = ImageTk.PhotoImage(self.disp_img)
         self.img_off = ((cw - disp_w) // 2, (ch - disp_h) // 2)
@@ -535,9 +535,9 @@ class CropperApp:
         fast = bool(e.state & 0x0001)  # Shift
         self.resize_rect_mouse(1 if e.num == 4 else -1, fast)
 
-    def resize_rect_mouse(self, direction, fast):
+    def resize_rect_mouse(self, orientation, fast):
         speed = SCALE_FACTOR_FAST if fast else SCALE_FACTOR
-        factor = speed if direction > 0 else (1 / speed)
+        factor = speed if orientation > 0 else (1 / speed)
         self.apply_resize_factor(factor)
 
     # ---------- Keyboard ----------
@@ -631,11 +631,11 @@ class CropperApp:
         return x1d, y1d, x2d, y2d
 
     # ---------- Toggles ----------
-    def toggle_direction(self, _e=None):
+    def toggle_orientation(self, _e=None):
         # Switch internal state
-        self.direction = AVAILABLE_DIRECTIONS[0] if self.direction == AVAILABLE_DIRECTIONS[1] else AVAILABLE_DIRECTIONS[1]
+        self.orientation = AVAILABLE_ORIENTATIONS[0] if self.orientation == AVAILABLE_ORIENTATIONS[1] else AVAILABLE_ORIENTATIONS[1]
 
-        # Update target_size and ratio for new direction
+        # Update target_size and ratio for new orientation
         self.update_targetsize_and_ratio()
 
         # Resize crop rect to respect the new ratio
@@ -664,8 +664,8 @@ class CropperApp:
         self.clamp_crop_rectangle_to_canvas()
 
         # Update title + label + redraw
-        self.update_size_lbl() # after direction toggle
-        self.update_button_text("direction", self.direction)
+        self.update_size_lbl() # after orientation toggle
+        self.update_button_text("orientation", self.orientation)
         self.draw_crop_marker_grid()
 
     def toggle_fill_mode(self, _e=None):
@@ -683,7 +683,7 @@ class CropperApp:
         self.update_button_text("targetdevice", self.target_device)
 
     def update_targetsize_and_ratio(self):
-        if self.direction == "portrait":
+        if self.orientation == "portrait":
             self.ratio = DEFAULT_TARGET_SIZE[1] / DEFAULT_TARGET_SIZE[0]
             self.target_size = (DEFAULT_TARGET_SIZE[1], DEFAULT_TARGET_SIZE[0])
         else:
@@ -777,18 +777,18 @@ class CropperApp:
             base = region_scaled_or_none.resize(self.target_size, Image.LANCZOS)
             return base.filter(ImageFilter.GaussianBlur(radius=25))
 
-    def export_folder_with_direction(self):
-        return EXPORT_FOLDER + '_' + self.direction
+    def export_folder_with_orientation(self):
+        return EXPORT_FOLDER + '_' + self.orientation
     
     def save_output(self, out_img):
         print(f"→ Source: {self.image_paths[self.idx]}")
         in_path = self.image_paths[self.idx]
         base = os.path.splitext(os.path.basename(in_path))[0]
-        out_dir = os.path.join(os.path.dirname(in_path), f"{self.export_folder_with_direction()}")
+        out_dir = os.path.join(os.path.dirname(in_path), f"{self.export_folder_with_orientation()}")
         os.makedirs(out_dir, exist_ok=True)
-        out_path = os.path.join(out_dir, f"{base}{EXPORT_FILENAME_SUFFIX}_{self.direction}.jpg")
+        out_path = os.path.join(out_dir, f"{base}{EXPORT_FILENAME_SUFFIX}_{self.orientation}.jpg")
 
-        if self.color_mode == "bw":
+        if self.color_mode == "monochrome":
             out_img = out_img.convert("L").convert("RGB")
 
         out_img.save(out_path, format="JPEG", quality=JPEG_QUALITY, optimize=True, progressive=True)
@@ -824,7 +824,7 @@ class CropperApp:
             f"target_w={self.target_size[0]}",
             f"target_h={self.target_size[1]}",
             f"ratio={self.ratio:.6f}",
-            f"direction={self.direction}",
+            f"orientation={self.orientation}",
             f"fill_mode={self.fill_mode}",
             f"color_mode={self.color_mode}",
             f"target_device={self.target_device}",
@@ -846,8 +846,8 @@ class CropperApp:
             self.root.update_idletasks()
 
         base = os.path.splitext(os.path.basename(in_path))[0]
-        out_dir = os.path.join(os.path.dirname(in_path), f"{self.export_folder_with_direction()}")
-        out_path = os.path.join(out_dir, f"{base}{EXPORT_FILENAME_SUFFIX}_{self.direction}.jpg").replace('\\', '/') # complete source path & file of cropped image for convert
+        out_dir = os.path.join(os.path.dirname(in_path), f"{self.export_folder_with_orientation()}")
+        out_path = os.path.join(out_dir, f"{base}{EXPORT_FILENAME_SUFFIX}_{self.orientation}.jpg").replace('\\', '/') # complete source path & file of cropped image for convert
 
         self.update_status_label("Starting conversion…")        # <— start message
         self.root.update_idletasks()          # <— force GUI update before blocking
@@ -857,7 +857,7 @@ class CropperApp:
         try:
             converter.convert(
                 in_path=out_path,
-                direction=self.direction,
+                orientation=self.orientation,
                 target_device=self.target_device,
                 dither=CONVERT_DITHER,
                 progress_callback=progress
@@ -893,7 +893,7 @@ class CropperApp:
         return data
 
     def load_saved_preferences(self, img_path: str) -> bool:
-        """Load only direction / fill_mode / color_mode / target_device
+        """Load only orientation / fill_mode / color_mode / target_device
         BEFORE opening the image."""
         kv_path = self.image_state_path(img_path)
 
@@ -905,31 +905,31 @@ class CropperApp:
         if not self.saved_preferences:
             return False
 
-        # reports direction if present
-        if self.saved_preferences.get("direction") in AVAILABLE_DIRECTIONS:
-            # 1) apply direction from state file
-            self.direction = self.saved_preferences["direction"]
+        # reports orientation if present
+        if self.saved_preferences.get("orientation") in AVAILABLE_ORIENTATIONS:
+            # 1) apply orientation from state file
+            self.orientation = self.saved_preferences["orientation"]
 
-            # 2) Update target_size and ratio for new direction
+            # 2) Update target_size and ratio for new orientation
             self.update_targetsize_and_ratio()
 
-            # 3) update label
-            self.update_button_text("direction", self.direction)
+        # 3) update button label
+        self.update_button_text("orientation", self.orientation)
 
         # reports fill mode if present
         if self.saved_preferences.get("fill_mode") in AVAILABLE_FILL_MODES:
             self.fill_mode = self.saved_preferences["fill_mode"]
-            self.update_button_text("fillmode", self.fill_mode)
+        self.update_button_text("fillmode", self.fill_mode)
 
         # reports color mode if present
         if self.saved_preferences.get("color_mode") in AVAILABLE_COLOR_MODES:
             self.color_mode = self.saved_preferences["color_mode"]
-            self.update_button_text("colormode", self.color_mode)
+        self.update_button_text("colormode", self.color_mode)
 
         # reports device target if present
         if self.saved_preferences.get("target_device") in AVAILABLE_TARGET_DEVICES:
             self.target_device = self.saved_preferences["target_device"]
-            self.update_button_text("targetdevice", self.target_device)
+        self.update_button_text("targetdevice", self.target_device)
 
         return True
 
@@ -1102,7 +1102,7 @@ class Converter:
     # -----------------------
     # main API
     # -----------------------
-    def convert(self, in_path: str, direction: str=DIRECTION, target_device: str=TARGET_DEVICE, dither=Image.FLOYDSTEINBERG, progress_callback=None):
+    def convert(self, in_path: str, orientation: str=ORIENTATION, target_device: str=TARGET_DEVICE, dither=Image.FLOYDSTEINBERG, progress_callback=None):
         """
         Converts one RGB image into:
         - quantized preview BMP
@@ -1115,8 +1115,8 @@ class Converter:
         :param self: instance
         :param in_path: image path
         :type in_path: str
-        :param direction: landscape | portrait
-        :type direction: str
+        :param orientation: landscape | portrait
+        :type orientation: str
         :param dither: dither method
         :param progress_callback: callback for progress
         """
@@ -1150,17 +1150,17 @@ class Converter:
 
         # Prepare folders if not exist
         convert_dir = os.path.join(basedir, f"{CONVERT_FOLDER}")
-        convert_out_dir = os.path.join(convert_dir, f"{output_basename_without_ext}_{direction}.bmp")
+        convert_out_dir = os.path.join(convert_dir, f"{output_basename_without_ext}_{orientation}.bmp")
         os.makedirs(convert_dir, exist_ok=True)
 
         device_dir = os.path.join(convert_dir, f"{DEVICE_FOLDER}", target_device)
-        device_out_dir = os.path.join(device_dir, f"{output_basename_without_ext}_{direction}.bmp")
+        device_out_dir = os.path.join(device_dir, f"{output_basename_without_ext}_{orientation}.bmp")
         os.makedirs(device_dir, exist_ok=True)
 
         raw_out_dir: str = ""
         if EXPORT_RAW:
             raw_dir = os.path.join(convert_dir, f"{RAW_FOLDER}")
-            raw_out_dir = os.path.join(raw_dir, f"{output_basename_without_ext}_{direction}.sp6")
+            raw_out_dir = os.path.join(raw_dir, f"{output_basename_without_ext}_{orientation}.sp6")
             os.makedirs(raw_dir, exist_ok=True)
 
         # save preview
