@@ -7,7 +7,7 @@ import math
 import time
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-from PIL import Image, ImageTk, ImageFilter
+from PIL import Image, ImageTk, ImageFilter, ImageEnhance
 from converter import Converter
 
 # ====== CONFIG ======
@@ -22,6 +22,10 @@ COLOR_MODE = "color" # AVAILABLE_COLOR_MODES
 DITHER_METHOD = 3 # NONE(0) or FLOYDSTEINBERG(3)
 TARGET_DEVICE = "acep" # ACEP | SPECTRA6
 
+BRIGHTNESS=1.0 # 1: no change
+CONTRAST=1.1 # 1: no change
+SATURATION=1.0 # 1: no change
+
 AVAILABLE_ORIENTATIONS = ("landscape", "portrait")
 AVAILABLE_FILL_MODES = ("blur", "white")
 AVAILABLE_COLOR_MODES = ("color", "monochrome")
@@ -33,6 +37,7 @@ GRID_COLOR = "#00ff00"          # grid lines
 MASK_COLOR = "#000000"          # mask outside crop region
 MASK_STIPPLE = "gray50"
 WINDOW_BACKGROUND_COLOR = "#222222"
+HIGHLIGHT_COLOR = "#339933"
 
 ARROW_STEP = 1                      # px for step with arrows
 ARROW_STEP_FAST = 10                # px with Shift pressed
@@ -68,60 +73,110 @@ class DynamicButtonVar:
         else:
             self.var.set(f"{self.default_text}: {extra_text.upper()}")
 
+class DynamicSliderVar:
+    def __init__(self, default_text):
+        self.default_text = default_text
+        self.var = tk.StringVar(value=default_text)
+
+    def update(self, extra_text):
+        """Set slider text to: Base: extra"""
+        if extra_text is None or extra_text == "":
+            self.var.set(self.default_text)
+        else:
+            self.var.set(f"{self.default_text}: {extra_text.upper()}")
+
 class CropperApp:
-    def __init__(self, root):
+    def __init__(self, window):
+        # ---------- Load settings ----------
+        self.JPEG_QUALITY: int = JPEG_QUALITY
+        self.BRIGHTNESS = BRIGHTNESS
+        self.CONTRAST = CONTRAST
+        self.SATURATION = SATURATION
         self._resize_pending = False
-        self.root = root
-        self.root.minsize(*WINDOW_MIN)
-        self.root.iconbitmap(default=resource_path("./_source/icon.ico"))
-        self.root.title(f"{APP_TITLE} – "
+        self.window = window
+        self.window.minsize(*WINDOW_MIN)
+        self.window.iconbitmap(default=resource_path("./_source/icon.ico"))
+        self.window.tk_setPalette(WINDOW_BACKGROUND_COLOR)
+        self.window.title(f"{APP_TITLE} – "
             "Drag/Arrows=move (Shift=+fast)  •  "
             "Scroll/+/-=resize (Shift=+fast)  •  "
             "Esc=skip"
         )
 
-        self.style = ttk.Style()
-
-        top = ttk.Frame(root)
+        top = ttk.Frame(self.window)
         top.pack(fill=tk.X, side=tk.TOP)
 
-        self.canvas = tk.Canvas(root, bg=WINDOW_BACKGROUND_COLOR)
-        self.canvas.pack(fill=tk.BOTH, expand=True)
-
-        # ---------- Button UI ----------
         self.button_bar = ttk.Frame(top)
         self.button_bar.pack(padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1], anchor=tk.W, fill=tk.X, side=tk.TOP)
 
+        canvas_with_options = ttk.Frame(window)
+        canvas_with_options.pack(fill=tk.BOTH, side=tk.TOP, expand=True)
+
+        # set the attribute "highlightthickness=0" in Canvas will no longer display the border around it
+        self.canvas = tk.Canvas(canvas_with_options, highlightthickness=0, bg=WINDOW_BACKGROUND_COLOR)
+        self.canvas.pack(fill=tk.BOTH, side=tk.LEFT, expand=True)
+
+        self.options_frame = tk.Frame(canvas_with_options, highlightthickness=0)
+        self.options_frame.pack(padx=LABEL_PADDINGS[0], fill=tk.Y, side=tk.RIGHT)
+
+        bottom_bar = ttk.Frame(self.window)#, relief=tk.SUNKEN)
+        bottom_bar.pack(fill=tk.X, side=tk.BOTTOM)
+
+        # ---------- Theme ----------
+        self.style = ttk.Style()
+        self.style.theme_use('clam')
+        self.style.configure('TFrame', background=WINDOW_BACKGROUND_COLOR, foreground="white")
+        self.style.configure('TLabel', background=WINDOW_BACKGROUND_COLOR, foreground="white")
+        #self.style.configure('TScale', background=WINDOW_BACKGROUND_COLOR, foreground="white")
+        self.style.configure('TButton', background=WINDOW_BACKGROUND_COLOR, foreground="white", bordercolor=WINDOW_BACKGROUND_COLOR)
+        self.style.map('TButton', 
+            background=[('active', HIGHLIGHT_COLOR)], # When 'active' (hovered), use 'darkgreen'
+            foreground=[('pressed', 'red')], # When 'pressed' (clicked), use 'red'
+        )
+        # Remove the "Focus Ring" from Buttons
+        #self.style.layout('TButton',  [
+        #    ('Button.padding', {
+        #        'sticky': 'nswe', 'children': [
+        #            ('Button.label', {'sticky': 'nswe'})
+        #        ]
+        #    })
+        #])
+
+        # ---------- Button UI ----------
         # Define buttons with text variable, command, optional params, styling, and optional hover tip
-        self.btn_defs = {
+        self.option_button_definitions = {
             "orientation": {
                 "default_text": "Orientation",
                 "command": self.toggle_orientation,
                 "enter_tip": "Toggle Orientation (D)",
-                "width": 23,
+                #"width": 23,
+                "fill": tk.X,
                 "underline": 0,
             },
             "fillmode": {
                 "default_text": "Fill",
                 "command": self.toggle_fill_mode,
                 "enter_tip": "Toggle Fill mode (F)",
-                "width": 10,
+                #"width": 10,
                 "underline": 0,
             },
             "colormode": {
                 "default_text": "Color",
                 "command": self.toggle_color_mode,
                 "enter_tip": "Toggle Color mode (C)",
-                "width": 21,
+                #"width": 21,
                 "underline": 0,
             },
             "targetdevice": {
                 "default_text": "Device",
                 "command": self.toggle_target_device,
                 "enter_tip": "Toggle Target device (T)",
-                "width": 17,
+                #"width": 17,
                 "underline": 0,
             },
+        }
+        
+        self.app_button_definitions = {
             "prev": {
                 "default_text": "<< Prev",
                 "command": self.prev_image,
@@ -140,12 +195,39 @@ class CropperApp:
             },
         }
 
+        self.enhancer_sliders = {
+            "brightness": {
+                "text": "Brightness",
+                "command": lambda value: self.update_slider_value_and_label("brightness", value),
+                "value": self.BRIGHTNESS,
+            },
+            "contrast": {
+                "text": "Contrast",
+                "command": lambda value: self.update_slider_value_and_label("contrast", value),
+                "value": self.CONTRAST,
+            },
+            "saturation": {
+                "text": "Saturation",
+                "command": lambda value: self.update_slider_value_and_label("saturation", value),
+                "value": self.SATURATION,
+            },
+        }
+
         # Store the actual Button widgets
         self.button_vars = {} # DynamicButtonVar objects
         self.buttons = {}
 
+        # Store the actual Sliders widgets
+        self.slider_vars = {} # DynamicButtonVar objects
+        self.sliders = {}
+
         # Build buttons
-        self.create_buttons()
+        self.create_buttons(self.app_button_definitions, self.button_bar, tk.HORIZONTAL)
+        self.create_buttons(self.option_button_definitions, self.options_frame, tk.VERTICAL)
+        tk.Label(self.options_frame, width=22, height=1).pack() # spacer
+
+        # Build sliders
+        self.create_image_enhancer_sliders()
 
         # Status and button hover text
         self.status_var_default_text = "Ready"
@@ -159,14 +241,11 @@ class CropperApp:
         self.size_lbl.pack(padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1], anchor=tk.W)
 
         # Status bar elements
-        self.bottom_bar = ttk.Frame(self.root)
-        self.bottom_bar.pack(fill=tk.X, side=tk.BOTTOM)
-
         self.status_label_var = tk.StringVar(value="Select folder with images…")
-        self.status_label = ttk.Label(self.bottom_bar, textvariable=self.status_label_var, anchor=tk.W)
+        self.status_label = ttk.Label(bottom_bar, textvariable=self.status_label_var, anchor=tk.W)
         self.status_label.pack(padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1], anchor=tk.W, fill=tk.X, side=tk.LEFT)
 
-        self.status_count = ttk.Label(self.bottom_bar, text="0/0")
+        self.status_count = ttk.Label(bottom_bar, text="0/0")
         self.status_count.pack(padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1], side=tk.RIGHT)
         
         # Mouse events
@@ -178,36 +257,36 @@ class CropperApp:
         self.canvas.bind("<Button-5>", self.on_wheel_linux) # linux down
 
         # Keyboard events
-        self.root.bind("<Return>", self.on_confirm)
-        self.root.bind_all("<Tab>", self.on_confirm_tab)    # Tab intercept (prevent focus change)
-        self.root.bind("<s>", self.on_confirm)
-        self.root.bind("<S>", self.on_confirm)
-        self.root.bind("<Prior>", self.prev_image) # PAGE UP
-        self.root.bind("<Next>", self.next_image) # PAGE DOWN
-        self.root.bind("<Escape>", self.on_skip)
+        self.window.bind("<Return>", self.on_confirm)
+        self.window.bind_all("<Tab>", self.on_confirm_tab)    # Tab intercept (prevent focus change)
+        self.window.bind("<s>", self.on_confirm)
+        self.window.bind("<S>", self.on_confirm)
+        self.window.bind("<Prior>", self.prev_image) # PAGE UP
+        self.window.bind("<Next>", self.next_image) # PAGE DOWN
+        self.window.bind("<Escape>", self.on_skip)
 
         # Keyboard events (movement)
-        self.root.bind("<Left>",  lambda e: self.on_arrow(e, -1,  0))
-        self.root.bind("<Right>", lambda e: self.on_arrow(e,  1,  0))
-        self.root.bind("<Up>",    lambda e: self.on_arrow(e,  0, -1))
-        self.root.bind("<Down>",  lambda e: self.on_arrow(e,  0,  1))
+        self.window.bind("<Left>",  lambda e: self.on_arrow(e, -1,  0))
+        self.window.bind("<Right>", lambda e: self.on_arrow(e,  1,  0))
+        self.window.bind("<Up>",    lambda e: self.on_arrow(e,  0, -1))
+        self.window.bind("<Down>",  lambda e: self.on_arrow(e,  0,  1))
 
         # Keyboard events (resize)
         for ks in ("<plus>", "<KP_Add>", "<equal>"):  # '+' It's often Shift+'='; include '=' for convenience
-            self.root.bind(ks, self.on_plus)
+            self.window.bind(ks, self.on_plus)
         for ks in ("<minus>", "<KP_Subtract>"):
-            self.root.bind(ks, self.on_minus)
+            self.window.bind(ks, self.on_minus)
 
         # Various
-        self.root.bind("<Configure>", self.on_resize)
-        self.root.bind("<d>", self.toggle_orientation)
-        self.root.bind("<D>", self.toggle_orientation)
-        self.root.bind("<f>", self.toggle_fill_mode)
-        self.root.bind("<F>", self.toggle_fill_mode)
-        self.root.bind("<c>", self.toggle_color_mode)
-        self.root.bind("<C>", self.toggle_color_mode)
-        self.root.bind("<t>", self.toggle_target_device)
-        self.root.bind("<T>", self.toggle_target_device)
+        self.window.bind("<Configure>", self.on_resize)
+        self.window.bind("<d>", self.toggle_orientation)
+        self.window.bind("<D>", self.toggle_orientation)
+        self.window.bind("<f>", self.toggle_fill_mode)
+        self.window.bind("<F>", self.toggle_fill_mode)
+        self.window.bind("<c>", self.toggle_color_mode)
+        self.window.bind("<C>", self.toggle_color_mode)
+        self.window.bind("<t>", self.toggle_target_device)
+        self.window.bind("<T>", self.toggle_target_device)
 
         # State
         self.orientation = ORIENTATION
@@ -234,12 +313,12 @@ class CropperApp:
         self.dragging = False
         self.drag_offset = (0, 0)
 
-        self.root.after(200, self.delayed_start)
+        self.window.after(200, self.delayed_start)
 
     # ---------- UI helpers ----------
     def delayed_start(self):
         # ensure window is fully realized
-        self.root.update()
+        self.window.update()
         self.canvas.focus_set()       # keyboard focus works now
         self.load_folder()
 
@@ -247,9 +326,9 @@ class CropperApp:
         w, h = self.target_size
         self.size_lbl_var.set(f"Crop: {w}x{h}")
 
-    def create_buttons(self):
+    def create_buttons(self, button_definition, target, orientation):
         # Create buttons dynamically
-        for name, info in self.btn_defs.items():
+        for name, info in button_definition.items():
 
             # 1) Create helper var object
             dyn = DynamicButtonVar(info["default_text"])
@@ -272,10 +351,9 @@ class CropperApp:
                 self.style.configure(style_name, **info["style_config"])
                 btn_kwargs["style"] = style_name
 
-            # 3) Create the button
-            #    COMMAND MUST BE PASSED DIRECTLY!!!
-            btn = ttk.Button(self.button_bar, command=info["command"], **btn_kwargs)
-            btn.pack(side=tk.LEFT)
+            # 3) Create the button - COMMAND MUST BE PASSED DIRECTLY!!!
+            btn = ttk.Button(target, command=info["command"], name=f"btn_{name}", **btn_kwargs)
+            btn.pack(side=tk.LEFT if orientation=="horizontal" else tk.TOP, fill=tk.X)
             self.buttons[name] = btn
 
             # 4) Bind hover tooltip events if enter_tip exists
@@ -291,10 +369,10 @@ class CropperApp:
         :param button_name: Beschreibung
         :param extra_text: Beschreibung
         """
-        if button_name in self.btn_defs:
+        if button_name in self.button_vars:
             self.button_vars[button_name].update(extra_text)
         else:
-            print(f"No button variable found for '{button_name}'")
+            print(f"No button found for '{button_name}'")
 
     def show_tip(self, msg: str = ""):
         """
@@ -309,6 +387,41 @@ class CropperApp:
         else:
             self.status_var.set(self.status_var_default_text)
     
+    def create_image_enhancer_sliders(self):
+        i = 0
+        for name, info in self.enhancer_sliders.items():
+            # 1) Create helper var object
+            dyn = DynamicSliderVar(info["text"])
+            self.slider_vars[name] = dyn
+
+            # 2) Collect optional settings for ttk.Scale
+            slider_kwargs = {
+                #"variable": dyn.var,
+                "takefocus": 0,
+                "from_": 0.0,
+                "to": 2.0,
+                "resolution": 0.1,
+                "tickinterval": 1.0,
+                "orient": tk.HORIZONTAL,
+                "showvalue": False
+            }
+
+            # 3) Create the slider - COMMAND MUST BE PASSED DIRECTLY!!!
+            slider_label = ttk.Label(self.options_frame, textvariable=dyn.var, justify=tk.LEFT)
+            slider_label.pack(fill=tk.X)
+            slider = tk.Scale(self.options_frame, command=info["command"], **slider_kwargs)
+            slider.set(info["value"])
+            slider.pack(fill=tk.X)
+            self.sliders[name] = [slider_label, slider]
+            i += 2
+
+    def update_slider_value_and_label(self, slider_label, value):
+        if slider_label in self.enhancer_sliders:
+            setattr(self, slider_label.upper(), float(value))
+            self.slider_vars[slider_label].update(value)
+        else:
+            print(f"No slider found for '{slider_label}'")
+
     def update_status_label(self, msg):
         """Set status message immediately."""
         self.status_label_var.set(msg)
@@ -324,7 +437,7 @@ class CropperApp:
         folder = filedialog.askdirectory(title="Select source folder with photos")
 
         if not folder:
-            self.root.after(50, self.root.destroy) #quit)
+            self.window.after(50, self.window.destroy) #quit)
             return
 
         supported_formats = (".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff", ".webp")
@@ -335,7 +448,7 @@ class CropperApp:
 
         if not self.image_paths:
             messagebox.showerror("No image", "The folder contains no images.")
-            self.root.after(50, self.root.destroy) #quit)
+            self.window.after(50, self.window.destroy) #quit)
             return
 
         self.show_image()
@@ -586,7 +699,7 @@ class CropperApp:
             return
 
         self._resize_pending = True
-        self.root.after(30, self._apply_resize)
+        self.window.after(30, self._apply_resize)
 
     def _apply_resize(self):
         """
@@ -670,6 +783,12 @@ class CropperApp:
         self.draw_crop_marker_grid()
 
     def toggle_fill_mode(self, _e=None):
+        #elt = AVAILABLE_FILL_MODES.pop(0)
+        #print("fill", elt)
+        #AVAILABLE_FILL_MODES.append(elt)
+        #self.fill_mode = elt
+        #self.update_button_text("fillmode", self.fill_mode)
+        #yield elt
         self.fill_mode = AVAILABLE_FILL_MODES[0] if self.fill_mode == AVAILABLE_FILL_MODES[1] else AVAILABLE_FILL_MODES[1]
         self.update_button_text("fillmode", self.fill_mode)
 
@@ -759,6 +878,18 @@ class CropperApp:
                 sub = region_scaled.crop((src_x1, src_y1, src_x1 + width, src_y1 + height))
                 out.paste(sub, (dst_x1, dst_y1))
 
+        enhancer = ImageEnhance.Brightness(out)
+        enhanced_image = enhancer.enhance(self.BRIGHTNESS)
+        print("self.BRIGHTNESS", self.BRIGHTNESS)
+
+        enhancer = ImageEnhance.Contrast(enhanced_image)
+        enhanced_image = enhancer.enhance(self.CONTRAST)
+
+        enhancer = ImageEnhance.Color(enhanced_image)
+        enhanced_image = enhancer.enhance(self.SATURATION)
+
+        out = enhanced_image
+
         # 5) save image
         self.save_output(out)
 
@@ -774,7 +905,7 @@ class CropperApp:
     def background_only(self, region_scaled_or_none):
         if self.fill_mode == "white" or region_scaled_or_none is None:
             return Image.new("RGB", self.target_size, "white")
-        else:
+        else: # blur
             base = region_scaled_or_none.resize(self.target_size, Image.LANCZOS)
             return base.filter(ImageFilter.GaussianBlur(radius=25))
 
@@ -792,7 +923,7 @@ class CropperApp:
         if self.color_mode == "monochrome":
             out_img = out_img.convert("L").convert("RGB")
 
-        out_img.save(out_path, format="JPEG", quality=JPEG_QUALITY, optimize=True, progressive=True)
+        out_img.save(out_path, format="JPEG", quality=self.JPEG_QUALITY, optimize=True, progressive=True)
         print(f"✔ Crop saved: {out_path}")
 
     # ---------- Persist state ----------
@@ -844,14 +975,14 @@ class CropperApp:
     def convert_to_bmp(self, in_path: str):
         def progress(step, msg):
             self.update_status_label(f"[{step}/5] {msg}")
-            self.root.update_idletasks()
+            self.window.update_idletasks()
 
         base = os.path.splitext(os.path.basename(in_path))[0]
         out_dir = os.path.join(os.path.dirname(in_path), f"{self.export_folder_with_orientation()}")
         out_path = os.path.join(out_dir, f"{base}{EXPORT_FILENAME_SUFFIX}_{self.orientation}.jpg").replace('\\', '/') # complete source path & file of cropped image for convert
 
         self.update_status_label("Starting conversion…")        # <— start message
-        self.root.update_idletasks()          # <— force GUI update before blocking
+        self.window.update_idletasks()          # <— force GUI update before blocking
 
         converter = Converter() # instantiate Converter class
 
@@ -1004,13 +1135,13 @@ class CropperApp:
 
 def on_closing():
     if messagebox.askokcancel("Quit", "Do you really want to quit?"):
-        root.destroy()
+        window.destroy()
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    app = CropperApp(root)
-    root.protocol("WM_DELETE_WINDOW", on_closing)
-    root.mainloop()
+    window = tk.Tk()
+    app = CropperApp(window)
+    window.protocol("WM_DELETE_WINDOW", on_closing)
+    window.mainloop()
 
     # For future reference:
     # If you want to exit and close the program completely, you should use 
