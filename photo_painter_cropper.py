@@ -18,17 +18,17 @@ WINDOW_MIN = (1024, 768)
 JPEG_QUALITY = 90
 ORIENTATION = "landscape" # AVAILABLE_ORIENTATIONS
 FILL_MODE = "blur" # AVAILABLE_FILL_MODES
-COLOR_MODE = "color" # AVAILABLE_COLOR_MODES
 DITHER_METHOD = 3 # NONE(0) or FLOYDSTEINBERG(3)
 TARGET_DEVICE = "acep" # ACEP | SPECTRA6
 
-BRIGHTNESS=1.0 # 1: no change
-CONTRAST=1.0 # 1: no change
-SATURATION=1.0 # 1: no change
+defaults = {
+    "BRIGHTNESS": 1.0, # 1.0: no change
+    "CONTRAST": 1.0, # 1.0: no change
+    "SATURATION": 1.0, # 1.0: no change
+}
 
 AVAILABLE_ORIENTATIONS = ("landscape", "portrait")
 AVAILABLE_FILL_MODES = ("blur", "white")
-AVAILABLE_COLOR_MODES = ("color", "monochrome")
 AVAILABLE_TARGET_DEVICES = ("acep", "spectra6")
 
 CROP_BORDER_COLOR = "#00ff00"   # green rectangle border
@@ -81,13 +81,14 @@ class DynamicSliderVar:
 class CropperApp:
     def __init__(self, window):
         # ---------- Load settings ----------
-        self.settings = self.load_app_settings_or_defaults()
-        self.saved_preferences = None
+        self.app_settings = self.load_app_settings_or_defaults()
+        self.image_preferences = {}
 
         # ---------- UI ----------
         self._resize_pending = False
+        self._slider_update_pending = None
         self.window = window
-        w, h = self.settings["window_min"].split(',')
+        w, h = self.app_settings["window_min"].split(',')
         self.window.minsize(w, h)
         resource_path = os.path.join(os.path.dirname(__file__), "./_source/icon.ico") if not hasattr(sys, "frozen") else os.path.join(sys.prefix, "./_source/icon.ico")
         self.window.iconbitmap(default=resource_path)
@@ -147,21 +148,14 @@ class CropperApp:
                 "fill": tk.X,
                 "underline": 0,
             },
-            "fillmode": {
+            "fill_mode": {
                 "default_text": "Fill",
                 "command": self.toggle_fill_mode,
                 "enter_tip": "Toggle Fill mode (F)",
                 #"width": 10,
                 "underline": 0,
             },
-            "colormode": {
-                "default_text": "Color",
-                "command": self.toggle_color_mode,
-                "enter_tip": "Toggle Color mode (C)",
-                #"width": 21,
-                "underline": 0,
-            },
-            "targetdevice": {
+            "target_device": {
                 "default_text": "Device",
                 "command": self.toggle_target_device,
                 "enter_tip": "Toggle Target device (T)",
@@ -192,18 +186,15 @@ class CropperApp:
         self.enhancer_sliders = {
             "brightness": {
                 "text": "Brightness",
-                "command": lambda value: self.update_slider_value_and_label("brightness", value),
-                "default_value": BRIGHTNESS,
+                "command": lambda value: self.schedule_slider_update("brightness", value),
             },
             "contrast": {
                 "text": "Contrast",
-                "command": lambda value: self.update_slider_value_and_label("contrast", value),
-                "default_value": CONTRAST,
+                "command": lambda value: self.schedule_slider_update("contrast", value),
             },
             "saturation": {
                 "text": "Saturation",
-                "command": lambda value: self.update_slider_value_and_label("saturation", value),
-                "default_value": SATURATION,
+                "command": lambda value: self.schedule_slider_update("saturation", value),
             },
         }
 
@@ -271,19 +262,18 @@ class CropperApp:
 
         # Various
         self.window.bind("<Configure>", self.on_resize)
-        self.window.bind("<d>", self.toggle_orientation)
-        self.window.bind("<D>", self.toggle_orientation)
+        self.window.bind("<o>", self.toggle_orientation)
+        self.window.bind("<O>", self.toggle_orientation)
         self.window.bind("<f>", self.toggle_fill_mode)
         self.window.bind("<F>", self.toggle_fill_mode)
-        self.window.bind("<c>", self.toggle_color_mode)
-        self.window.bind("<C>", self.toggle_color_mode)
-        self.window.bind("<t>", self.toggle_target_device)
-        self.window.bind("<T>", self.toggle_target_device)
+        self.window.bind("<d>", self.toggle_target_device)
+        self.window.bind("<D>", self.toggle_target_device)
 
         # State
-        self.img: Image = None
-        self.disp_img: Image = None # image to display in window
+        self.original_img: Image = None
+        self.display_img: Image = None # image to display in window
         self.tk_img: ImageTk.PhotoImage = None
+        self.image_id = None
         self.image_paths = []
         self.idx = 0
 
@@ -376,11 +366,11 @@ class CropperApp:
     def create_image_enhancer_sliders(self):
         i = 0
         for name, info in self.enhancer_sliders.items():
-            value = info["default_value"] if not name in self.saved_preferences else self.saved_preferences[name]
+            value = self.image_preferences[name]
 
             # if sliders already exists, just update value
             if len(self.slider_vars) == len(self.enhancer_sliders.items()):
-                self.update_slider_value_and_label(name, value)
+                self.schedule_slider_update(name, value)
                 self.sliders[name][1].set(value)
                 continue
 
@@ -409,11 +399,20 @@ class CropperApp:
             self.sliders[name] = [slider_label, slider]
             i += 2
 
+    # -------------------------------------------------------------------------
+    # Debounced processing for sliders
+    # -------------------------------------------------------------------------
+    def schedule_slider_update(self, slider_label, value):
+        if self._slider_update_pending:
+            self.window.after_cancel(self._slider_update_pending)
+        self._slider_update_pending = self.window.after(10, self.update_slider_value_and_label(slider_label, value))
+
     def update_slider_value_and_label(self, slider_label, value):
         if slider_label in self.enhancer_sliders:
-            #setattr(self.saved_preferences, slider_label, float(value))
-            self.saved_preferences[slider_label] = float(value)
+            self.image_preferences[slider_label] = float(value)
             self.slider_vars[slider_label].update(value)
+
+            self.update_image()
         else:
             print(f"No slider found for '{slider_label}'")
 
@@ -461,34 +460,28 @@ class CropperApp:
         current_image_path = self.image_paths[self.idx]
 
         # Load saved preferences BEFORE loading the image
-        pref_loaded = self.load_state_or_defaults(current_image_path)
+        pref_loaded = self.load_image_preferences_or_defaults(current_image_path)
 
         try:
-            self.img = self.load_image_by_exif_orientation(current_image_path) # EXIF auto-rotate
+            self.image_id = None
+            self.original_img = self.load_image_by_exif_orientation(current_image_path) # EXIF auto-rotate
+            self.display_img = self.original_img.copy()
         except Exception as e:
             messagebox.showwarning("Image error", f"Unable to open:\n{current_image_path}\n{e}\nWe move on to the next one.")
-            # jump to next image
-            self.idx += 1
-            self.show_image()
+            self.next_image()
             return
 
-        self.center_image_in_window()
+        self.create_image_enhancer_sliders() # create image options sliders
+        self.resize_image_and_center_in_window()
 
         # restore state if exists; otherwise initial pane
         if not pref_loaded or not self.apply_saved_state():
-            self.update_button_text("orientation", self.settings["image_orientation"])
-            self.update_button_text("fillmode", self.settings["image_fill_mode"])
-            self.update_button_text("colormode", self.settings["image_color_mode"])
-            self.update_button_text("targetdevice", self.settings["image_target_device"])
             self.init_crop_rectangle()
 
         self.status_count.config(text=f"{self.idx+1}/{len(self.image_paths)}")
         self.update_size_lbl() # after loading state
         self.update_status_label(f"{current_image_path}")
-        # create image options sliders
-        self.create_image_enhancer_sliders()
-        # create crop marker
-        self.draw_crop_marker_grid()
+        self.draw_crop_marker_grid() # create crop marker
 
     def load_image_by_exif_orientation(self, path: str) -> Image:
         """
@@ -496,7 +489,7 @@ class CropperApp:
         Returns an RGB image with correct orientation.
         """
         try:
-            image = Image.open(path)
+            image = Image.open(path).convert("RGB")
 
             try:
                 # modern Pillow: .getexif()
@@ -513,30 +506,40 @@ class CropperApp:
             elif orientation == 8:
                 image = image.rotate(90, expand=True)   # 90° CCW
 
-            # Convert only after orientation repair
-            return image #.convert("RGB") if self.color_mode == "color" else image.convert("L")
+            return image
 
         except Exception as e:
             print("EXIF load/rotation failed:", e)
-            return Image.open(path) #.convert("RGB") if self.color_mode == "color" else Image.open(path).convert("L")
+            return Image.open(path)
 
     # ---------- Layout & Drawing ----------
     def canvas_size(self):
         # Return REAL canvas size (never force minimum)
         return (self.canvas.winfo_width(), self.canvas.winfo_height())
 
-    def center_image_in_window(self):
+    def resize_image_and_center_in_window(self):
         cw, ch = self.canvas_size()
-        iw, ih = self.img.size
+        iw, ih = self.original_img.size
         self.scale = min(cw / iw, ch / ih)
         disp_w = max(1, int(iw * self.scale))
         disp_h = max(1, int(ih * self.scale))
         self.disp_size = (disp_w, disp_h)
-        self.disp_img = self.img.resize((disp_w, disp_h), Image.LANCZOS)
-        if self.color_mode == "monochrome":
-            self.disp_img = self.disp_img.convert('L')
-        self.tk_img = ImageTk.PhotoImage(self.disp_img)
+        self.display_img = self.original_img.resize((disp_w, disp_h), Image.LANCZOS)
         self.img_off = ((cw - disp_w) // 2, (ch - disp_h) // 2)
+
+    def update_image(self):
+        """Apply all enhancements and update the image display."""
+        # Initial image
+        img = self.enhance_image(self.display_img)
+        self.tk_img = ImageTk.PhotoImage(img)
+
+        # Draw or update image on canvas
+        if self.image_id is None:
+            self.image_id = self.canvas.create_image(self.img_off[0], self.img_off[1], anchor="nw", image=self.tk_img)
+        else: # Update the existing canvas
+            self.canvas.itemconfig(self.image_id, image=self.tk_img)
+
+        self._slider_update_pending = None
 
     def init_crop_rectangle(self):
         """
@@ -584,10 +587,9 @@ class CropperApp:
         # snap to have straight lines (no sub-pixels)
         def snap(v): return int(round(v))
 
-        self.canvas.delete("all") # remove previous grid
-
-        # Draw image into window
-        self.canvas.create_image(self.img_off[0], self.img_off[1], anchor="nw", image=self.tk_img)
+        self.canvas.delete("all") # remove everything from Canvas
+        self.image_id = None
+        self.update_image() # rebuild image
 
         # crop rectangle
         x1f, y1f, x2f, y2f = self.rect_coords()
@@ -690,7 +692,7 @@ class CropperApp:
         
         :param self: instance
         """
-        if self.img is None:
+        if self.original_img is None:
             return
 
         if self._resize_pending:
@@ -707,11 +709,11 @@ class CropperApp:
         """
         self._resize_pending = False
 
-        if self.img is None:
+        if self.original_img is None:
             return
         
         rect_img_raw = self.rect_in_image_coords_raw()
-        self.center_image_in_window()
+        self.resize_image_and_center_in_window()
         x1i, y1i, x2i, y2i = rect_img_raw
         self.calculate_display_coordiantes(x1i, y1i, x2i, y2i)
         self.clamp_crop_rectangle_to_canvas()
@@ -745,7 +747,7 @@ class CropperApp:
     # ---------- Toggles ----------
     def toggle_orientation(self, _e=None):
         # Switch internal state
-        self.settings["image_orientation"] = AVAILABLE_ORIENTATIONS[0] if self.settings["image_orientation"] == AVAILABLE_ORIENTATIONS[1] else AVAILABLE_ORIENTATIONS[1]
+        self.image_preferences["orientation"] = AVAILABLE_ORIENTATIONS[0] if self.image_preferences["orientation"] == AVAILABLE_ORIENTATIONS[1] else AVAILABLE_ORIENTATIONS[1]
 
         # Update target_size and ratio for new orientation
         self.update_targetsize_and_ratio()
@@ -777,31 +779,19 @@ class CropperApp:
 
         # Update title + label + redraw
         self.update_size_lbl() # after orientation toggle
-        self.update_button_text("orientation", self.settings["image_orientation"])
+        self.update_button_text("orientation", self.image_preferences["orientation"])
         self.draw_crop_marker_grid()
 
     def toggle_fill_mode(self, _e=None):
-        #elt = AVAILABLE_FILL_MODES.pop(0)
-        #print("fill", elt)
-        #AVAILABLE_FILL_MODES.append(elt)
-        #self.fill_mode = elt
-        #self.update_button_text("fillmode", self.fill_mode)
-        #yield elt
-        self.fill_mode = AVAILABLE_FILL_MODES[0] if self.fill_mode == AVAILABLE_FILL_MODES[1] else AVAILABLE_FILL_MODES[1]
-        self.update_button_text("fillmode", self.fill_mode)
-
-    def toggle_color_mode(self, _e=None):
-        self.color_mode = AVAILABLE_COLOR_MODES[0] if self.color_mode == AVAILABLE_COLOR_MODES[1] else AVAILABLE_COLOR_MODES[1]
-        self.update_button_text("colormode", self.color_mode)
-        self.center_image_in_window()
-        self.draw_crop_marker_grid()
+        self.image_preferences["fill_mode"] = AVAILABLE_FILL_MODES[0] if self.image_preferences["fill_mode"] == AVAILABLE_FILL_MODES[1] else AVAILABLE_FILL_MODES[1]
+        self.update_button_text("fill_mode", self.image_preferences["fill_mode"])
 
     def toggle_target_device(self, _e=None):
-        self.target_device = AVAILABLE_TARGET_DEVICES[0] if self.target_device == AVAILABLE_TARGET_DEVICES[1] else AVAILABLE_TARGET_DEVICES[1]
-        self.update_button_text("targetdevice", self.target_device)
+        self.image_preferences["target_device"] = AVAILABLE_TARGET_DEVICES[0] if self.image_preferences["target_device"] == AVAILABLE_TARGET_DEVICES[1] else AVAILABLE_TARGET_DEVICES[1]
+        self.update_button_text("target_device", self.image_preferences["target_device"])
 
     def update_targetsize_and_ratio(self):
-        if self.settings["image_orientation"] == "portrait":
+        if self.image_preferences["orientation"] == "portrait":
             self.ratio = DEFAULT_TARGET_SIZE[1] / DEFAULT_TARGET_SIZE[0]
             self.target_size = (DEFAULT_TARGET_SIZE[1], DEFAULT_TARGET_SIZE[0])
         else:
@@ -840,7 +830,7 @@ class CropperApp:
             return
 
         # 2) intersection with the original image
-        iw, ih = self.img.size
+        iw, ih = self.original_img.size
         ix1 = max(0, math.floor(x1i))
         iy1 = max(0, math.floor(y1i))
         ix2 = min(iw, math.ceil(x2i))
@@ -858,7 +848,7 @@ class CropperApp:
             int_h_orig = iy2 - iy1
             int_w_tgt = max(1, int(round(int_w_orig * sx)))
             int_h_tgt = max(1, int(round(int_h_orig * sy)))
-            region_scaled = self.img.crop((ix1, iy1, ix2, iy2)).resize((int_w_tgt, int_h_tgt), Image.LANCZOS)
+            region_scaled = self.original_img.crop((ix1, iy1, ix2, iy2)).resize((int_w_tgt, int_h_tgt), Image.LANCZOS)
             out = self.background_only(region_scaled)
 
             dx_tgt = int(round((ix1 - x1i) * sx))
@@ -892,26 +882,45 @@ class CropperApp:
         self.next_image()
 
     def enhance_image(self, img):
-        enhancer = ImageEnhance.Brightness(img)
-        enhanced_image = enhancer.enhance(self.saved_preferences["brightness"])
+        # Add edge enhancement
+        #enhanced_image = img.filter(ImageFilter.EDGE_ENHANCE)
 
+        # Add noise reduction
+        #enhanced_image = enhanced_image.filter(ImageFilter.SMOOTH)
+
+        # Add sharpening for better detail visibility
+        enhanced_image = img.filter(ImageFilter.SHARPEN)
+
+        if (
+            float(self.image_preferences["brightness"]) == float(defaults["BRIGHTNESS"]) and
+            float(self.image_preferences["contrast"]) == float(defaults["CONTRAST"]) and
+            float(self.image_preferences["saturation"]) == float(defaults["SATURATION"])
+        ):
+            return enhanced_image
+
+        # Add brightness enhancement
+        enhancer = ImageEnhance.Brightness(enhanced_image)
+        enhanced_image = enhancer.enhance(float(self.image_preferences["brightness"]))
+
+        # Add contrast enhancement
         enhancer = ImageEnhance.Contrast(enhanced_image)
-        enhanced_image = enhancer.enhance(self.saved_preferences["contrast"])
+        enhanced_image = enhancer.enhance(float(self.image_preferences["contrast"]))
 
+        # Add saturation enhancement
         enhancer = ImageEnhance.Color(enhanced_image)
-        enhanced_image = enhancer.enhance(self.saved_preferences["saturation"])
+        enhanced_image = enhancer.enhance(float(self.image_preferences["saturation"]))
 
         return enhanced_image
 
     def background_only(self, region_scaled_or_none):
-        if self.fill_mode == "white" or region_scaled_or_none is None:
+        if self.image_preferences["fill_mode"] == "white" or region_scaled_or_none is None:
             return Image.new("RGB", self.target_size, "white")
         else: # blur
             base = region_scaled_or_none.resize(self.target_size, Image.LANCZOS)
             return base.filter(ImageFilter.GaussianBlur(radius=25))
 
     def export_folder_with_orientation(self):
-        return EXPORT_FOLDER + '_' + self.settings["image_orientation"]
+        return EXPORT_FOLDER + '_' + self.image_preferences["orientation"]
     
     def save_output(self, out_img):
         print(f"→ Source: {self.image_paths[self.idx]}")
@@ -919,12 +928,8 @@ class CropperApp:
         base = os.path.splitext(os.path.basename(in_path))[0]
         out_dir = os.path.join(os.path.dirname(in_path), f"{self.export_folder_with_orientation()}")
         os.makedirs(out_dir, exist_ok=True)
-        out_path = os.path.join(out_dir, f"{base}{EXPORT_FILENAME_SUFFIX}_{self.settings['image_orientation']}.jpg")
-
-        if self.color_mode == "monochrome":
-            out_img = out_img.convert("L").convert("RGB")
-
-        out_img.save(out_path, format="JPEG", quality=self.settings["image_quality"], optimize=True, progressive=True)
+        out_path = os.path.join(out_dir, f"{base}{EXPORT_FILENAME_SUFFIX}_{self.image_preferences['orientation']}.jpg")
+        out_img.save(out_path, format="JPEG", quality=self.app_settings["image_quality"], optimize=True, progressive=True)
         print(f"✔ Crop saved: {out_path}")
 
     # ---------- Persist state ----------
@@ -935,7 +940,7 @@ class CropperApp:
 
     def save_state(self, img_path: str, x1i: int, y1i: int, x2i: int, y2i: int):
         path = self.image_state_path(img_path)
-        iw, ih = self.img.size
+        iw, ih = self.original_img.size
         nx1 = x1i / iw
         ny1 = y1i / ih
         nx2 = x2i / iw
@@ -957,13 +962,12 @@ class CropperApp:
             f"target_w={self.target_size[0]}",
             f"target_h={self.target_size[1]}",
             f"ratio={self.ratio:.6f}",
-            f"orientation={self.saved_preferences['orientation']}",
-            f"fill_mode={self.saved_preferences['fill_mode']}",
-            f"color_mode={self.saved_preferences['color_mode']}",
-            f"target_device={self.saved_preferences['target_device']}",
-            f"brightness={self.saved_preferences['brightness']}",
-            f"contrast={self.saved_preferences['contrast']}",
-            f"saturation={self.saved_preferences['saturation']}",
+            f"orientation={self.image_preferences['orientation']}",
+            f"fill_mode={self.image_preferences['fill_mode']}",
+            f"target_device={self.image_preferences['target_device']}",
+            f"brightness={self.image_preferences['brightness']}",
+            f"contrast={self.image_preferences['contrast']}",
+            f"saturation={self.image_preferences['saturation']}",
         ]
 
         try:
@@ -1030,10 +1034,9 @@ class CropperApp:
             settings["save_filelist"]=SAVE_FILELIST
             settings["image_target_size"]=DEFAULT_TARGET_SIZE
             settings["image_quality"]=JPEG_QUALITY
-            settings["image_orientation"]=ORIENTATION
-            settings["image_fill_mode"]=FILL_MODE
-            settings["image_color_mode"]=COLOR_MODE
-            settings["image_target_device"]=TARGET_DEVICE
+            settings["orientation"]=ORIENTATION
+            settings["fill_mode"]=FILL_MODE
+            settings["target_device"]=TARGET_DEVICE
             settings["crop_border_color"]=CROP_BORDER_COLOR
             settings["export_folder"]=EXPORT_FOLDER
             settings["export_filename_suffix"]=EXPORT_FILENAME_SUFFIX
@@ -1045,57 +1048,58 @@ class CropperApp:
         print("Settings", settings)
         return settings
 
-    def load_state_or_defaults(self, img_path: str) -> bool:
-        """Load only orientation / fill_mode / color_mode / target_device
-        BEFORE opening the image."""
+    def load_image_preferences_or_defaults(self, img_path: str) -> bool:
+        self.image_preferences = {} # reset to default to prevent usage of old data
         kv_path = self.image_state_path(img_path)
 
-        if not os.path.exists(kv_path):
-            return False
+        if os.path.exists(kv_path):
+            self.image_preferences = self.load_keyvalues(kv_path)
 
-        self.saved_preferences = self.load_keyvalues(kv_path)
+            if not self.image_preferences:
+                return False
 
-        if not self.saved_preferences:
-            return False
+        #needed_options = ("orientation", "fill_mode", "target_device", "brightness", "contrast", "saturation")
 
-        # reports orientation if present
-        if "orientation" in self.saved_preferences and self.saved_preferences.get("orientation") in AVAILABLE_ORIENTATIONS:
-            # 1) apply orientation from state file
-            self.settings["image_orientation"] = self.saved_preferences["orientation"]
+        if not self.image_preferences: # use app defaults
+            print("SET DEFAULT IMAGE PREFS", self.image_preferences, "FROM", self.app_settings)
+            self.image_preferences["orientation"] = self.app_settings["orientation"]
+            self.image_preferences["fill_mode"] = self.app_settings["fill_mode"]
+            self.image_preferences["target_device"] = self.app_settings["target_device"]
+            self.image_preferences["brightness"] = defaults["BRIGHTNESS"]
+            self.image_preferences["contrast"] = defaults["CONTRAST"]
+            self.image_preferences["saturation"] = defaults["SATURATION"]
 
-            # 2) Update target_size and ratio for new orientation
-            self.update_targetsize_and_ratio()
+        # safe values
+        if "orientation" in self.image_preferences and (self.image_preferences["orientation"] not in AVAILABLE_ORIENTATIONS):
+            print("NO ORIENTATION AVAILABLE")
+            self.image_preferences["orientation"] = ORIENTATION
 
-        # 3) update button label
-        self.update_button_text("orientation", self.settings["image_orientation"])
+        # Update target_size and ratio for new orientation
+        self.update_targetsize_and_ratio()
 
-        # reports fill mode if present
-        if "fill_mode" in self.saved_preferences and self.saved_preferences.get("fill_mode") in AVAILABLE_FILL_MODES:
-            self.fill_mode = self.saved_preferences["fill_mode"]
-        self.update_button_text("fillmode", self.fill_mode)
+        if "fill_mode" in self.image_preferences and self.image_preferences["fill_mode"] not in AVAILABLE_FILL_MODES:
+            self.image_preferences["fill_mode"] = FILL_MODE
 
-        # reports color mode if present
-        if "color_mode" in self.saved_preferences and self.saved_preferences.get("color_mode") in AVAILABLE_COLOR_MODES:
-            self.color_mode = self.saved_preferences["color_mode"]
-        self.update_button_text("colormode", self.color_mode)
+        if "target_device" in self.image_preferences and self.image_preferences["target_device"] not in AVAILABLE_TARGET_DEVICES:
+            self.image_preferences["target_device"] = TARGET_DEVICE
 
-        # reports device target if present
-        if "target_device" in self.saved_preferences and self.saved_preferences.get("target_device") in AVAILABLE_TARGET_DEVICES:
-            self.target_device = self.saved_preferences["target_device"]
-        self.update_button_text("targetdevice", self.target_device)
+        # update button labels
+        for name, info in self.option_button_definitions.items():
+            self.update_button_text(name, self.image_preferences[name])
 
-        # reports brightness if present
-        if "brightness" in self.saved_preferences and (0 <= float(self.saved_preferences.get("brightness")) <= 2):
-            self.saved_preferences["brightness"] = self.saved_preferences["brightness"]
-        self.update_button_text("targetdevice", self.target_device)
+        # get safe values and update slider values
+        for name, info in self.enhancer_sliders.items():
+            if not name in self.image_preferences or (name in self.image_preferences and not (0 <= float(self.image_preferences[name]) <= 2)):
+                self.image_preferences[name] = defaults[name.upper()]
+            #self.update_slider_value_and_label(name, self.image_preferences[name])
 
         return True
 
     def apply_saved_state(self) -> bool:
-        keyvalues = self.saved_preferences
+        keyvalues = self.image_preferences
 
         # prefer absolute coordinates if the dimensions match
-        iw, ih = self.img.size
+        iw, ih = self.original_img.size
 
         try:
             saved_w = int(keyvalues.get("image_w", iw))
@@ -1163,7 +1167,7 @@ class CropperApp:
 
         base = os.path.splitext(os.path.basename(in_path))[0]
         out_dir = os.path.join(os.path.dirname(in_path), f"{self.export_folder_with_orientation()}")
-        out_path = os.path.join(out_dir, f"{base}{EXPORT_FILENAME_SUFFIX}_{self.settings['image_orientation']}.jpg").replace('\\', '/') # complete source path & file of cropped image for convert
+        out_path = os.path.join(out_dir, f"{base}{EXPORT_FILENAME_SUFFIX}_{self.image_preferences['orientation']}.jpg").replace('\\', '/') # complete source path & file of cropped image for convert
 
         self.update_status_label("Starting conversion…")        # <— start message
         self.window.update_idletasks()          # <— force GUI update before blocking
@@ -1173,8 +1177,8 @@ class CropperApp:
         try:
             converter.convert(
                 in_path=out_path,
-                orientation=self.settings["image_orientation"],
-                target_device=self.target_device,
+                orientation=self.image_preferences["orientation"],
+                target_device=self.image_preferences["target_device"],
                 dither_method=DITHER_METHOD,
                 convert_folder=CONVERT_FOLDER,
                 raw_folder=RAW_FOLDER,
