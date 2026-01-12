@@ -364,40 +364,39 @@ class CropperApp:
             self.status_var.set(self.status_var_default_text)
     
     def create_image_enhancer_sliders(self):
-        i = 0
-        for name, info in self.enhancer_sliders.items():
+        # create all sliders if needed
+        if not self.slider_vars:
+            for name, info in self.enhancer_sliders.items():
+                value = self.image_preferences[name]
+
+                dyn = DynamicSliderVar(info["text"])
+                self.slider_vars[name] = dyn
+
+                slider_label = ttk.Label(self.options_frame, textvariable=dyn.var, justify=tk.LEFT)
+                slider_label.pack(fill=tk.X)
+
+                slider_kwargs = {
+                    "name": f"slider_{name}",
+                    "from_": 0.0,
+                    "to": 2.0,
+                    "resolution": 0.1,
+                    "tickinterval": 1.0,
+                    "orient": tk.HORIZONTAL,
+                    "showvalue": False,
+                    "takefocus": 0,
+                }
+
+                slider = tk.Scale(self.options_frame, command=info["command"], **slider_kwargs)
+                slider.set(value)
+                slider.pack(fill=tk.X)
+
+                self.sliders[name] = [slider_label, slider]
+
+        # AFTER all sliders exist → update their labels correctly
+        for name, slider in self.sliders.items():
             value = self.image_preferences[name]
-
-            # if sliders already exists, just update value
-            if len(self.slider_vars) == len(self.enhancer_sliders.items()):
-                self.schedule_slider_update(name, value)
-                self.sliders[name][1].set(value)
-                continue
-
-            # 1) Create helper var object
-            dyn = DynamicSliderVar(info["text"])
-            self.slider_vars[name] = dyn
-
-            # 2) Collect optional settings for ttk.Scale
-            slider_kwargs = {
-                "name": f"slider_{name}",
-                "takefocus": 0,
-                "from_": 0.0,
-                "to": 2.0,
-                "resolution": 0.1,
-                "tickinterval": 1.0,
-                "orient": tk.HORIZONTAL,
-                "showvalue": False,
-            }
-
-            # 3) Create the slider - COMMAND MUST BE PASSED DIRECTLY!!!
-            slider_label = ttk.Label(self.options_frame, textvariable=dyn.var, justify=tk.LEFT)
-            slider_label.pack(fill=tk.X)
-            slider = tk.Scale(self.options_frame, command=info["command"], **slider_kwargs)
-            slider.set(value)
-            slider.pack(fill=tk.X)
-            self.sliders[name] = [slider_label, slider]
-            i += 2
+            self.slider_vars[name].update(value)
+            self.sliders[name][1].set(value)
 
     # -------------------------------------------------------------------------
     # Debounced processing for sliders
@@ -405,14 +404,14 @@ class CropperApp:
     def schedule_slider_update(self, slider_label, value):
         if self._slider_update_pending:
             self.window.after_cancel(self._slider_update_pending)
-        self._slider_update_pending = self.window.after(10, self.update_slider_value_and_label(slider_label, value))
+        self._slider_update_pending = self.window.after(20, lambda: self.update_slider_value_and_label(slider_label, value))
 
     def update_slider_value_and_label(self, slider_label, value):
         if slider_label in self.enhancer_sliders:
             self.image_preferences[slider_label] = float(value)
             self.slider_vars[slider_label].update(value)
 
-            self.update_image()
+            self.window.after_idle(self.update_image)
         else:
             print(f"No slider found for '{slider_label}'")
 
@@ -535,7 +534,7 @@ class CropperApp:
 
         # Draw or update image on canvas
         if self.image_id is None:
-            self.image_id = self.canvas.create_image(self.img_off[0], self.img_off[1], anchor="nw", image=self.tk_img)
+            self.image_id = self.canvas.create_image(self.img_off[0], self.img_off[1], anchor="nw", image=self.tk_img, tags="image_layer")
         else: # Update the existing canvas
             self.canvas.itemconfig(self.image_id, image=self.tk_img)
 
@@ -1091,7 +1090,6 @@ class CropperApp:
         for name, info in self.enhancer_sliders.items():
             if not name in self.image_preferences or (name in self.image_preferences and not (0 <= float(self.image_preferences[name]) <= 2)):
                 self.image_preferences[name] = defaults[name.upper()]
-            #self.update_slider_value_and_label(name, self.image_preferences[name])
 
         return True
 
