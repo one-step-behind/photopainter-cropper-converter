@@ -12,31 +12,32 @@ from converter import Converter
 
 # ====== CONFIG ======
 APP_TITLE = "PhotoPainterCropper"
-DEFAULT_TARGET_SIZE: tuple[int, int] = (800, 480)           # exact JPG output
-DEFAULT_RATIO: float = DEFAULT_TARGET_SIZE[0] / DEFAULT_TARGET_SIZE[1]
 WINDOW_MIN: tuple[int, int] = (1024, 768)
 JPEG_QUALITY: int = 90
-ORIENTATION: str = "landscape" # AVAILABLE_ORIENTATIONS
-FILL_MODE: str = "blur" # AVAILABLE_FILL_MODES
 DITHER_METHOD: int = 3 # NONE(0) or FLOYDSTEINBERG(3)
-TARGET_DEVICE: str = "acep" # ACEP | SPECTRA6
 
 defaults = {
+    "EXPORT_FOLDER": "cropped", # folder where to store cropped images
+    "IMAGE_TARGET_SIZE": (800, 480), # exact JPG output image dimensions
+    "ORIENTATION": "landscape", # available_option["ORIENTATION"]
+    "FILL_MODE": "blur", # available_option["FILL_MODE"]
+    "TARGET_DEVICE": "acep", # available_option["TARGET_DEVICE"]
     "BRIGHTNESS": 1.0, # 1.0: no change
     "CONTRAST": 1.0, # 1.0: no change
     "SATURATION": 1.0, # 1.0: no change
-    "EDGE": False,
-    "SMOOTH": False,
-    "SHARPEN": False,
+    "ENHANCER_EDGE": False,
+    "ENHANCER_SMOOTH": True,
+    "ENHANCER_SHARPEN": False,
 }
 
-AVAILABLE_ORIENTATIONS = ("landscape", "portrait")
-AVAILABLE_FILL_MODES = ("blur", "white")
-AVAILABLE_TARGET_DEVICES = ("acep", "spectra6")
+available_option = {
+    "ORIENTATION": ("landscape", "portrait"),
+    "FILL_MODE": ("blur", "white"),
+    "TARGET_DEVICE": ("acep", "spectra6"),
+}
 
-CROP_BORDER_COLOR = "#00ff00"   # green rectangle border
+GRID_COLOR = "#00ff00"   # green rectangle border
 DEFAULT_CROP_SIZE = 1 # between 0.1 ... 1
-GRID_COLOR = "#00ff00"          # grid lines
 MASK_COLOR = "#000000"          # mask outside crop region
 MASK_STIPPLE = "gray50"
 WINDOW_BACKGROUND_COLOR = "#222222"
@@ -49,8 +50,6 @@ SCALE_FACTOR_FAST = 1.10            # zoom step with Shift
 
 LABEL_PADDINGS = (5, 5)
 
-EXPORT_FOLDER = "cropped" # folder where to store cropped images
-EXPORT_FILENAME_SUFFIX = "_pp"
 STATE_SUFFIX = "_ppcrop.txt"        # file status next to the source image
 CONVERT_FOLDER = "dithered" # folder where to store converted/dithered images
 RAW_FOLDER = "raw" # folder where to store raw images
@@ -91,7 +90,7 @@ class CropperApp:
         self._resize_pending = False
         self._slider_update_pending = None
         self.window = window
-        w, h = self.app_settings["window_min"] if type(self.app_settings["window_min"]) is tuple else self.app_settings["window_min"].split(',')
+        w, h = self.app_settings["window_min"] if type(self.app_settings["window_min"]) is tuple else tuple(int(item) if item.isdigit() else item for item in self.app_settings["window_min"].split("x"))
         self.window.minsize(int(w), int(h))
         resource_path = os.path.join(os.path.dirname(__file__), "./_source/icon.ico") if not hasattr(sys, "frozen") else os.path.join(sys.prefix, "./_source/icon.ico")
         self.window.iconbitmap(default=resource_path)
@@ -147,7 +146,7 @@ class CropperApp:
 
         # ---------- Button UI ----------
         # Define buttons with text variable, command, optional params, styling, and optional hover tip
-        self.option_button_definitions = {
+        self.option_button_def = {
             "orientation": {
                 "default_text": "Orientation",
                 "command": self.toggle_orientation,
@@ -188,51 +187,72 @@ class CropperApp:
             },
         }
 
-        self.enhancer_sliders = {
+        self.enhancer_sliders_def = {
             "brightness": {
                 "text": "Brightness",
+                "min": 0.1,
+                "max": 5.0,
                 "command": lambda value: self.schedule_slider_update("brightness", value),
+                "enter_tip": "Set Brighness",
             },
             "contrast": {
                 "text": "Contrast",
+                "min": 0.1,
+                "max": 5.0,
                 "command": lambda value: self.schedule_slider_update("contrast", value),
+                "enter_tip": "Set Contrast",
             },
             "saturation": {
                 "text": "Saturation",
+                "min": 0.0,
+                "max": 5.0,
                 "command": lambda value: self.schedule_slider_update("saturation", value),
+                "enter_tip": "Set Saturation",
             },
         }
 
-        self.enhancer_checkboxes = {
-            "edge": {
+        self.enhancer_checkboxes_def = {
+            "enhancer_edge": {
                 "text": "Edge",
-                "command": lambda: self.update_checkbox("edge"),
+                "command": lambda: self.update_image_enhancer_checkbox("enhancer_edge"),
+                "enter_tip": "Enhance image by Edgeing",
             },
-            "smooth": {
+            "enhancer_smooth": {
                 "text": "Smooth",
-                "command": lambda: self.update_checkbox("smooth"),
+                "command": lambda: self.update_image_enhancer_checkbox("enhancer_smooth"),
+                "enter_tip": "Enhance image by Smoothing",
             },
-            "sharpen": {
+            "enhancer_sharpen": {
                 "text": "Sharpen",
-                "command": lambda: self.update_checkbox("sharpen"),
+                "command": lambda: self.update_image_enhancer_checkbox("enhancer_sharpen"),
+                "enter_tip": "Enhance image by Sharpening",
+            },
+        }
+
+        self.app_settings_def = {
+            "save_filelist": {
+                "text": "Save image list",
+                "command": lambda: self.update_app_settings_checkbox("save_filelist"),
+                "enter_tip": "Saves file list of existing images on app exit to fileList.txt in export folder(s)",
             },
         }
 
         # Store the actual Button widgets
         self.button_vars = {} # DynamicButtonVar objects
         self.buttons = {}
-
         # Store the actual Sliders widgets
         self.slider_vars = {} # DynamicSliderVar objects
         self.sliders = {}
-
-        self.checkbox_vars = {} # Checkbox objects
-        self.checkboxes = {}
+        # Store the actual Checkbox widgets
+        self.image_enhancer_checkbox_vars = {} # Checkbox objects
+        self.image_enhancer_checkboxes = {}
+        self.app_settings_checkbox_vars = {} # Checkbox objects
+        self.app_settings_checkboxes = {}
 
         # Build buttons
         self.create_buttons(self.app_button_definitions, self.button_bar, tk.HORIZONTAL)
         # create image options buttons
-        self.create_buttons(self.option_button_definitions, self.options_frame, tk.VERTICAL)
+        self.create_buttons(self.option_button_def, self.options_frame, tk.VERTICAL)
         tk.Label(self.options_frame, width=22, height=1).pack() # spacer
 
         # Status and button hover text
@@ -293,6 +313,7 @@ class CropperApp:
         self.window.bind("<D>", self.toggle_target_device)
 
         # State
+        self.picture_input_folder: str | None = None
         self.original_img = None
         self.display_img = None # image to display in window
         self.tk_img: ImageTk.PhotoImage | None = None
@@ -300,20 +321,19 @@ class CropperApp:
         self.image_paths = []
         self.idx = 0
 
-        self.scale = 1.0
-        self.img_off = (0, 0)
-        self.disp_size = (0, 0)
+        self.scale: float = 1.0
+        self.img_off: tuple[int, int] = (0, 0)
+        self.disp_size: tuple[int, int] = (0, 0)
 
-        self.target_size = DEFAULT_TARGET_SIZE  # will be updated dynamically
-        self.ratio = DEFAULT_RATIO
-        self.rect_w = 0
-        self.rect_h = 0
-        self.rect_center = (0, 0)
-        self.dragging = False
-        self.drag_offset = (0, 0)
+        self.target_size: tuple[int, int] = (0, 0)
+        self.ratio: float = 0
+        self.rect_w: int = 0
+        self.rect_h: int = 0
+        self.rect_center: tuple[int, int] = (0, 0)
+        self.dragging: bool = False
+        self.drag_offset: tuple[int, int] = (0, 0)
 
         self.width, self.height = self.window.winfo_width(), self.window.winfo_height()
-
         self.window.after(200, self.delayed_start)
 
     # ---------- UI helpers ----------
@@ -327,7 +347,7 @@ class CropperApp:
         w, h = self.target_size
         self.size_lbl_var.set(f"Crop: {w}x{h}")
 
-    def create_buttons(self, button_definition, target, orientation) -> None:
+    def create_buttons(self, button_definition, target, btn_orient) -> None:
         # Create buttons dynamically
         for name, info in button_definition.items():
 
@@ -354,7 +374,7 @@ class CropperApp:
 
             # 3) Create the button - COMMAND MUST BE PASSED DIRECTLY!!!
             btn = ttk.Button(target, command=info["command"], name=f"btn_{name}", **btn_kwargs)
-            btn.pack(side=tk.LEFT if orientation=="horizontal" else tk.TOP, fill=tk.X)
+            btn.pack(side=tk.LEFT if btn_orient=="horizontal" else tk.TOP, fill=tk.X)
             self.buttons[name] = btn
 
             # 4) Bind hover tooltip events if enter_tip exists
@@ -390,7 +410,7 @@ class CropperApp:
     
     def create_image_enhancer_sliders(self) -> None:
         if not self.slider_vars:
-            for name, info in self.enhancer_sliders.items():
+            for name, info in self.enhancer_sliders_def.items():
                 value = self.image_preferences[name]
 
                 dyn = DynamicSliderVar(info["text"])
@@ -401,8 +421,8 @@ class CropperApp:
 
                 slider_kwargs = {
                     "name": f"slider_{name}",
-                    "from_": 0.0,
-                    "to": 2.0,
+                    "from_": info["min"],
+                    "to": info["max"],
                     "resolution": 0.1,
                     "tickinterval": 1.0,
                     "orient": tk.HORIZONTAL,
@@ -415,6 +435,11 @@ class CropperApp:
                 slider.pack(fill=tk.X)
 
                 self.sliders[name] = [slider_label, slider]
+
+                # Bind hover tooltip events if enter_tip exists
+                if "enter_tip" in info:
+                    slider.bind("<Enter>", lambda e, tip=info["enter_tip"]: self.show_tip(tip))
+                    slider.bind("<Leave>", lambda e: self.show_tip())
 
         # AFTER all sliders exist → update their labels correctly
         for name, slider in self.sliders.items():
@@ -431,7 +456,7 @@ class CropperApp:
         self._slider_update_pending = self.window.after(20, lambda: self.update_slider_value_and_label(slider_label, value))
 
     def update_slider_value_and_label(self, slider_label, value) -> None:
-        if slider_label in self.enhancer_sliders:
+        if slider_label in self.enhancer_sliders_def:
             self.image_preferences[slider_label] = float(value)
             self.slider_vars[slider_label].update(value)
 
@@ -440,8 +465,8 @@ class CropperApp:
             print(f"No slider found for '{slider_label}'")
 
     def create_image_enhancer_checkboxes(self) -> None:
-        if not self.checkbox_vars:
-            for name, info in self.enhancer_checkboxes.items():
+        if not self.image_enhancer_checkbox_vars:
+            for name, info in self.enhancer_checkboxes_def.items():
                 value = self.image_preferences[name]
 
                 checkbox_kwargs = {
@@ -452,26 +477,70 @@ class CropperApp:
                     "takefocus": 0,
                 }
 
-                self.checkbox_vars[name] = tk.BooleanVar(value=value)
-                checkbox = ttk.Checkbutton(self.options_frame, command=info["command"], variable=self.checkbox_vars[name], **checkbox_kwargs)
+                self.image_enhancer_checkbox_vars[name] = tk.BooleanVar(value=value)
+                checkbox = ttk.Checkbutton(self.options_frame, command=info["command"], variable=self.image_enhancer_checkbox_vars[name], **checkbox_kwargs)
                 checkbox.pack(padx = 5, pady = 5, fill=tk.X)
 
-                self.checkboxes[name] = checkbox
+                self.image_enhancer_checkboxes[name] = checkbox
+
+                # Bind hover tooltip events if enter_tip exists
+                if "enter_tip" in info:
+                    checkbox.bind("<Enter>", lambda e, tip=info["enter_tip"]: self.show_tip(tip))
+                    checkbox.bind("<Leave>", lambda e: self.show_tip())
 
         # AFTER all checkboxes exist → update their values
-        for name, checkbox in self.checkboxes.items():
+        for name, checkbox in self.image_enhancer_checkboxes.items():
             value = self.image_preferences[name]
-            self.checkbox_vars[name].set(value)
+            self.image_enhancer_checkbox_vars[name].set(value)
+    
+    def create_app_settings_checkboxes(self) -> None:
+        if not self.app_settings_checkbox_vars:
+            ttk.Separator(self.options_frame).pack(fill=tk.X, pady=5)
 
-    def update_checkbox(self, name) -> None:
-        if name in self.checkbox_vars:
+            for name, info in self.app_settings_def.items():
+                value = self.app_settings[name]
+
+                checkbox_kwargs = {
+                    "text": info["text"],
+                    "name": f"checkbox_{name}",
+                    "onvalue": True,
+                    "offvalue": False,
+                    "takefocus": 0,
+                }
+
+                self.app_settings_checkbox_vars[name] = tk.BooleanVar(value=value)
+                checkbox = ttk.Checkbutton(self.options_frame, command=info["command"], variable=self.app_settings_checkbox_vars[name], **checkbox_kwargs)
+                checkbox.pack(padx = 5, pady = 5, fill=tk.X)
+
+                self.app_settings_checkboxes[name] = checkbox
+
+                # Bind hover tooltip events if enter_tip exists
+                if "enter_tip" in info:
+                    checkbox.bind("<Enter>", lambda e, tip=info["enter_tip"]: self.show_tip(tip))
+                    checkbox.bind("<Leave>", lambda e: self.show_tip())
+
+        # AFTER all checkboxes exist → update their values
+        for name, checkbox in self.app_settings_checkboxes.items():
+            value = self.app_settings[name]
+            self.app_settings_checkbox_vars[name].set(value)
+
+    def update_image_enhancer_checkbox(self, name) -> None:
+        if name in self.image_enhancer_checkbox_vars:
             self.image_preferences[name] = False if self.image_preferences[name] == True else True
-            self.checkbox_vars[name].set(self.image_preferences[name])
+            self.image_enhancer_checkbox_vars[name].set(self.image_preferences[name])
             
             self.window.after_idle(self.update_image)
         else:
-            print(f"No Checkbox/Checkbutton found for '{name}'")
+            print(f"No Checkbox/Checkbutton found for '{name}' in image_enhancer_checkbox_vars")
 
+    def update_app_settings_checkbox(self, name) -> None:
+        if name in self.app_settings_checkbox_vars:
+            self.app_settings[name] = False if self.app_settings[name] == True else True
+            self.app_settings_checkbox_vars[name].set(self.app_settings[name])
+            
+            self.window.after_idle(self.update_image)
+        else:
+            print(f"No Checkbox/Checkbutton found for '{name}' in app_settings_checkbox_vars")
 
     def update_status_label(self, msg) -> None:
         """Set status message immediately."""
@@ -484,15 +553,15 @@ class CropperApp:
         
         :param self: instance
         """
-        folder = filedialog.askdirectory(title="Select source folder with photos")
+        self.picture_input_folder = filedialog.askdirectory(title="Select source folder with photos")
 
-        if not folder:
+        if not self.picture_input_folder:
             self.window.after(50, self.window.destroy) #quit)
             return
 
         supported_formats = (".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff", ".webp")
         self.image_paths = [
-            os.path.join(folder, f) for f in sorted(os.listdir(folder))
+            os.path.join(self.picture_input_folder, f) for f in sorted(os.listdir(self.picture_input_folder))
             if f.lower().endswith(supported_formats)
         ]
 
@@ -506,7 +575,7 @@ class CropperApp:
     def show_image(self) -> None:
         if self.idx >= len(self.image_paths):
         #    messagebox.showinfo("Done", "All images have been processed.")
-        #    self.root.after(50, self.root.destroy) #quit)
+        #    self.root.after(50, self.window.destroy) #quit)
         #    return
             self.idx = 0
 
@@ -517,10 +586,12 @@ class CropperApp:
 
         # Load saved preferences BEFORE loading the image
         pref_loaded = self.load_image_preferences_or_defaults(current_image_path)
+        # Update target_size and ratio for new orientation
+        self.update_targetsize_and_ratio()
 
         try:
             self.image_id = None
-            self.original_img = self.load_image_by_exif_orientation(current_image_path) # EXIF auto-rotate
+            self.original_img = self.load_image_by_exiforient(current_image_path) # EXIF auto-rotate
             self.display_img = self.original_img.copy()
         except Exception as e:
             messagebox.showwarning("Image error", f"Unable to open:\n{current_image_path}\n{e}\nWe move on to the next one.")
@@ -529,6 +600,7 @@ class CropperApp:
 
         self.create_image_enhancer_sliders() # create image options sliders
         self.create_image_enhancer_checkboxes()
+        self.create_app_settings_checkboxes()
         self.resize_image_and_center_in_window()
 
         # restore state if exists; otherwise initial pane
@@ -541,7 +613,7 @@ class CropperApp:
         self.update_status_label(f"{current_image_path}")
         self.draw_crop_marker_grid() # create crop marker
 
-    def load_image_by_exif_orientation(self, path: str):
+    def load_image_by_exiforient(self, path: str):
         """
         Loads an image and applies EXIF orientation correction (auto-rotate).
         Returns an RGB image with correct orientation.
@@ -552,16 +624,16 @@ class CropperApp:
             try:
                 # modern Pillow: .getexif()
                 exif = image.getexif()
-                orientation = exif.get(0x0112, 1)  # EXIF Orientation
+                exiforient = exif.get(0x0112, 1)  # EXIF Orientation
             except Exception:
-                orientation = 1
+                exiforient = 1
 
             # Rotate according to EXIF orientation tag
-            if orientation == 3:
+            if exiforient == 3:
                 image = image.rotate(180, expand=True)
-            elif orientation == 6:
+            elif exiforient == 6:
                 image = image.rotate(270, expand=True)  # 90° CW
-            elif orientation == 8:
+            elif exiforient == 8:
                 image = image.rotate(90, expand=True)   # 90° CCW
 
             return image
@@ -664,7 +736,7 @@ class CropperApp:
         self.canvas.create_rectangle(x2, y1, cw, y2, fill=MASK_COLOR, stipple=MASK_STIPPLE, width=0, tags=("crop_layer",))
 
         # crop edge
-        self.canvas.create_rectangle(x1, y1, x2, y2, outline=CROP_BORDER_COLOR, width=1, tags=("crop_layer",))
+        self.canvas.create_rectangle(x1, y1, x2, y2, outline=self.app_settings["grid_color"], width=1, tags=("crop_layer",))
 
         # grid (thirds) with straight lines
         v1 = snap(x1 + (x2 - x1) / 3.0)
@@ -672,10 +744,10 @@ class CropperApp:
         h1 = snap(y1 + (y2 - y1) / 3.0)
         h2 = snap(y1 + 2 * (y2 - y1) / 3.0)
         dash_pat = (3, 3)
-        self.canvas.create_line(v1, y1, v1, y2, fill=GRID_COLOR, dash=dash_pat, width=1, capstyle="butt", joinstyle="miter", tags=("crop_layer",))
-        self.canvas.create_line(v2, y1, v2, y2, fill=GRID_COLOR, dash=dash_pat, width=1, capstyle="butt", joinstyle="miter", tags=("crop_layer",))
-        self.canvas.create_line(x1, h1, x2, h1, fill=GRID_COLOR, dash=dash_pat, width=1, capstyle="butt", joinstyle="miter", tags=("crop_layer",))
-        self.canvas.create_line(x1, h2, x2, h2, fill=GRID_COLOR, dash=dash_pat, width=1, capstyle="butt", joinstyle="miter", tags=("crop_layer",))
+        self.canvas.create_line(v1, y1, v1, y2, fill=self.app_settings["grid_color"], dash=dash_pat, width=1, capstyle="butt", joinstyle="miter", tags=("crop_layer",))
+        self.canvas.create_line(v2, y1, v2, y2, fill=self.app_settings["grid_color"], dash=dash_pat, width=1, capstyle="butt", joinstyle="miter", tags=("crop_layer",))
+        self.canvas.create_line(x1, h1, x2, h1, fill=self.app_settings["grid_color"], dash=dash_pat, width=1, capstyle="butt", joinstyle="miter", tags=("crop_layer",))
+        self.canvas.create_line(x1, h2, x2, h2, fill=self.app_settings["grid_color"], dash=dash_pat, width=1, capstyle="butt", joinstyle="miter", tags=("crop_layer",))
 
         self.canvas.tag_raise("crop_layer")
 
@@ -709,9 +781,9 @@ class CropperApp:
         fast = bool(e.state & 0x0001)  # Shift
         self.resize_rect_mouse(1 if e.num == 4 else -1, fast)
 
-    def resize_rect_mouse(self, orientation, fast) -> None:
+    def resize_rect_mouse(self, direction, fast) -> None:
         speed = SCALE_FACTOR_FAST if fast else SCALE_FACTOR
-        factor = speed if orientation > 0 else (1 / speed)
+        factor = speed if direction > 0 else (1 / speed)
         self.apply_resize_factor(factor)
 
     # ---------- Keyboard ----------
@@ -721,18 +793,18 @@ class CropperApp:
         return "break"  # avoid changing Tab focus
 
     def on_arrow(self, e, dx, dy) -> None:
-        step = ARROW_STEP_FAST if (e.state & 0x0001) else ARROW_STEP  # Shift accelerates
+        step = ARROW_STEP_FAST if (e.state & 0x0001) else ARROW_STEP # Shift accelerates
         self.rect_center = (self.rect_center[0] + dx*step, self.rect_center[1] + dy*step)
         self.clamp_crop_rectangle_to_canvas()
         self.draw_crop_marker_grid()
 
     def on_plus(self, e) -> None:
-        fast = bool(e.state & 0x0001)  # Shift
+        fast = bool(e.state & 0x0001) # Shift accelerates
         factor = SCALE_FACTOR_FAST if fast else SCALE_FACTOR
         self.apply_resize_factor(factor)
 
     def on_minus(self, e) -> None:
-        fast = bool(e.state & 0x0001)
+        fast = bool(e.state & 0x0001) # Shift accelerates
         factor = (1 / SCALE_FACTOR_FAST) if fast else (1 / SCALE_FACTOR)
         self.apply_resize_factor(factor)
 
@@ -812,7 +884,7 @@ class CropperApp:
     # ---------- Toggles ----------
     def toggle_orientation(self, _e=None) -> None:
         # Switch internal state
-        self.image_preferences["orientation"] = AVAILABLE_ORIENTATIONS[0] if self.image_preferences["orientation"] == AVAILABLE_ORIENTATIONS[1] else AVAILABLE_ORIENTATIONS[1]
+        self.image_preferences["orientation"] = available_option["ORIENTATION"][0] if self.image_preferences["orientation"] == available_option["ORIENTATION"][1] else available_option["ORIENTATION"][1]
 
         # Update target_size and ratio for new orientation
         self.update_targetsize_and_ratio()
@@ -848,20 +920,20 @@ class CropperApp:
         self.canvas.tag_raise("crop_layer")
 
     def toggle_fill_mode(self, _e=None) -> None:
-        self.image_preferences["fill_mode"] = AVAILABLE_FILL_MODES[0] if self.image_preferences["fill_mode"] == AVAILABLE_FILL_MODES[1] else AVAILABLE_FILL_MODES[1]
+        self.image_preferences["fill_mode"] = available_option["FILL_MODE"][0] if self.image_preferences["fill_mode"] == available_option["FILL_MODE"][1] else available_option["FILL_MODE"][1]
         self.update_button_text("fill_mode", self.image_preferences["fill_mode"])
 
     def toggle_target_device(self, _e=None) -> None:
-        self.image_preferences["target_device"] = AVAILABLE_TARGET_DEVICES[0] if self.image_preferences["target_device"] == AVAILABLE_TARGET_DEVICES[1] else AVAILABLE_TARGET_DEVICES[1]
+        self.image_preferences["target_device"] = available_option["TARGET_DEVICE"][0] if self.image_preferences["target_device"] == available_option["TARGET_DEVICE"][1] else available_option["TARGET_DEVICE"][1]
         self.update_button_text("target_device", self.image_preferences["target_device"])
 
     def update_targetsize_and_ratio(self) -> None:
         if self.image_preferences["orientation"] == "portrait":
-            self.ratio = DEFAULT_TARGET_SIZE[1] / DEFAULT_TARGET_SIZE[0]
-            self.target_size = (DEFAULT_TARGET_SIZE[1], DEFAULT_TARGET_SIZE[0])
+            self.target_size = (self.app_settings["image_target_size"][1], self.app_settings["image_target_size"][0])
         else:
-            self.ratio = DEFAULT_TARGET_SIZE[0] / DEFAULT_TARGET_SIZE[1]
-            self.target_size = DEFAULT_TARGET_SIZE
+            self.target_size = (self.app_settings["image_target_size"][0], self.app_settings["image_target_size"][1])
+        self.ratio = int(self.target_size[0]) / int(self.target_size[1])
+        #print("ORIENT", self.image_preferences["orientation"], self.target_size, self.ratio, self.app_settings["image_target_size"])
 
     # ---------- Coordinate helpers ----------
     def rect_in_image_coords_raw(self) -> tuple[float, float, float, float]:
@@ -937,8 +1009,8 @@ class CropperApp:
         # 6) save image
         self.save_output(out)
 
-        # 7) save state (txt) next to the source
-        self.save_state(in_path, x1i, y1i, x2i, y2i)
+        # 7) save image preferences (txt) next to the source
+        self.save_image_preferences(in_path, x1i, y1i, x2i, y2i)
 
         # 8) convert to 24 bit BMP
         self.convert_to_bmp(in_path)
@@ -950,15 +1022,15 @@ class CropperApp:
         enhanced_image = img
 
         # Add edge enhancement
-        if (self.image_preferences["edge"]):
+        if (self.image_preferences["enhancer_edge"]):
             enhanced_image = enhanced_image.filter(ImageFilter.EDGE_ENHANCE)
 
         # Add noise reduction
-        if (self.image_preferences["smooth"]):
+        if (self.image_preferences["enhancer_smooth"]):
             enhanced_image = enhanced_image.filter(ImageFilter.SMOOTH)
 
         # Add sharpening for better detail visibility
-        if (self.image_preferences["sharpen"]):
+        if (self.image_preferences["enhancer_sharpen"]):
             enhanced_image = enhanced_image.filter(ImageFilter.SHARPEN)
 
         if (
@@ -990,7 +1062,7 @@ class CropperApp:
             return base.filter(ImageFilter.GaussianBlur(radius=25))
 
     def export_folder_with_orientation(self) -> str:
-        return EXPORT_FOLDER + '_' + self.image_preferences["orientation"]
+        return self.app_settings["export_folder"] + '_' + self.image_preferences["orientation"]
     
     def save_output(self, out_img) -> None:
         print(f"→ Source: {self.image_paths[self.idx]}")
@@ -998,7 +1070,7 @@ class CropperApp:
         base = os.path.splitext(os.path.basename(in_path))[0]
         out_dir = os.path.join(os.path.dirname(in_path), f"{self.export_folder_with_orientation()}")
         os.makedirs(out_dir, exist_ok=True)
-        out_path = os.path.join(out_dir, f"{base}{EXPORT_FILENAME_SUFFIX}_{self.image_preferences['orientation']}.jpg")
+        out_path = os.path.join(out_dir, f"{base}.jpg")
         out_img.save(out_path, format="JPEG", quality=self.app_settings["image_quality"], optimize=True, progressive=True)
         print(f"✔ Crop saved: {out_path}")
 
@@ -1006,17 +1078,37 @@ class CropperApp:
     def image_state_path(self, img_path: str) -> str:
         dirname = os.path.dirname(img_path)
         basename = os.path.splitext(os.path.basename(img_path))[0]
-        return os.path.join(dirname, f"{basename}{STATE_SUFFIX}")
+        return os.path.join(dirname, f"{basename}{self.app_settings['state_suffix']}")
 
-    def save_state(self, img_path: str, x1i: int, y1i: int, x2i: int, y2i: int) -> str | None:
+    def save_app_settings(self) -> str | None:
+        settings_path = "./settings.ini"
+
+        self.app_settings["image_target_size"] = f"{self.app_settings['image_target_size'][0]}x{self.app_settings['image_target_size'][1]}"
+
+        lines = "\n".join(f"{k}={v}" for k, v in self.app_settings.items())
+
+        try:
+            with open(settings_path, "w", encoding="utf-8", newline='\n') as f:
+                f.write("# PhotoPainter app state\n")
+                f.write(lines)
+
+            print(f"✔ App state saved: {settings_path}")
+
+            return settings_path
+        except Exception as e:
+            print(f"[WARN] Unable to save app state: {e}")
+
+    def save_image_preferences(self, img_path: str, x1i: float, y1i: float, x2i: float, y2i: float) -> str | None:
         path = self.image_state_path(img_path)
+
         iw, ih = self.original_img.size
         nx1 = x1i / iw
         ny1 = y1i / ih
         nx2 = x2i / iw
         ny2 = y2i / ih
+
         lines = [
-            "# PhotoPainter state",
+            "# PhotoPainter image preferences",
             f"timestamp={int(time.time())}",
             f"image_name={os.path.basename(img_path)}",
             f"image_w={iw}",
@@ -1038,20 +1130,20 @@ class CropperApp:
             f"brightness={self.image_preferences['brightness']}",
             f"contrast={self.image_preferences['contrast']}",
             f"saturation={self.image_preferences['saturation']}",
-            f"edge={self.image_preferences['edge']}",
-            f"smooth={self.image_preferences['smooth']}",
-            f"sharpen={self.image_preferences['sharpen']}",
+            f"enhancer_edge={self.image_preferences['enhancer_edge']}",
+            f"enhancer_smooth={self.image_preferences['enhancer_smooth']}",
+            f"enhancer_sharpen={self.image_preferences['enhancer_sharpen']}",
         ]
 
         try:
-            with open(path, "w", encoding="utf-8") as f:
+            with open(path, "w", encoding="utf-8", newline='\n') as f:
                 f.write("\n".join(lines) + "\n")
 
-            print(f"✔ State saved: {path}")
+            print(f"✔ Image preferences saved: {path}")
 
             return img_path
         except Exception as e:
-            print(f"[WARN] Unable to save state: {e}")
+            print(f"[WARN] Unable to save image preferences: {e}")
 
     def load_keyvalues(self, path: str):
         """
@@ -1086,19 +1178,22 @@ class CropperApp:
         if not os.path.exists(settings_path):
             settings["window_min"]=WINDOW_MIN
             settings["save_filelist"]=SAVE_FILELIST
-            settings["image_target_size"]=DEFAULT_TARGET_SIZE
+            settings["image_target_size"]=defaults["IMAGE_TARGET_SIZE"]
             settings["image_quality"]=JPEG_QUALITY
-            settings["orientation"]=ORIENTATION
-            settings["fill_mode"]=FILL_MODE
-            settings["target_device"]=TARGET_DEVICE
-            settings["crop_border_color"]=CROP_BORDER_COLOR
-            settings["export_folder"]=EXPORT_FOLDER
-            settings["export_filename_suffix"]=EXPORT_FILENAME_SUFFIX
+            settings["orientation"]=defaults["ORIENTATION"]
+            settings["fill_mode"]=defaults["FILL_MODE"]
+            settings["target_device"]=defaults["TARGET_DEVICE"]
+            settings["enhancer_edge"]=defaults["ENHANCER_EDGE"]
+            settings["enhancer_smooth"]=defaults["ENHANCER_SMOOTH"]
+            settings["enhancer_sharpen"]=defaults["ENHANCER_SHARPEN"]
+            settings["grid_color"]=GRID_COLOR
+            settings["export_folder"]=defaults["EXPORT_FOLDER"]
             settings["state_suffix"]=STATE_SUFFIX
             settings["convert_folder"]=CONVERT_FOLDER
             settings["raw_folder"]=RAW_FOLDER
             settings["export_raw"]=EXPORT_RAW
 
+            #print("APP Settings from DEFAULTS", settings)
             return settings
 
         try:
@@ -1115,10 +1210,12 @@ class CropperApp:
             return settings
 
         if settings:
+            settings["image_target_size"] = settings["image_target_size"] if type(settings["image_target_size"]) is tuple else tuple(int(item) if item.isdigit() else item for item in settings["image_target_size"].split("x"))
             settings["image_quality"] = int(settings["image_quality"])
             settings["export_raw"] = eval(settings["export_raw"])
+            settings["save_filelist"] = eval(settings["save_filelist"])
         
-        print("Settings", settings)
+        #print("APP Settings from FILE", settings)
         return settings
 
     def load_image_preferences_or_defaults(self, img_path: str) -> bool:
@@ -1127,52 +1224,48 @@ class CropperApp:
 
         if os.path.exists(kv_path):
             self.image_preferences = self.load_keyvalues(kv_path)
+            #print("LOADED IMAGE prefs", self.image_preferences)
 
             if not self.image_preferences:
                 return False
 
-        #needed_options = ("orientation", "fill_mode", "target_device", "brightness", "contrast", "saturation")
-
         if not self.image_preferences: # use app defaults
-            print("SET DEFAULT IMAGE PREFS", self.image_preferences, "FROM", self.app_settings)
+            self.image_preferences["image_target_size"] = self.app_settings["image_target_size"]
             self.image_preferences["orientation"] = self.app_settings["orientation"]
             self.image_preferences["fill_mode"] = self.app_settings["fill_mode"]
             self.image_preferences["target_device"] = self.app_settings["target_device"]
             self.image_preferences["brightness"] = defaults["BRIGHTNESS"]
             self.image_preferences["contrast"] = defaults["CONTRAST"]
             self.image_preferences["saturation"] = defaults["SATURATION"]
-            self.image_preferences["edge"] = defaults["EDGE"]
-            self.image_preferences["smooth"] = defaults["SMOOTH"]
-            self.image_preferences["sharpen"] = defaults["SHARPEN"]
-
-        # safe values
-        if "orientation" in self.image_preferences and (self.image_preferences["orientation"] not in AVAILABLE_ORIENTATIONS):
-            self.image_preferences["orientation"] = ORIENTATION
-        # Update target_size and ratio for new orientation
-        self.update_targetsize_and_ratio()
-
-        if "fill_mode" in self.image_preferences and self.image_preferences["fill_mode"] not in AVAILABLE_FILL_MODES:
-            self.image_preferences["fill_mode"] = FILL_MODE
-
-        if "target_device" in self.image_preferences and self.image_preferences["target_device"] not in AVAILABLE_TARGET_DEVICES:
-            self.image_preferences["target_device"] = TARGET_DEVICE
+            self.image_preferences["enhancer_edge"] = self.app_settings["enhancer_edge"]
+            self.image_preferences["enhancer_smooth"] = self.app_settings["enhancer_smooth"]
+            self.image_preferences["enhancer_sharpen"] = self.app_settings["enhancer_sharpen"]
+            #print("SET DEFAULT IMAGE PREFS", self.image_preferences, "FROM", self.app_settings)
 
         # update button labels
-        for name, info in self.option_button_definitions.items():
+        for name, info in self.option_button_def.items():
+            if not name in self.image_preferences or (name in self.image_preferences and self.image_preferences[name] not in available_option[name.upper()]):
+                print("NAME", name, "NOT IN", available_option[name.upper()])
+                self.image_preferences[name] = defaults[name.upper()]
             self.update_button_text(name, self.image_preferences[name])
 
         # get safe values and update slider values
-        for name, info in self.enhancer_sliders.items():
+        for name, info in self.enhancer_sliders_def.items():
             if not name in self.image_preferences or (name in self.image_preferences and not (0 <= float(self.image_preferences[name]) <= 2)):
                 self.image_preferences[name] = defaults[name.upper()]
 
         # get safe values and update checkbox values
-        for name, info in self.enhancer_checkboxes.items():
-            if not name in self.image_preferences or (name in self.image_preferences and not bool(self.image_preferences[name]) in (True, False)):
-                self.image_preferences[name] = defaults[name.upper()]
-            else:
-                self.image_preferences[name] = eval(self.image_preferences[name])
+        for name, info in self.enhancer_checkboxes_def.items():
+            if not name in self.image_preferences:
+                self.image_preferences[name] = self.app_settings[name] if name in self.app_settings else defaults[name.upper()] # app default or project default
 
+            if type(self.image_preferences[name]) == str:
+                self.image_preferences[name] = eval(self.image_preferences[name]) # just eval() True/False to get true bool
+
+            if not self.image_preferences[name] in (True, False):
+                self.image_preferences[name] = defaults[name.upper()]
+
+        #print("IMAGE Settings", self.image_preferences)
         return True
 
     def apply_saved_state(self) -> bool:
@@ -1227,6 +1320,26 @@ class CropperApp:
         except Exception:
             return (None, None, None, None)
 
+    def save_file_list(self):
+        if self.app_settings["save_filelist"]:
+            filelistfile = "fileList.txt"
+            source_folder: str = self.picture_input_folder
+            export_folder: str = self.app_settings['export_folder']
+            convert_folder: str = self.app_settings["convert_folder"]
+            pic_folder_on_device: str = self.app_settings['pic_folder_on_device']
+            target_device: str = f"{pic_folder_on_device}_{self.app_settings['target_device']}"
+
+            for ori in available_option["ORIENTATION"]:
+                folder = os.path.join(source_folder, f"{export_folder}_{ori}", convert_folder, target_device)
+
+                if os.path.exists(folder):
+                    filelist = [f for f in os.listdir(folder) if f.endswith('.bmp')]
+                    lines = "\n".join(f"{pic_folder_on_device}/{str(item)}" for item in filelist)
+                    with open(os.path.join(folder, filelistfile), "w", encoding="utf-8", newline='\n') as f:
+                        f.write(lines)
+
+                    print(f"✔ filelist.txt saved in: {os.path.join(folder, filelistfile)}")
+
     # ---------- Progress ----------
     def next_image(self, _e=None) -> None:
         self.idx += 1
@@ -1247,7 +1360,7 @@ class CropperApp:
 
         base = os.path.splitext(os.path.basename(in_path))[0]
         out_dir = os.path.join(os.path.dirname(in_path), f"{self.export_folder_with_orientation()}")
-        out_path = os.path.join(out_dir, f"{base}{self.app_settings['export_filename_suffix']}_{self.image_preferences['orientation']}.jpg").replace('\\', '/') # complete source path & file of cropped image for convert
+        out_path = os.path.join(out_dir, f"{base}.jpg").replace('\\', '/') # complete source path & file of cropped image for convert
 
         self.update_status_label("Starting conversion…")        # <— start message
         self.window.update_idletasks()          # <— force GUI update before blocking
@@ -1262,6 +1375,7 @@ class CropperApp:
                 dither_method=DITHER_METHOD,
                 convert_folder=self.app_settings["convert_folder"],
                 raw_folder=self.app_settings["raw_folder"],
+                pic_folder_on_device=self.app_settings["pic_folder_on_device"],
                 export_raw=self.app_settings["export_raw"],
                 progress_callback=progress,
             )
@@ -1272,6 +1386,9 @@ class CropperApp:
 
 def on_closing() -> None:
     if messagebox.askokcancel("Quit", "Do you really want to quit?"):
+        # save app state (inf)
+        app.save_app_settings()
+        app.save_file_list()
         window.destroy()
 
 if __name__ == "__main__":
@@ -1279,13 +1396,3 @@ if __name__ == "__main__":
     app = CropperApp(window)
     window.protocol("WM_DELETE_WINDOW", on_closing)
     window.mainloop()
-
-    # For future reference:
-    # If you want to exit and close the program completely, you should use 
-    # root.destroy(), as it stops the mainloop() and destroys the window
-    # and all its widgets.
-    # If you want to run some infinite loop and don't want to destroy your Tkinter 
-    # window and want to execute some code after the root.mainloop() line, you should use
-    # root.quit()
-
-    # do something
