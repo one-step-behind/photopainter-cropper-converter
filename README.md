@@ -64,7 +64,7 @@ A sample image:
 - Supported image types: `.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.tif`, `.tiff`, `.webp`.
 - Use **mouse/keyboard** to position and size the crop rectangle.
 - Press **Enter / S** to save and go to the next image.
-- A `*_ppcrop.txt` file is written next to each original to **remember** the crop.
+- A `*_ppcrop.txt` "sidecar" file is written next to each original image to **remember** the individual setting (orientation, fill mode, color mode, target device and dimensions).
 - **Cropped JPGs** are saved to `cropped_landscape|cropped_portrait` next to your originals.
 - **Converted BMP** images are saved to `cropped_landscape|cropped_portrait/dithered` next to your originals.
 - **Converted Real-color BMP** images are saved to `cropped_landscape|cropped_portrait/dithered/device/[acep|spectra6]` next to your originals.
