@@ -1,20 +1,25 @@
-# PhotoPainter crop state
-timestamp=1767824139
+# PhotoPainter image preferences
+timestamp=1768350435
 image_name=sample.jpg
 image_w=1000
 image_h=1000
-rect_x1=-240.0000
-rect_y1=45.7143
-rect_x2=1271.4286
-rect_y2=951.4286
-rect_nx1=-0.240000
-rect_ny1=0.045714
-rect_nx2=1.271429
-rect_ny2=0.951429
+rect_x1=-229.2264
+rect_y1=60.1719
+rect_x2=1229.2264
+rect_y2=934.0974
+rect_nx1=-0.229226
+rect_ny1=0.060172
+rect_nx2=1.229226
+rect_ny2=0.934097
 target_w=800
 target_h=480
 ratio=1.666667
-direction=landscape
+orientation=landscape
 fill_mode=blur
-color_mode=color
 target_device=acep
+brightness=0.8
+contrast=1.7
+saturation=1.0
+enhancer_edge=False
+enhancer_smooth=False
+enhancer_sharpen=True
