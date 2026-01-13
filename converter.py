@@ -100,6 +100,7 @@ class Converter:
         convert_folder: str,
         raw_folder: str,
         export_raw: bool,
+        pic_folder_on_device: str,
         dither_method=Image.FLOYDSTEINBERG,
         progress_callback=None,
     ):
@@ -126,6 +127,8 @@ class Converter:
         :type raw_folder: str
         :param export_raw: weather or not to store raw images for direct usage with ESP version
         :type export_raw: bool
+        :param pic_folder_on_device: folder where the pictures will reside on SD Card (default: "pic")
+        :type pic_folder_on_device: str
         :param dither_method: dither method
         :param progress_callback: callback for progress
         """
@@ -181,7 +184,7 @@ class Converter:
         os.makedirs(convert_dir, exist_ok=True)
 
         # folder where to store real-world RGB to device RGB images
-        device_dir = os.path.join(convert_dir, f"pic_{target_device}")
+        device_dir = os.path.join(convert_dir, f"{pic_folder_on_device}_{target_device}")
         device_out_dir = os.path.join(device_dir, f"{output_basename_without_ext}_{orientation}.bmp")
         os.makedirs(device_dir, exist_ok=True)
 
