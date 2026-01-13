@@ -10,3 +10,5 @@ venv/
 build/
 dist/
 #*.spec
+_testscripts/
+TODO.md
