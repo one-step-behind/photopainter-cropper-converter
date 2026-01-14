@@ -1404,8 +1404,12 @@ def on_closing() -> None:
         app.save_file_list()
         window.destroy()
 
+def on_quit(event) -> None:
+    on_closing()
+
 if __name__ == "__main__":
     window = tk.Tk()
     app = CropperApp(window)
     window.protocol("WM_DELETE_WINDOW", on_closing)
+    window.bind('<Control-c>', on_quit)
     window.mainloop()
