@@ -97,7 +97,7 @@ class CropperApp:
     def __init__(self, window):
         # ---------- Load settings ----------
         self.app_settings = self.load_app_settings_or_defaults()
-        self.image_preferences: dict[str, str] | None = {}
+        self.image_preferences: dict[str, str | float | bool] = {}
 
         # ---------- UI ----------
         self._resize_pending = False
@@ -250,16 +250,14 @@ class CropperApp:
             },
         }
 
-        # Store the actual Button widgets
-        self.button_vars = {} # DynamicButtonVar objects
-        self.buttons = {}
-        # Store the actual Sliders widgets
-        self.slider_vars = {} # DynamicSliderVar objects
-        self.sliders = {}
-        # Store the actual Checkbox widgets
-        self.image_enhancer_checkbox_vars = {} # Checkbox objects
+        # Store the Button, Sliders, Checkbox widgets
+        self.app_button_vars = {}
+        self.app_buttons = {}
+        self.image_enhancer_slider_vars = {}
+        self.image_enhancer_sliders = {}
+        self.image_enhancer_checkbox_vars: dict[str, tk.BooleanVar] = {}
         self.image_enhancer_checkboxes = {}
-        self.app_settings_checkbox_vars = {} # Checkbox objects
+        self.app_settings_checkbox_vars = {}
         self.app_settings_checkboxes = {}
 
         # Build buttons
@@ -317,7 +315,7 @@ class CropperApp:
             self.window.bind(ks, self.on_minus)
 
         # Various
-        self.window.bind("<Configure>", self.on_resize)
+        self.window.bind("<Configure>", self.on_window_resize)
         self.window.bind("<o>", self.toggle_orientation)
         self.window.bind("<O>", self.toggle_orientation)
         self.window.bind("<f>", self.toggle_fill_mode)
@@ -327,17 +325,15 @@ class CropperApp:
 
         # State
         self.picture_input_folder: str | None = None
-        self.original_img = None
+        self.original_img: Image.Image | None = None
         self.display_img = None # image to display in window
         self.tk_img: ImageTk.PhotoImage | None = None
         self.image_id = None
         self.image_paths = []
         self.idx = 0
-
         self.scale: float = 1.0
         self.img_off: tuple[int, int] = (0, 0)
         self.disp_size: tuple[int, int] = (0, 0)
-
         self.target_size: tuple[int, int] = (0, 0)
         self.ratio: float = 0
         self.rect_w: int = 0
@@ -349,217 +345,13 @@ class CropperApp:
         self.width, self.height = self.window.winfo_width(), self.window.winfo_height()
         self.window.after(200, self.delayed_start)
 
-    # ---------- UI helpers ----------
+    # ---------- App start and File loading ----------
     def delayed_start(self) -> None:
         # ensure window is fully realized
         self.window.update()
         self.canvas.focus_set()       # keyboard focus works now
         self.load_folder()
 
-    def update_size_lbl(self):
-        w, h = self.target_size
-        self.size_lbl_var.set(f"Crop: {w}x{h}")
-
-    def create_buttons(self, button_definition, target, btn_orient) -> None:
-        # Create buttons dynamically
-        for name, info in button_definition.items():
-
-            # 1) Create helper var object
-            dyn = DynamicButtonVar(info["default_text"])
-            self.button_vars[name] = dyn
-
-            # 2) Collect optional settings for ttk.Button
-            btn_kwargs = {
-                "textvariable": dyn.var,
-                "takefocus": 0,
-            }
-
-            if "width" in info:
-                btn_kwargs["width"] = info["width"]
-
-            if "underline" in info:
-                btn_kwargs["underline"] = info["underline"]
-
-            if "style_config" in info:
-                style_name = f"{name}.Custom.TButton"
-                self.style.configure(style_name, **info["style_config"])
-                btn_kwargs["style"] = style_name
-
-            # 3) Create the button - COMMAND MUST BE PASSED DIRECTLY!!!
-            btn = ttk.Button(target, command=info["command"], name=f"btn_{name}", **btn_kwargs)
-            btn.pack(side=tk.LEFT if btn_orient=="horizontal" else tk.TOP, fill=tk.X)
-            self.buttons[name] = btn
-
-            # 4) Bind hover tooltip events if enter_tip exists
-            if "enter_tip" in info:
-                btn.bind("<Enter>", lambda e, tip=info["enter_tip"]: self.show_tip(tip))
-                btn.bind("<Leave>", lambda e: self.show_tip())
-
-    def update_button_text(self, button_name, extra_text) -> None:
-        """
-        Update button text dynamically, preserving base text
-        
-        :param self: Beschreibung
-        :param button_name: Beschreibung
-        :param extra_text: Beschreibung
-        """
-        if button_name in self.button_vars:
-            self.button_vars[button_name].update(extra_text)
-        else:
-            print(f"No button found for '{button_name}'")
-
-    def show_tip(self, msg: str = "") -> None:
-        """
-        Show tooltip text (hover)
-        
-        :param self: Beschreibung
-        :param msg: Beschreibung
-        :type msg: str
-        """
-        if msg:
-            self.status_var.set(msg)
-        else:
-            self.status_var.set(self.status_var_default_text)
-    
-    def create_image_enhancer_sliders(self) -> None:
-        if not self.slider_vars:
-            for name, info in self.enhancer_sliders_def.items():
-                value = self.image_preferences[name]
-
-                dyn = DynamicSliderVar(info["text"])
-                self.slider_vars[name] = dyn
-
-                slider_label = ttk.Label(self.options_frame, textvariable=dyn.var, justify=tk.LEFT)
-                slider_label.pack(fill=tk.X)
-
-                slider_kwargs = {
-                    "name": f"slider_{name}",
-                    "from_": info["min"],
-                    "to": info["max"],
-                    "resolution": 0.1,
-                    "tickinterval": 1.0,
-                    "orient": tk.HORIZONTAL,
-                    "showvalue": False,
-                    "takefocus": 0,
-                }
-
-                slider = tk.Scale(self.options_frame, command=info["command"], **slider_kwargs)
-                slider.set(value)
-                slider.pack(fill=tk.X)
-
-                self.sliders[name] = [slider_label, slider]
-
-                # Bind hover tooltip events if enter_tip exists
-                if "enter_tip" in info:
-                    slider.bind("<Enter>", lambda e, tip=info["enter_tip"]: self.show_tip(tip))
-                    slider.bind("<Leave>", lambda e: self.show_tip())
-
-        # AFTER all sliders exist → update their labels correctly
-        for name, slider in self.sliders.items():
-            value = self.image_preferences[name]
-            self.slider_vars[name].update(value)
-            self.sliders[name][1].set(value)
-
-    # -------------------------------------------------------------------------
-    # Debounced processing for sliders
-    # -------------------------------------------------------------------------
-    def schedule_slider_update(self, slider_label, value) -> None:
-        if self._slider_update_pending:
-            self.window.after_cancel(self._slider_update_pending)
-        self._slider_update_pending = self.window.after(20, lambda: self.update_slider_value_and_label(slider_label, value))
-
-    def update_slider_value_and_label(self, slider_label, value) -> None:
-        if slider_label in self.enhancer_sliders_def:
-            self.image_preferences[slider_label] = float(value)
-            self.slider_vars[slider_label].update(value)
-
-            self.window.after_idle(self.update_image)
-        else:
-            print(f"No slider found for '{slider_label}'")
-
-    def create_image_enhancer_checkboxes(self) -> None:
-        if not self.image_enhancer_checkbox_vars:
-            for name, info in self.enhancer_checkboxes_def.items():
-                value = self.image_preferences[name]
-
-                checkbox_kwargs = {
-                    "text": info["text"],
-                    "name": f"checkbox_{name}",
-                    "onvalue": True,
-                    "offvalue": False,
-                    "takefocus": 0,
-                }
-
-                self.image_enhancer_checkbox_vars[name] = tk.BooleanVar(value=value)
-                checkbox = ttk.Checkbutton(self.options_frame, command=info["command"], variable=self.image_enhancer_checkbox_vars[name], **checkbox_kwargs)
-                checkbox.pack(padx = 5, pady = 5, fill=tk.X)
-
-                self.image_enhancer_checkboxes[name] = checkbox
-
-                # Bind hover tooltip events if enter_tip exists
-                if "enter_tip" in info:
-                    checkbox.bind("<Enter>", lambda e, tip=info["enter_tip"]: self.show_tip(tip))
-                    checkbox.bind("<Leave>", lambda e: self.show_tip())
-
-        # AFTER all checkboxes exist → update their values
-        for name, checkbox in self.image_enhancer_checkboxes.items():
-            value = self.image_preferences[name]
-            self.image_enhancer_checkbox_vars[name].set(value)
-    
-    def create_app_settings_checkboxes(self) -> None:
-        if not self.app_settings_checkbox_vars:
-            ttk.Separator(self.options_frame).pack(fill=tk.X, pady=5)
-
-            for name, info in self.app_settings_def.items():
-                value = self.app_settings[name]
-
-                checkbox_kwargs = {
-                    "text": info["text"],
-                    "name": f"checkbox_{name}",
-                    "onvalue": True,
-                    "offvalue": False,
-                    "takefocus": 0,
-                }
-
-                self.app_settings_checkbox_vars[name] = tk.BooleanVar(value=value)
-                checkbox = ttk.Checkbutton(self.options_frame, command=info["command"], variable=self.app_settings_checkbox_vars[name], **checkbox_kwargs)
-                checkbox.pack(padx = 5, pady = 5, fill=tk.X)
-
-                self.app_settings_checkboxes[name] = checkbox
-
-                # Bind hover tooltip events if enter_tip exists
-                if "enter_tip" in info:
-                    checkbox.bind("<Enter>", lambda e, tip=info["enter_tip"]: self.show_tip(tip))
-                    checkbox.bind("<Leave>", lambda e: self.show_tip())
-
-        # AFTER all checkboxes exist → update their values
-        for name, checkbox in self.app_settings_checkboxes.items():
-            value = self.app_settings[name]
-            self.app_settings_checkbox_vars[name].set(value)
-
-    def update_image_enhancer_checkbox(self, name) -> None:
-        if name in self.image_enhancer_checkbox_vars:
-            self.image_preferences[name] = False if self.image_preferences[name] == True else True
-            self.image_enhancer_checkbox_vars[name].set(self.image_preferences[name])
-            
-            self.window.after_idle(self.update_image)
-        else:
-            print(f"No Checkbox/Checkbutton found for '{name}' in image_enhancer_checkbox_vars")
-
-    def update_app_settings_checkbox(self, name) -> None:
-        if name in self.app_settings_checkbox_vars:
-            self.app_settings[name] = False if self.app_settings[name] == True else True
-            self.app_settings_checkbox_vars[name].set(self.app_settings[name])
-            
-            self.window.after_idle(self.update_image)
-        else:
-            print(f"No Checkbox/Checkbutton found for '{name}' in app_settings_checkbox_vars")
-
-    def update_status_label(self, msg) -> None:
-        """Set status message immediately."""
-        self.status_label_var.set(msg)
-
-    # ---------- File loading ----------
     def load_folder(self) -> None:
         """
         Load images from given folder. Called once on app start.
@@ -612,9 +404,6 @@ class CropperApp:
             self.next_image()
             return
 
-        self.create_image_enhancer_sliders() # create image options sliders
-        self.create_image_enhancer_checkboxes()
-        self.create_app_settings_checkboxes()
         self.resize_image_and_center_in_window()
 
         # restore state if exists; otherwise initial pane
@@ -622,8 +411,11 @@ class CropperApp:
             self.init_crop_rectangle()
 
         self.status_count.config(text=f"[{self.idx+1}/{len(self.image_paths)}]")
+        self.create_image_enhancer_sliders() # create image options sliders
+        self.create_image_enhancer_checkboxes()
+        self.create_app_settings_checkboxes()
         self.update_size_lbl() # after loading state
-        self.update_image()
+        self.update_image_in_canvas()
         self.update_status_label(f"{current_image_path}")
         self.draw_crop_marker_grid() # create crop marker
 
@@ -656,10 +448,211 @@ class CropperApp:
             print("EXIF load/rotation failed:", e)
             return Image.open(path)
 
+    # ---------- UI helpers ----------
+    def create_buttons(self, button_definition, target, btn_orient) -> None:
+        # Create buttons dynamically
+        for name, info in button_definition.items():
+
+            # 1) Create helper var object
+            dyn = DynamicButtonVar(info["default_text"])
+            self.app_button_vars[name] = dyn
+
+            # 2) Collect optional settings for ttk.Button
+            btn_kwargs = {
+                "textvariable": dyn.var,
+                "takefocus": 0,
+            }
+
+            if "width" in info:
+                btn_kwargs["width"] = info["width"]
+
+            if "underline" in info:
+                btn_kwargs["underline"] = info["underline"]
+
+            if "style_config" in info:
+                style_name = f"{name}.Custom.TButton"
+                self.style.configure(style_name, **info["style_config"])
+                btn_kwargs["style"] = style_name
+
+            # 3) Create the button - COMMAND MUST BE PASSED DIRECTLY!!!
+            btn = ttk.Button(target, command=info["command"], name=f"btn_{name}", **btn_kwargs)
+            btn.pack(side=tk.LEFT if btn_orient=="horizontal" else tk.TOP, fill=tk.X)
+            self.app_buttons[name] = btn
+
+            # 4) Bind hover tooltip events if enter_tip exists
+            if "enter_tip" in info:
+                btn.bind("<Enter>", lambda e, tip=info["enter_tip"]: self.show_tip(tip))
+                btn.bind("<Leave>", lambda e: self.show_tip())
+
+    def update_button_text(self, button_name, extra_text) -> None:
+        """
+        Update button text dynamically, preserving base text
+        
+        :param self: Beschreibung
+        :param button_name: Beschreibung
+        :param extra_text: Beschreibung
+        """
+        if button_name in self.app_button_vars:
+            self.app_button_vars[button_name].update(extra_text)
+        else:
+            print(f"No button found for '{button_name}'")
+
+    def create_image_enhancer_sliders(self) -> None:
+        if not self.image_enhancer_slider_vars:
+            for name, info in self.enhancer_sliders_def.items():
+                value = self.image_preferences[name]
+
+                dyn = DynamicSliderVar(info["text"])
+                self.image_enhancer_slider_vars[name] = dyn
+
+                slider_label = ttk.Label(self.options_frame, textvariable=dyn.var, justify=tk.LEFT)
+                slider_label.pack(fill=tk.X)
+
+                slider_kwargs = {
+                    "name": f"slider_{name}",
+                    "from_": info["min"],
+                    "to": info["max"],
+                    "resolution": 0.1,
+                    "tickinterval": 1.0,
+                    "orient": tk.HORIZONTAL,
+                    "showvalue": False,
+                    "takefocus": 0,
+                }
+
+                slider = tk.Scale(self.options_frame, command=info["command"], **slider_kwargs)
+                slider.set(value)
+                slider.pack(fill=tk.X)
+
+                self.image_enhancer_sliders[name] = [slider_label, slider]
+
+                # Bind hover tooltip events if enter_tip exists
+                if "enter_tip" in info:
+                    slider.bind("<Enter>", lambda e, tip=info["enter_tip"]: self.show_tip(tip))
+                    slider.bind("<Leave>", lambda e: self.show_tip())
+
+        # AFTER all sliders exist → update their labels correctly
+        for name, slider in self.image_enhancer_sliders.items():
+            value = self.image_preferences[name]
+            self.image_enhancer_slider_vars[name].update(value)
+            self.image_enhancer_sliders[name][1].set(value)
+
+    def schedule_slider_update(self, slider_label, value) -> None:
+        if self._slider_update_pending:
+            self.window.after_cancel(self._slider_update_pending)
+        self._slider_update_pending = self.window.after(20, lambda: self.update_slider_value_and_label(slider_label, value))
+
+    def update_slider_value_and_label(self, slider_label, value) -> None:
+        if slider_label in self.enhancer_sliders_def:
+            self.image_preferences[slider_label] = float(value)
+            self.image_enhancer_slider_vars[slider_label].update(value)
+
+            self.window.after_idle(self.update_image_in_canvas)
+        else:
+            print(f"No slider found for '{slider_label}'")
+
+    def create_image_enhancer_checkboxes(self) -> None:
+        if not self.image_enhancer_checkbox_vars:
+            for name, info in self.enhancer_checkboxes_def.items():
+                value = self.image_preferences[name]
+                
+                checkbox_kwargs = {
+                    "text": info["text"],
+                    "name": f"checkbox_{name}",
+                    "onvalue": True,
+                    "offvalue": False,
+                    "takefocus": 0,
+                }
+
+                self.image_enhancer_checkbox_vars[name] = tk.BooleanVar(value=value)
+                checkbox = ttk.Checkbutton(self.options_frame, command=info["command"], variable=self.image_enhancer_checkbox_vars[name], **checkbox_kwargs)
+                checkbox.pack(padx = 5, pady = 5, fill=tk.X)
+
+                self.image_enhancer_checkboxes[name] = checkbox
+
+                # Bind hover tooltip events if enter_tip exists
+                if "enter_tip" in info:
+                    checkbox.bind("<Enter>", lambda e, tip=info["enter_tip"]: self.show_tip(tip))
+                    checkbox.bind("<Leave>", lambda e: self.show_tip())
+
+        # AFTER all checkboxes exist → update their values
+        for name, checkbox in self.image_enhancer_checkboxes.items():
+            value = self.image_preferences[name]
+            self.image_enhancer_checkbox_vars[name].set(value)
+
+    def update_image_enhancer_checkbox(self, name) -> None:
+        if name in self.image_enhancer_checkbox_vars:
+            self.image_preferences[name] = False if self.image_preferences[name] == True else True
+            self.image_enhancer_checkbox_vars[name].set(self.image_preferences[name])
+            
+            self.window.after_idle(self.update_image_in_canvas)
+        else:
+            print(f"No Checkbox/Checkbutton found for '{name}' in image_enhancer_checkbox_vars")
+
+    def create_app_settings_checkboxes(self) -> None:
+        if not self.app_settings_checkbox_vars:
+            ttk.Separator(self.options_frame).pack(fill=tk.X, pady=5)
+
+            for name, info in self.app_settings_def.items():
+                value = self.app_settings[name]
+
+                checkbox_kwargs = {
+                    "text": info["text"],
+                    "name": f"checkbox_{name}",
+                    "onvalue": True,
+                    "offvalue": False,
+                    "takefocus": 0,
+                }
+
+                self.app_settings_checkbox_vars[name] = tk.BooleanVar(value=value)
+                checkbox = ttk.Checkbutton(self.options_frame, command=info["command"], variable=self.app_settings_checkbox_vars[name], **checkbox_kwargs)
+                checkbox.pack(padx = 5, pady = 5, fill=tk.X)
+
+                self.app_settings_checkboxes[name] = checkbox
+
+                # Bind hover tooltip events if enter_tip exists
+                if "enter_tip" in info:
+                    checkbox.bind("<Enter>", lambda e, tip=info["enter_tip"]: self.show_tip(tip))
+                    checkbox.bind("<Leave>", lambda e: self.show_tip())
+
+        # AFTER all checkboxes exist → update their values
+        for name, checkbox in self.app_settings_checkboxes.items():
+            value = self.app_settings[name]
+            self.app_settings_checkbox_vars[name].set(value)
+
+    def update_app_settings_checkbox(self, name) -> None:
+        if name in self.app_settings_checkbox_vars:
+            self.app_settings[name] = False if self.app_settings[name] == True else True
+            self.app_settings_checkbox_vars[name].set(self.app_settings[name])
+            
+            self.window.after_idle(self.update_image_in_canvas)
+        else:
+            print(f"No Checkbox/Checkbutton found for '{name}' in app_settings_checkbox_vars")
+
+    def update_status_label(self, msg) -> None:
+        """Set status message immediately."""
+        self.status_label_var.set(msg)
+
+    def show_tip(self, msg: str = "") -> None:
+        """
+        Show tooltip text (hover)
+        
+        :param self: Beschreibung
+        :param msg: Beschreibung
+        :type msg: str
+        """
+        if msg:
+            self.status_var.set(msg)
+        else:
+            self.status_var.set(self.status_var_default_text)
+    
     # ---------- Layout & Drawing ----------
     def canvas_size(self):
         # Return REAL canvas size (never force minimum)
         return (self.canvas.winfo_width(), self.canvas.winfo_height())
+
+    def update_size_lbl(self):
+        w, h = self.target_size
+        self.size_lbl_var.set(f"Crop: {w}x{h}")
 
     def resize_image_and_center_in_window(self) -> None:
         cw, ch = self.canvas_size()
@@ -671,7 +664,7 @@ class CropperApp:
         self.display_img = self.original_img.resize((disp_w, disp_h), Image.LANCZOS)
         self.img_off = ((cw - disp_w) // 2, (ch - disp_h) // 2)
 
-    def update_image(self) -> None:
+    def update_image_in_canvas(self) -> None:
         """Apply all enhancements and update the image display."""
         # Initial image
         img = self.enhance_image(self.display_img)
@@ -765,7 +758,7 @@ class CropperApp:
 
         self.canvas.tag_raise("crop_layer")
 
-    # ---------- Mouse ----------
+    # ---------- Mouse actions ----------
     def on_click(self, e) -> None:
         x1, y1, x2, y2 = self.rect_coords()
         if x1 <= e.x <= x2 and y1 <= e.y <= y2:
@@ -800,7 +793,7 @@ class CropperApp:
         factor = speed if direction > 0 else (1 / speed)
         self.apply_resize_factor(factor)
 
-    # ---------- Keyboard ----------
+    # ---------- Keyboard actions ----------
     def on_confirm_tab(self):
         self.next_image()
 
@@ -832,7 +825,7 @@ class CropperApp:
         self.clamp_crop_rectangle_to_canvas()
         self.draw_crop_marker_grid()
 
-    def on_resize(self, event) -> None:
+    def on_window_resize(self, event) -> None:
         """
         Window resize
         
@@ -849,9 +842,9 @@ class CropperApp:
             self._resize_pending = True
             self.canvas.delete("image_layer")
             self.image_id = None
-            self.window.after(30, self._apply_resize)
+            self.window.after(30, self._apply_window_resize)
 
-    def _apply_resize(self) -> None:
+    def _apply_window_resize(self) -> None:
         """
         Apply resize
         
@@ -863,7 +856,7 @@ class CropperApp:
         
         rect_img_raw = self.rect_in_image_coords_raw()
         self.resize_image_and_center_in_window()
-        self.update_image()
+        self.update_image_in_canvas()
         x1i, y1i, x2i, y2i = rect_img_raw
         self.calculate_display_coordiantes(x1i, y1i, x2i, y2i)
         self.clamp_crop_rectangle_to_canvas()
@@ -941,6 +934,7 @@ class CropperApp:
         self.image_preferences["target_device"] = available_option["TARGET_DEVICE"][0] if self.image_preferences["target_device"] == available_option["TARGET_DEVICE"][1] else available_option["TARGET_DEVICE"][1]
         self.update_button_text("target_device", self.image_preferences["target_device"])
 
+    # ---------- Coordinate helpers ----------
     def update_targetsize_and_ratio(self) -> None:
         if self.image_preferences["orientation"] == "portrait":
             self.target_size = (self.app_settings["image_target_size"][1], self.app_settings["image_target_size"][0])
@@ -949,7 +943,6 @@ class CropperApp:
         self.ratio = int(self.target_size[0]) / int(self.target_size[1])
         #print("ORIENT", self.image_preferences["orientation"], self.target_size, self.ratio, self.app_settings["image_target_size"])
 
-    # ---------- Coordinate helpers ----------
     def rect_in_image_coords_raw(self) -> tuple[float, float, float, float]:
         """
         Converts rectangle (display) -> ORIGINAL image coordinates
@@ -1032,7 +1025,7 @@ class CropperApp:
         # 9) next image
         self.next_image()
 
-    def enhance_image(self, img) -> Image:
+    def enhance_image(self, img) -> Image.Image:
         enhanced_image = img
 
         # Add edge enhancement
@@ -1089,101 +1082,6 @@ class CropperApp:
         print(f"✔ Crop saved: {out_path}")
 
     # ---------- Persist state ----------
-    def image_state_path(self, img_path: str) -> str:
-        dirname = os.path.dirname(img_path)
-        basename = os.path.splitext(os.path.basename(img_path))[0]
-        return os.path.join(dirname, f"{basename}{self.app_settings['state_suffix']}")
-
-    def save_app_settings(self) -> str | None:
-        settings_path = "./settings.ini"
-
-        self.app_settings["image_target_size"] = f"{self.app_settings['image_target_size'][0]}x{self.app_settings['image_target_size'][1]}"
-
-        lines = "\n".join(f"{k}={v}" for k, v in self.app_settings.items())
-
-        try:
-            with open(settings_path, "w", encoding="utf-8", newline='\n') as f:
-                f.write("# PhotoPainter app state\n")
-                f.write(lines)
-
-            print(f"✔ App state saved: {settings_path}")
-
-            return settings_path
-        except Exception as e:
-            print(f"[WARN] Unable to save app state: {e}")
-
-    def save_image_preferences(self, img_path: str, x1i: float, y1i: float, x2i: float, y2i: float) -> str | None:
-        path = self.image_state_path(img_path)
-
-        iw, ih = self.original_img.size
-        nx1 = x1i / iw
-        ny1 = y1i / ih
-        nx2 = x2i / iw
-        ny2 = y2i / ih
-
-        lines = [
-            "# PhotoPainter image preferences",
-            f"timestamp={int(time.time())}",
-            f"image_name={os.path.basename(img_path)}",
-            f"image_w={iw}",
-            f"image_h={ih}",
-            f"rect_x1={x1i:.4f}",
-            f"rect_y1={y1i:.4f}",
-            f"rect_x2={x2i:.4f}",
-            f"rect_y2={y2i:.4f}",
-            f"rect_nx1={nx1:.6f}",
-            f"rect_ny1={ny1:.6f}",
-            f"rect_nx2={nx2:.6f}",
-            f"rect_ny2={ny2:.6f}",
-            f"target_w={self.target_size[0]}",
-            f"target_h={self.target_size[1]}",
-            f"ratio={self.ratio:.6f}",
-            f"orientation={self.image_preferences['orientation']}",
-            f"fill_mode={self.image_preferences['fill_mode']}",
-            f"target_device={self.image_preferences['target_device']}",
-            f"brightness={self.image_preferences['brightness']}",
-            f"contrast={self.image_preferences['contrast']}",
-            f"saturation={self.image_preferences['saturation']}",
-            f"enhancer_edge={self.image_preferences['enhancer_edge']}",
-            f"enhancer_smooth={self.image_preferences['enhancer_smooth']}",
-            f"enhancer_sharpen={self.image_preferences['enhancer_sharpen']}",
-        ]
-
-        try:
-            with open(path, "w", encoding="utf-8", newline='\n') as f:
-                f.write("\n".join(lines) + "\n")
-
-            print(f"✔ Image preferences saved: {path}")
-
-            return img_path
-        except Exception as e:
-            print(f"[WARN] Unable to save image preferences: {e}")
-
-    def load_keyvalues(self, path: str):
-        """
-        loads image sidecar file
-        
-        :param self: Beschreibung
-        :param path: state_path_for_image
-        :type path: str
-        """
-        data = {}
-
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-
-                    if not line or line.startswith("#") or "=" not in line:
-                        continue
-
-                    k, v = line.split("=", 1)
-                    data[k.strip()] = v.strip()
-        except Exception:
-            return None
-
-        return data
-
     def load_app_settings_or_defaults(self):
         settings_path = "./settings.ini"
 
@@ -1232,12 +1130,30 @@ class CropperApp:
         #print("APP Settings from FILE", settings)
         return settings
 
+    def save_app_settings(self) -> str | None:
+        settings_path = "./settings.ini"
+
+        self.app_settings["image_target_size"] = f"{self.app_settings['image_target_size'][0]}x{self.app_settings['image_target_size'][1]}"
+
+        lines = "\n".join(f"{k}={v}" for k, v in self.app_settings.items())
+
+        try:
+            with open(settings_path, "w", encoding="utf-8", newline='\n') as f:
+                f.write("# PhotoPainter app state\n")
+                f.write(lines)
+
+            print(f"✔ App state saved: {settings_path}")
+
+            return settings_path
+        except Exception as e:
+            print(f"[WARN] Unable to save app state: {e}")
+
     def load_image_preferences_or_defaults(self, img_path: str) -> bool:
         self.image_preferences = {} # reset to default to prevent usage of old data
         kv_path = self.image_state_path(img_path)
 
         if os.path.exists(kv_path):
-            self.image_preferences = self.load_keyvalues(kv_path)
+            self.image_preferences = self._load_keyvalues(kv_path)
             #print("LOADED IMAGE prefs", self.image_preferences)
 
             if not self.image_preferences:
@@ -1281,6 +1197,83 @@ class CropperApp:
 
         #print("IMAGE Settings", self.image_preferences)
         return True
+
+    def save_image_preferences(self, img_path: str, x1i: float, y1i: float, x2i: float, y2i: float) -> str | None:
+        path = self.image_state_path(img_path)
+
+        iw, ih = self.original_img.size
+        nx1 = x1i / iw
+        ny1 = y1i / ih
+        nx2 = x2i / iw
+        ny2 = y2i / ih
+
+        lines = [
+            "# PhotoPainter image preferences",
+            f"timestamp={int(time.time())}",
+            f"image_name={os.path.basename(img_path)}",
+            f"image_w={iw}",
+            f"image_h={ih}",
+            f"rect_x1={x1i:.4f}",
+            f"rect_y1={y1i:.4f}",
+            f"rect_x2={x2i:.4f}",
+            f"rect_y2={y2i:.4f}",
+            f"rect_nx1={nx1:.6f}",
+            f"rect_ny1={ny1:.6f}",
+            f"rect_nx2={nx2:.6f}",
+            f"rect_ny2={ny2:.6f}",
+            f"target_w={self.target_size[0]}",
+            f"target_h={self.target_size[1]}",
+            f"ratio={self.ratio:.6f}",
+            f"orientation={self.image_preferences['orientation']}",
+            f"fill_mode={self.image_preferences['fill_mode']}",
+            f"target_device={self.image_preferences['target_device']}",
+            f"brightness={self.image_preferences['brightness']}",
+            f"contrast={self.image_preferences['contrast']}",
+            f"saturation={self.image_preferences['saturation']}",
+            f"enhancer_edge={self.image_preferences['enhancer_edge']}",
+            f"enhancer_smooth={self.image_preferences['enhancer_smooth']}",
+            f"enhancer_sharpen={self.image_preferences['enhancer_sharpen']}",
+        ]
+
+        try:
+            with open(path, "w", encoding="utf-8", newline='\n') as f:
+                f.write("\n".join(lines) + "\n")
+
+            print(f"✔ Image preferences saved: {path}")
+
+            return img_path
+        except Exception as e:
+            print(f"[WARN] Unable to save image preferences: {e}")
+
+    def image_state_path(self, img_path: str) -> str:
+        dirname = os.path.dirname(img_path)
+        basename = os.path.splitext(os.path.basename(img_path))[0]
+        return os.path.join(dirname, f"{basename}{self.app_settings['state_suffix']}")
+
+    def _load_keyvalues(self, path: str) -> dict[str, str] | None:
+        """
+        loads image sidecar file
+        
+        :param self: Beschreibung
+        :param path: state_path_for_image
+        :type path: str
+        """
+        data = {}
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+
+                    k, v = line.split("=", 1)
+                    data[k.strip()] = v.strip()
+        except Exception:
+            return None
+
+        return data
 
     def apply_saved_state(self) -> bool:
         keyvalues = self.image_preferences
@@ -1334,7 +1327,7 @@ class CropperApp:
         except Exception:
             return (None, None, None, None)
 
-    def save_file_list(self):
+    def save_file_list(self) -> None:
         if self.app_settings["save_filelist"]:
             filelistfile = "fileList.txt"
             source_folder: str = self.picture_input_folder
@@ -1354,7 +1347,7 @@ class CropperApp:
 
                     print(f"✔ filelist.txt saved in: {os.path.join(folder, filelistfile)}")
 
-    # ---------- Progress ----------
+    # ---------- File list progress ----------
     def next_image(self, _e=None) -> None:
         self.idx += 1
         self.show_image()
@@ -1367,6 +1360,7 @@ class CropperApp:
         print(f"skipped: {self.image_paths[self.idx]}")
         self.next_image()
 
+    # ---------- Call converter ----------
     def convert_to_bmp(self, in_path: str) -> None:
         def progress(step, msg):
             self.update_status_label(f"[{step}/5] {msg}")
@@ -1376,10 +1370,10 @@ class CropperApp:
         out_dir = os.path.join(os.path.dirname(in_path), f"{self.export_folder_with_orientation()}")
         out_path = os.path.join(out_dir, f"{base}.jpg").replace('\\', '/') # complete source path & file of cropped image for convert
 
-        self.update_status_label("Starting conversion…")        # <— start message
-        self.window.update_idletasks()          # <— force GUI update before blocking
+        self.update_status_label("Starting conversion…")
+        self.window.update_idletasks() # force GUI update before blocking
 
-        converter = Converter() # instantiate Converter class
+        converter = Converter()
 
         try:
             converter.convert(
@@ -1397,6 +1391,7 @@ class CropperApp:
             self.update_status_label(f"Conversion failed: {e}")
             raise
 
+# ---------- Exit handling ----------
 def on_closing() -> None:
     if messagebox.askokcancel("Quit", "Do you really want to quit?"):
         # save app state (inf)
@@ -1407,6 +1402,7 @@ def on_closing() -> None:
 def on_quit(event) -> None:
     on_closing()
 
+# ---------- Main ----------
 if __name__ == "__main__":
     window = tk.Tk()
     app = CropperApp(window)
