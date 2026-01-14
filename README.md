@@ -45,12 +45,12 @@ A sample image:
 ...converts to a dithered BMP:
 
 <figure class="align-center">
-<img src="sample/cropped_landscape/dithered/sample_landscape.bmp" width="900" alt="sample/cropped_landscape/dithered/sample_landscape.bmp" />
+<img src="sample/cropped_landscape/dithered/sample.bmp" width="900" alt="sample/cropped_landscape/dithered/sample.bmp" />
 </figure>
 
 ...and finally maps to a device specific color palette (Waveshare PhotoPainter Pico ACeP 7-color) which looks much punchier on your computer screen:
 <figure class="align-center">
-<img src="sample/cropped_landscape/dithered/pic_acep/sample_landscape.bmp" width="900" alt="sample/cropped_landscape/dithered/pic_acep/sample_landscape.bmp" />
+<img src="sample/cropped_landscape/dithered/pic_acep/sample.bmp" width="900" alt="sample/cropped_landscape/dithered/pic_acep/sample.bmp" />
 </figure>
 
 ...but much right when displayed on the PhotoPainter e-Paper device itself:
@@ -59,6 +59,8 @@ A sample image:
 </figure>
 
 ## How to use
+
+**Start the app** and select the folder with the images you want to convert.
 
 Use **mouse/keyboard** to position and size the crop rectangle.
 - **Mouse**:
@@ -75,12 +77,15 @@ Use **mouse/keyboard** to position and size the crop rectangle.
   - **PAGE_DOWN** = next image without processing current image
   - **Enter** or **S** = process & save current image and go to next
 
+Optionally apply some **image optimizations** if you you want.
+
 Use **Enter** or **S** to crop and convert the image.
 
-- **Cropped JPGs** are saved to `cropped_landscape|cropped_portrait` next to your originals
-- **Converted BMP** images are saved to `cropped_landscape|cropped_portrait/dithered` next to your originals
-- **Converted Real-color BMP** images are saved to `cropped_landscape|cropped_portrait/dithered/device/pic_[acep|spectra6]` next to your originals
+- **Cropped JPGs** are saved to `cropped_[landscape|portrait]` next to your originals
+- **Converted BMP** images are saved to `cropped_[landscape|portrait]/dithered` next to your originals
+- **Converted Real-color BMP** images are saved to `cropped_[landscape|portrait]/dithered/pic_[acep|spectra6]` next to your originals
 
+**Copy** the converted images to your SD card's `pic` folder.
 
 ## Why all these steps?
 
@@ -98,12 +103,12 @@ Using the direct BMP export of the original Waveshare converter that follows the
 ## Samples and Outputs included
 
 - Example **input** photo and **outputs** from this tool (JPG 800×480) are available in `sample` folder.
-- For convenience, this repository also includes a **BMP file** in `sample/cropped_landscape/dithered/device/acep` folder created with this converter, so you can copy it directly to the device.
+- For convenience, this repository also includes a **BMP file** in `sample/cropped_landscape/dithered/pic_acep` folder created with this converter, so you can copy it directly to the device.
 
 ## Device SD Card layout
 
 - Create a folder named `pic` at the **root** of the SD card.
-- Copy all **24-bit BMP** files from your desired target device folder into the `pic` folder.
+- Copy all **24-bit BMP** files from your desired target device folder (e.g. `pic_acep`) into the `pic` folder.
 - Stock firmware expects fewer than ~100 images in `pic` folder.
 - I personally use a **custom firmware** for my 7-color ACeP version, a mix of the official Waveshare firmware with improvements from @myevit made for the Spectra6 firmware which supports nearly **unlimited photos** in theory. Practically it has *"a reasonable limit to prevent memory issues"* of **100.000** photos on the SD Card.
 

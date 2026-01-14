@@ -1371,7 +1371,6 @@ class CropperApp:
         try:
             converter.convert(
                 in_path=out_path,
-                orientation=self.image_preferences["orientation"],
                 target_device=self.image_preferences["target_device"],
                 dither_method=DITHER_METHOD,
                 convert_folder=self.app_settings["convert_folder"],

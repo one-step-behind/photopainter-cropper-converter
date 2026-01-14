@@ -95,7 +95,6 @@ class Converter:
     def convert(
         self,
         in_path: str,
-        orientation: str,
         target_device: str,
         convert_folder: str,
         raw_folder: str,
@@ -180,18 +179,18 @@ class Converter:
 
         # Prepare folders if not exist
         convert_dir = os.path.join(basedir, f"{convert_folder}")
-        convert_out_dir = os.path.join(convert_dir, f"{output_basename_without_ext}_{orientation}.bmp")
+        convert_out_dir = os.path.join(convert_dir, f"{output_basename_without_ext}.bmp")
         os.makedirs(convert_dir, exist_ok=True)
 
         # folder where to store real-world RGB to device RGB images
         device_dir = os.path.join(convert_dir, f"{pic_folder_on_device}_{target_device}")
-        device_out_dir = os.path.join(device_dir, f"{output_basename_without_ext}_{orientation}.bmp")
+        device_out_dir = os.path.join(device_dir, f"{output_basename_without_ext}.bmp")
         os.makedirs(device_dir, exist_ok=True)
 
         raw_out_dir: str = ""
         if export_raw:
             raw_dir = os.path.join(convert_dir, f"{raw_folder}")
-            raw_out_dir = os.path.join(raw_dir, f"{output_basename_without_ext}_{orientation}.sp6")
+            raw_out_dir = os.path.join(raw_dir, f"{output_basename_without_ext}.sp6")
             os.makedirs(raw_dir, exist_ok=True)
 
         # save preview
