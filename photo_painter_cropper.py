@@ -40,6 +40,7 @@ GRID_COLOR = "#00ff00"   # green rectangle border
 DEFAULT_CROP_SIZE = 1 # between 0.1 ... 1
 MASK_COLOR = "#000000"          # mask outside crop region
 MASK_STIPPLE = "gray50"
+CANVAS_BACKGROUND_COLOR = "#000000"
 WINDOW_BACKGROUND_COLOR = "#222222"
 HIGHLIGHT_COLOR = "#339933"
 
@@ -84,7 +85,7 @@ class CropperApp:
     def __init__(self, window):
         # ---------- Load settings ----------
         self.app_settings = self.load_app_settings_or_defaults()
-        self.image_preferences = {}
+        self.image_preferences: dict[str, str] | None = {}
 
         # ---------- UI ----------
         self._resize_pending = False
@@ -111,7 +112,7 @@ class CropperApp:
         canvas_with_options.pack(fill=tk.BOTH, side=tk.TOP, expand=True)
 
         # set the attribute "highlightthickness=0" in Canvas will no longer display the border around it
-        self.canvas = tk.Canvas(canvas_with_options, highlightthickness=0, bg=WINDOW_BACKGROUND_COLOR)
+        self.canvas = tk.Canvas(canvas_with_options, highlightthickness=0, bg=CANVAS_BACKGROUND_COLOR)
         self.canvas.pack(fill=tk.BOTH, side=tk.LEFT, expand=True)
 
         self.options_frame = tk.Frame(canvas_with_options, highlightthickness=0)
@@ -267,12 +268,12 @@ class CropperApp:
         self.size_lbl.pack(padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1], anchor=tk.W)
 
         # Status bar elements
+        self.status_count = ttk.Label(bottom_bar, text="[0/0]")
+        self.status_count.pack(padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1], side=tk.LEFT)
+
         self.status_label_var = tk.StringVar(value="Select folder with images…")
         self.status_label = ttk.Label(bottom_bar, textvariable=self.status_label_var, anchor=tk.W)
         self.status_label.pack(padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1], anchor=tk.W, fill=tk.X, side=tk.LEFT)
-
-        self.status_count = ttk.Label(bottom_bar, text="0/0")
-        self.status_count.pack(padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1], side=tk.RIGHT)
         
         # Mouse events
         self.canvas.bind("<Button-1>", self.on_click)
@@ -607,7 +608,7 @@ class CropperApp:
         if not pref_loaded or not self.apply_saved_state():
             self.init_crop_rectangle()
 
-        self.status_count.config(text=f"{self.idx+1}/{len(self.image_paths)}")
+        self.status_count.config(text=f"[{self.idx+1}/{len(self.image_paths)}]")
         self.update_size_lbl() # after loading state
         self.update_image()
         self.update_status_label(f"{current_image_path}")
