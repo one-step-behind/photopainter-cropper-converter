@@ -10,7 +10,7 @@ Originally developed by **@geegeek** on **macOS** for personal workflow needs, t
 
 ## Key Features
 
-- Supported image types: `.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.tif`, `.tiff`, `.webp`
+- Supported image types: `.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.tif`, `.tiff`, `.webp`, `.heic`*
 - Load image by **EXIF** orientation
 - Fixed **800x480** (landscape) or **480x800** (portrait) crop ratio
   — You can set the output dimensions via `image_target_size` in `settings.ini`
@@ -21,6 +21,8 @@ Originally developed by **@geegeek** on **macOS** for personal workflow needs, t
 - App and some image properties configuration via `settings.ini` file
 - Crisp **crop area grid lines** aligned to device pixels
 - (optional) **Generate fileList.txt** on app exit
+
+\* HEIC support needs `pillow-heif` installed alongside `Pillow`. If you installed pip requirements this should be already the case.
 
 ## How it works
 

@@ -4,11 +4,23 @@
 import os
 import sys
 import math
+import glob
 import time
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from PIL import Image, ImageTk, ImageFilter, ImageEnhance
 from converter import Converter
+
+# Try to import pillow-heif for HEIC support
+try:
+    import pillow_heif
+
+    pillow_heif.register_heif_opener()
+    HEIC_SUPPORT = True
+except ImportError:
+    HEIC_SUPPORT = False
+    print("Warning: pillow-heif not installed. HEIC files will not be processed.")
+    print("To enable HEIC support, install with: pip install pillow-heif")
 
 # ====== CONFIG ======
 APP_TITLE = "PhotoPainterCropper"
@@ -560,11 +572,12 @@ class CropperApp:
             self.window.after(50, self.window.destroy) #quit)
             return
 
-        supported_formats = (".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff", ".webp")
-        self.image_paths = [
-            os.path.join(self.picture_input_folder, f) for f in sorted(os.listdir(self.picture_input_folder))
-            if f.lower().endswith(supported_formats)
-        ]
+        supported_formats = ["*.jpg", "*.jpeg", "*.png", "*.bmp", "*.gif", "*.tif", "*.tiff", "*.webp"]
+        if HEIC_SUPPORT:
+            supported_formats.append("*.heic")
+            
+        for format in supported_formats:
+            self.image_paths.extend(glob.glob(os.path.join(self.picture_input_folder, format)))
 
         if not self.image_paths:
             messagebox.showerror("No image", "The folder contains no images.")
