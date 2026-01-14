@@ -400,8 +400,13 @@ class CropperApp:
             self.original_img = self.load_image_by_exiforient(current_image_path) # EXIF auto-rotate
             self.display_img = self.original_img.copy()
         except Exception as e:
-            messagebox.showwarning("Image error", f"Unable to open:\n{current_image_path}\n{e}\nWe move on to the next one.")
-            self.next_image()
+            if len(self.image_paths) == 1:
+                messagebox.showwarning("Image error", f"Unable to open:\n{current_image_path}\n{e}\nAs it is the only image there's nothing more to do. App will quit now.")
+                self.window.after(50, self.window.destroy) #quit)
+            else:
+                messagebox.showwarning("Image error", f"Unable to open:\n{current_image_path}\n{e}\nWe move on to the next one.")
+                self.next_image()
+            
             return
 
         self.resize_image_and_center_in_window()
