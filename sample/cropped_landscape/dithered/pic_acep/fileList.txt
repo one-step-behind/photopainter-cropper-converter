@@ -1,1 +1,1 @@
-pic/sample_landscape.bmp
+pic/sample.bmp
