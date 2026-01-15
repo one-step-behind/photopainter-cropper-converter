@@ -32,6 +32,7 @@ DITHER_METHOD: int = 3 # NONE(0) or FLOYDSTEINBERG(3)
 
 defaults = {
     "WINDOW_MIN": (1024, 768),
+    "LAST_WINDOW_SIZE": (1024, 768),
     "IMAGE_TARGET_SIZE": (800, 480), # exact JPG output image dimensions
     "EXPORT_FOLDER": "cropped", # folder where to store cropped images
     "ORIENTATION": "landscape", # available_option["ORIENTATION"]
@@ -109,6 +110,7 @@ class CropperApp:
         self._resize_pending = False
         self._slider_update_pending = None
         self.window = window
+        self.window.geometry(f"{self.app_settings['last_window_size'][0]}x{self.app_settings['last_window_size'][1]}")
         w, h = self.app_settings["window_min"]
         self.window.minsize(int(w), int(h))
         resource_path = os.path.join(os.path.dirname(__file__), "./_source/icon.ico") if not hasattr(sys, "frozen") else os.path.join(sys.prefix, "./_source/icon.ico")
@@ -120,6 +122,11 @@ class CropperApp:
             "Esc=skip"
         )
 
+        self.supported_formats = ["*.jpg", "*.jpeg", "*.png", "*.bmp", "*.gif", "*.tif", "*.tiff", "*.webp"]
+        if HEIC_SUPPORT:
+            self.supported_formats.append("*.heic")
+
+
         # The Frame
         top = ttk.Frame(self.window)
         top.pack(fill=tk.X, side=tk.TOP)
@@ -130,6 +137,7 @@ class CropperApp:
 
         # Frame holding image canvas and options pane
         canvas_with_options = ttk.Frame(window)
+        canvas_with_options.pack_propagate(False) #Don't allow the widgets inside to determine the frame's width / height
         canvas_with_options.pack(fill=tk.BOTH, side=tk.TOP, expand=True)
 
         # image canvas
@@ -322,7 +330,7 @@ class CropperApp:
         self.image_id = None
         self.image_paths = []
         self.current_image_path: str = ""
-        self.idx = 0
+        self.idx: int = 0
         self.scale: float = 1.0
         self.img_off: tuple[int, int] = (0, 0)
         self.disp_size: tuple[int, int] = (0, 0)
@@ -363,14 +371,11 @@ class CropperApp:
                 self.window.after(50, self.window.destroy) #quit)
             return
         else:
+            self.idx = 0
             self.image_paths = [] # reset on folder change
 
-        supported_formats = ["*.jpg", "*.jpeg", "*.png", "*.bmp", "*.gif", "*.tif", "*.tiff", "*.webp"]
-        if HEIC_SUPPORT:
-            supported_formats.append("*.heic")
-            
         # get the images in folder
-        for format in supported_formats:
+        for format in self.supported_formats:
             self.image_paths.extend(glob.glob(os.path.join(self.picture_input_folder, format)))
 
         if not self.image_paths:
@@ -432,9 +437,8 @@ class CropperApp:
             self.init_crop_rectangle()
 
         count_img = len(self.image_paths)
-        counter_length = max(4, 3*(math.floor(math.log10(abs(count_img))) + 1))
-        print(counter_length)
-        self.status_count.config(text=f"[{self.idx+1}/{count_img}]", width=counter_length) # O(1): https://pynative.com/python-count-digits-of-number/
+        counter_length = max(4, 3*(math.floor(math.log10(abs(count_img))) + 1)) # math: O(1) => https://pynative.com/python-count-digits-of-number/
+        self.status_count.config(text=f"[{self.idx+1}/{count_img}]", width=counter_length)
         self.create_image_enhancer_sliders() # create image options sliders
         self.create_image_enhancer_checkboxes()
         self.create_app_settings_checkboxes()
@@ -525,6 +529,11 @@ class CropperApp:
         for name, info in button_definition.items():
 
             if name in self.app_button_vars:
+                if "disabled_if_single_image" in info:
+                    if info["disabled_if_single_image"] and len(self.image_paths) == 1:
+                        self.app_buttons[name].state(["disabled"])
+                    else:
+                        self.app_buttons[name].state(["!disabled"])
                 continue
 
             # 1) Create helper var object
@@ -730,7 +739,7 @@ class CropperApp:
         disp_w = max(1, int(iw * self.scale))
         disp_h = max(1, int(ih * self.scale))
         self.disp_size = (disp_w, disp_h)
-        self.display_img = self.original_img.resize((disp_w, disp_h), Image.LANCZOS)
+        self.display_img = self.original_img.resize((disp_w, disp_h), Image.Resampling.LANCZOS)
         self.img_off = ((cw - disp_w) // 2, (ch - disp_h) // 2)
 
     def update_image_in_canvas(self) -> None:
@@ -934,6 +943,7 @@ class CropperApp:
         self.calculate_display_coordiantes(x1i, y1i, x2i, y2i)
         self.clamp_crop_rectangle_to_canvas()
         self.draw_crop_marker_grid()
+        self.app_settings["last_window_size"] = (self.width, self.height)
         self._resize_pending = False
 
     def calculate_display_coordiantes(self, x1i, y1i, x2i, y2i) -> tuple[int,  int, int, int]:
@@ -1065,7 +1075,7 @@ class CropperApp:
             int_h_orig = iy2 - iy1
             int_w_tgt = max(1, int(round(int_w_orig * sx)))
             int_h_tgt = max(1, int(round(int_h_orig * sy)))
-            region_scaled = self.original_img.crop((ix1, iy1, ix2, iy2)).resize((int_w_tgt, int_h_tgt), Image.LANCZOS)
+            region_scaled = self.original_img.crop((ix1, iy1, ix2, iy2)).resize((int_w_tgt, int_h_tgt), Image.Resampling.LANCZOS)
             out = self.background_only(region_scaled)
 
             dx_tgt = int(round((ix1 - x1i) * sx))
@@ -1138,7 +1148,7 @@ class CropperApp:
         if self.image_preferences["fill_mode"] == "white" or region_scaled_or_none is None:
             return Image.new("RGB", self.target_size, "white")
         else: # blur
-            base = region_scaled_or_none.resize(self.target_size, Image.LANCZOS)
+            base = region_scaled_or_none.resize(self.target_size, Image.Resampling.LANCZOS)
             return base.filter(ImageFilter.GaussianBlur(radius=25))
 
     def export_folder_with_orientation(self) -> str:
@@ -1162,6 +1172,7 @@ class CropperApp:
 
         if not os.path.exists(settings_path):
             settings["window_min"]=defaults["WINDOW_MIN"]
+            settings["last_window_size"]=defaults["LAST_WINDOW_SIZE"]
             settings["image_target_size"]=defaults["IMAGE_TARGET_SIZE"]
             settings["image_quality"]=JPEG_QUALITY
             settings["orientation"]=defaults["ORIENTATION"]
@@ -1208,7 +1219,7 @@ class CropperApp:
             return settings
 
         # window_min and image_target_size needs to be in format: 1024x768 (2-4 digits each)
-        needs_tuple = ("window_min", "image_target_size")
+        needs_tuple = ("window_min", "last_window_size", "image_target_size")
         r = re.compile("^(\d{2,4})x(\d{2,4})$")
         # if still no tuple or not matching
         for need in needs_tuple:
@@ -1223,6 +1234,7 @@ class CropperApp:
 
         # convert tuples to strings
         self.app_settings["window_min"] = f"{self.app_settings['window_min'][0]}x{self.app_settings['window_min'][1]}"
+        self.app_settings["last_window_size"] = f"{self.app_settings['last_window_size'][0]}x{self.app_settings['last_window_size'][1]}"
         self.app_settings["image_target_size"] = f"{self.app_settings['image_target_size'][0]}x{self.app_settings['image_target_size'][1]}"
 
         lines = "\n".join(f"{k}={v}" for k, v in self.app_settings.items())
