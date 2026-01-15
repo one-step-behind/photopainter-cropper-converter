@@ -70,6 +70,7 @@ STATE_SUFFIX = "_ppcrop.txt"        # file status next to the source image
 CONVERT_FOLDER = "dithered" # folder where to store converted/dithered images
 RAW_FOLDER = "raw" # folder where to store raw images
 EXPORT_RAW = False # should export raw image suitable for SPECTRA6 use?
+PIC_FOLDER_ON_DEVICE = "pic"
 SAVE_FILELIST=True
 
 class DynamicButtonVar:
@@ -1129,6 +1130,8 @@ class CropperApp:
             settings["convert_folder"]=CONVERT_FOLDER
             settings["raw_folder"]=RAW_FOLDER
             settings["export_raw"]=EXPORT_RAW
+            settings["pic_folder_on_device"]=PIC_FOLDER_ON_DEVICE
+            settings["save_filelist"]=SAVE_FILELIST
 
             #print("APP Settings from DEFAULTS", settings)
             return settings
