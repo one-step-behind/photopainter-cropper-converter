@@ -322,14 +322,20 @@ class CropperApp:
         self.dragging: bool = False
         self.drag_offset: tuple[int, int] = (0, 0)
 
-        self.width, self.height = self.window.winfo_width(), self.window.winfo_height()
-        self.window.after(200, self.delayed_start)
+        self.width, self.height = (0, 0)
+
+        # Start
+        self.window.after_idle(self.delayed_start)
 
     # ---------- App start and File loading ----------
     def delayed_start(self) -> None:
         # ensure window is fully realized
-        self.window.update()
-        self.canvas.focus_set()       # keyboard focus works now
+        cw, ch = self.canvas_size()
+        if cw < 5 or ch < 5:  # canvas not ready yet
+            self.window.after(50, self.delayed_start)
+            return
+
+        self.window.focus_set()
         self.load_folder()
 
     def load_folder(self) -> None:
@@ -572,7 +578,6 @@ class CropperApp:
         if slider_label in self.enhancer_sliders_def:
             self.image_preferences[slider_label] = float(value)
             self.image_enhancer_slider_vars[slider_label].update(value)
-
             self.window.after_idle(self.update_image_in_canvas)
         else:
             print(f"No slider found for '{slider_label}'")
@@ -858,10 +863,11 @@ class CropperApp:
             self.window.after_cancel(self._resize_pending)
 
         if(event.widget == self.window and (self.width != event.width or self.height != event.height)):
-            self.width, self.height = event.width, event.height
             self._resize_pending = True
-            self.canvas.delete("image_layer")
+            self.width, self.height = event.width, event.height
+
             self.image_id = None
+            self.canvas.delete("image_layer")
             self.window.after(30, self._apply_window_resize)
 
     def _apply_window_resize(self) -> None:
