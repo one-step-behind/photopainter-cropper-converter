@@ -18,7 +18,7 @@ Originally developed by **@geegeek** on **macOS** for personal workflow needs, t
 - **Image enhancements** to improve image quality: **Brightness**, **Contrast**, **Saturation**, **Edge**, **Smooth**, **Sharpen**
 - Crop rectangle can **exceed image bounds** and empty areas will be filled with **White** or **Blur** background
 - **Per-image state**: A `*_ppcrop.txt` sidecar file (configurable via the `state_suffix` parameter in `settings.ini`) is saved alongside each original image to persist all per-image settings - such as orientation, fill mode, target device, crop dimensions, enhancement values, ... - allowing the application to automatically restore the exact crop rectangle on subsequent runs, which is especially beneficial for large batch workflows
-- App and some image properties configuration via `settings.ini` file
+- App and some image properties configuration via `settings.ini` file (see **Settings** section)
 - Crisp **crop area grid lines** aligned to device pixels
 - (optional) **Generate fileList.txt** on app exit
 
@@ -65,6 +65,7 @@ A sample image:
 **Start the app** and select the folder with the images you want to convert.
 
 Use **mouse/keyboard** to position and size the crop rectangle.
+
 - **Mouse**:
   - Drag to move
   - Scroll to resize (hold **Shift** = faster)
@@ -107,6 +108,35 @@ Using the direct BMP export of the original Waveshare converter that follows the
 - Example **input** photo and **outputs** from this tool (JPG 800×480) are available in `sample` folder.
 - For convenience, this repository also includes a **BMP file** in `sample/cropped_landscape/dithered/pic_acep` folder created with this converter, so you can copy it directly to the device.
 
+## Settings (`settings.ini`)
+
+*"With great power comes great responsibility."*
+
+If it's not existing, the `settings.ini` file will be automatically created the first time after closing the app properly. The next time closing the app, this fill will be updated.
+
+Available default settings:
+
+```text
+window_min=1280x960
+image_target_size=800x480
+image_quality=90
+orientation=landscape
+fill_mode=blur
+target_device=acep
+enhancer_edge=False
+enhancer_smooth=True
+enhancer_sharpen=False
+grid_color=#00ff00
+export_folder=cropped
+state_suffix=_ppcrop.txt
+convert_folder=dithered
+raw_folder=raw
+export_raw=False
+pic_folder_on_device=pic
+save_filelist=True
+exit_after_last_image=True
+```
+
 ## Device SD Card layout
 
 - Create a folder named `pic` at the **root** of the SD card.
@@ -118,7 +148,7 @@ Using the direct BMP export of the original Waveshare converter that follows the
 
 Clone repo:
 
-``` bash
+```bash
 git clone https://github.com/one-step-behind/photopainter-cropper-converter.git
 ```
 
@@ -126,14 +156,14 @@ git clone https://github.com/one-step-behind/photopainter-cropper-converter.git
 
 Use the **official** Python for macOS (includes Tkinter).
 
-``` bash
+```bash
 /Library/Frameworks/Python.framework/Versions/3.12/bin/python3 -m venv ~/ppainter-venv
 source ~/ppainter-venv/bin/activate
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-``` bash
+```bash
 source ~/ppainter-venv/bin/activate
 python photo_painter_cropper.py
 ```
@@ -142,7 +172,7 @@ python photo_painter_cropper.py
 
 Virtual environment & installing requirements:
 
-``` bash
+```bash
 cd photopainter-cropper-converter
 # create virtual environment for project (also creates folder by name)
 python -m venv .venv
@@ -159,7 +189,7 @@ python -m pip install -r requirements.txt
 
 Run script:
 
-``` bash
+```bash
 # run script
 python photo_painter_cropper.py
 
@@ -172,7 +202,7 @@ python photo_painter_cropper.py
 
 You can create a standalone executable with pyinstaller:
 
-``` bash
+```bash
 # build executable first time and auto-generate `.spec` file
 pyinstaller --onefile --windowed -i='.\_source\icon.ico' --add-data "_source/icon.ico;_source" --name "PhotoPainterCropper" ".\photo_painter_cropper.py"
 # later you can run compilation with just:
@@ -180,7 +210,8 @@ pyinstaller PhotoPainterCropper.spec
 ```
 
 Quit virtual env:
-``` bash
+
+```bash
 # quit venv
 deactivate
 ```
