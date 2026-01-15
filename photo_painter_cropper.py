@@ -72,6 +72,7 @@ RAW_FOLDER = "raw" # folder where to store raw images
 EXPORT_RAW = False # should export raw image suitable for SPECTRA6 use?
 PIC_FOLDER_ON_DEVICE = "pic"
 SAVE_FILELIST=True
+EXIT_AFTER_LAST_IMAGE=True
 
 class DynamicButtonVar:
     def __init__(self, default_text):
@@ -147,6 +148,11 @@ class CropperApp:
                 "text": "Save image list",
                 "command": lambda: self.update_app_settings_checkbox("save_filelist"),
                 "enter_tip": "Saves file list of existing images on app exit\nto fileList.txt in export folder(s)\n(landscape & portrait)",
+            },
+            "exit_after_last_image": {
+                "text": "Exit after last image",
+                "command": lambda: self.update_app_settings_checkbox("exit_after_last_image"),
+                "enter_tip": "Close the app after last image in folder was\nprocessed, otherwise open the first image.",
             },
         }
 
@@ -374,10 +380,12 @@ class CropperApp:
 
     def load_image(self) -> None:
         if self.idx >= len(self.image_paths):
-        #    messagebox.showinfo("Done", "All images have been processed.")
-        #    self.root.after(50, self.window.destroy) #quit)
-        #    return
-            self.idx = 0
+            if self.app_settings["exit_after_last_image"]:
+                messagebox.showinfo("Done", "All images have been processed. App closes now.")
+                self.window.after(50, self.window.destroy) #quit)
+                return
+            else:
+                self.idx = 0
 
         if self.idx < 0:
             self.idx = len(self.image_paths)-1
@@ -1132,6 +1140,7 @@ class CropperApp:
             settings["export_raw"]=EXPORT_RAW
             settings["pic_folder_on_device"]=PIC_FOLDER_ON_DEVICE
             settings["save_filelist"]=SAVE_FILELIST
+            settings["exit_after_last_image"]=EXIT_AFTER_LAST_IMAGE
 
             #print("APP Settings from DEFAULTS", settings)
             return settings
