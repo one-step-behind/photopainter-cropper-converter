@@ -9,7 +9,8 @@ import time
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from PIL import Image, ImageTk, ImageFilter, ImageEnhance
-from converter import Converter
+from utils.tooltip import Hovertip
+from utils.converter import Converter
 
 # Try to import pillow-heif for HEIC support
 try:
@@ -62,6 +63,7 @@ SCALE_FACTOR = 1.01                 # zoom step with normal +/-
 SCALE_FACTOR_FAST = 1.10            # zoom step with Shift
 
 LABEL_PADDINGS = (5, 5)
+DEFAULT_TOOLTIP_DELAY = 250
 
 STATE_SUFFIX = "_ppcrop.txt"        # file status next to the source image
 CONVERT_FOLDER = "dithered" # folder where to store converted/dithered images
@@ -508,8 +510,7 @@ class CropperApp:
 
             # 4) Bind hover tooltip events if enter_tip exists
             if "enter_tip" in info:
-                btn.bind("<Enter>", lambda e, tip=info["enter_tip"]: self.show_tip(tip))
-                btn.bind("<Leave>", lambda e: self.show_tip())
+                Hovertip(btn, info["enter_tip"], hover_delay=DEFAULT_TOOLTIP_DELAY)
 
     def update_button_text(self, button_name, extra_text) -> None:
         """
@@ -554,8 +555,7 @@ class CropperApp:
 
                 # Bind hover tooltip events if enter_tip exists
                 if "enter_tip" in info:
-                    slider.bind("<Enter>", lambda e, tip=info["enter_tip"]: self.show_tip(tip))
-                    slider.bind("<Leave>", lambda e: self.show_tip())
+                    Hovertip(slider, info["enter_tip"], hover_delay=DEFAULT_TOOLTIP_DELAY)
 
         # AFTER all sliders exist → update their labels correctly
         for name, slider in self.image_enhancer_sliders.items():
@@ -598,6 +598,8 @@ class CropperApp:
 
                 # Bind hover tooltip events if enter_tip exists
                 if "enter_tip" in info:
+                    Hovertip(checkbox, info["enter_tip"], hover_delay=DEFAULT_TOOLTIP_DELAY)
+
                 if "toggle_key" in info:
                     self.window.bind(
                         f"<{info['toggle_key']}>", 
@@ -641,8 +643,7 @@ class CropperApp:
 
                 # Bind hover tooltip events if enter_tip exists
                 if "enter_tip" in info:
-                    checkbox.bind("<Enter>", lambda e, tip=info["enter_tip"]: self.show_tip(tip))
-                    checkbox.bind("<Leave>", lambda e: self.show_tip())
+                    Hovertip(checkbox, info["enter_tip"], hover_delay=DEFAULT_TOOLTIP_DELAY)
 
         # AFTER all checkboxes exist → update their values
         for name, checkbox in self.app_settings_checkboxes.items():
@@ -661,19 +662,6 @@ class CropperApp:
     def update_status_label(self, msg) -> None:
         """Set status message immediately."""
         self.status_label_var.set(msg)
-
-    def show_tip(self, msg: str = "") -> None:
-        """
-        Show tooltip text (hover)
-        
-        :param self: Beschreibung
-        :param msg: Beschreibung
-        :type msg: str
-        """
-        if msg:
-            self.status_var.set(msg)
-        else:
-            self.status_var.set(self.status_var_default_text)
     
     # ---------- Layout & Drawing ----------
     def canvas_size(self):
