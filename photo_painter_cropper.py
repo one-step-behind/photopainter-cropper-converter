@@ -134,31 +134,39 @@ class CropperApp:
         bottom_bar.pack(fill=tk.X, side=tk.BOTTOM)
 
         # ---------- Theme ----------
-        self.style = ttk.Style()
-        self.style.theme_use('clam')
-        self.style.configure('TFrame', background=WINDOW_BACKGROUND_COLOR, foreground="white")
-        self.style.configure('TLabel', background=WINDOW_BACKGROUND_COLOR, foreground="white")
-        self.style.configure('TCheckbutton', background=WINDOW_BACKGROUND_COLOR, foreground="white")
-        self.style.map('TCheckbutton', 
-            background=[('active', HIGHLIGHT_COLOR)], # When 'active' (hovered), use 'darkgreen'
-            foreground=[('pressed', 'red')], # When 'pressed' (clicked), use 'red'
-        )
-        self.style.configure('TButton', background=WINDOW_BACKGROUND_COLOR, foreground="white", bordercolor=WINDOW_BACKGROUND_COLOR)
-        self.style.map('TButton', 
-            background=[('active', HIGHLIGHT_COLOR)], # When 'active' (hovered), use 'darkgreen'
-            foreground=[('pressed', 'red')], # When 'pressed' (clicked), use 'red'
-        )
-        # Remove the "Focus Ring" from Buttons
-        #self.style.layout('TButton',  [
-        #    ('Button.padding', {
-        #        'sticky': 'nswe', 'children': [
-        #            ('Button.label', {'sticky': 'nswe'})
-        #        ]
-        #    })
-        #])
+        self.set_theme()
 
         # ---------- Button UI ----------
         # Define buttons with text variable, command, optional params, styling, and optional hover tip
+        self.app_settings_def = {
+            "save_filelist": {
+                "text": "Save image list",
+                "command": lambda: self.update_app_settings_checkbox("save_filelist"),
+                "enter_tip": "Saves file list of existing images on app exit\nto fileList.txt in export folder(s)\n(landscape & portrait)",
+            },
+        }
+
+        self.app_button_definitions = {
+            "prev": {
+                "default_text": "<< Prev",
+                "command": self.prev_image,
+                "enter_tip": "Previous Image (PAGE_UP)",
+                "disabled_if_single_image": True,
+            },
+            "next": {
+                "default_text": "Next >>",
+                "command": self.next_image,
+                "enter_tip": "Next Image (PAGE_DOWN)",
+                "disabled_if_single_image": True,
+            },
+            "save": {
+                "default_text": "Save",
+                "command": self.on_confirm,
+                "enter_tip": "Crop and Convert (Enter/S)",
+                "style_config": {"foreground": "green"},
+            },
+        }
+
         self.option_button_def = {
             "orientation": {
                 "default_text": "Orientation",
@@ -181,25 +189,6 @@ class CropperApp:
             },
         }
         
-        self.app_button_definitions = {
-            "prev": {
-                "default_text": "<< Prev",
-                "command": self.prev_image,
-                "enter_tip": "Previous Image (PAGE_UP)",
-            },
-            "next": {
-                "default_text": "Next >>",
-                "command": self.next_image,
-                "enter_tip": "Next Image (PAGE_DOWN)",
-            },
-            "save": {
-                "default_text": "Save",
-                "command": self.on_confirm,
-                "enter_tip": "Crop and Convert (Enter/S)",
-                "style_config": {"foreground": "green"},
-            },
-        }
-
         self.enhancer_sliders_def = {
             "brightness": {
                 "text": "Brightness",
@@ -228,25 +217,20 @@ class CropperApp:
             "enhancer_edge": {
                 "text": "Edge",
                 "command": lambda: self.update_image_enhancer_checkbox("enhancer_edge"),
-                "enter_tip": "Enhance image by Edgeing",
+                "enter_tip": "Enhance image by Edgeing (1)",
+                "toggle_key": "Key-1",
             },
             "enhancer_smooth": {
                 "text": "Smooth",
                 "command": lambda: self.update_image_enhancer_checkbox("enhancer_smooth"),
-                "enter_tip": "Enhance image by Smoothing",
+                "enter_tip": "Enhance image by Smoothing (2)",
+                "toggle_key": "Key-2",
             },
             "enhancer_sharpen": {
                 "text": "Sharpen",
                 "command": lambda: self.update_image_enhancer_checkbox("enhancer_sharpen"),
-                "enter_tip": "Enhance image by Sharpening",
-            },
-        }
-
-        self.app_settings_def = {
-            "save_filelist": {
-                "text": "Save image list",
-                "command": lambda: self.update_app_settings_checkbox("save_filelist"),
-                "enter_tip": "Saves file list of existing images on app exit to fileList.txt in export folder(s)",
+                "enter_tip": "Enhance image by Sharpening (3)",
+                "toggle_key": "Key-3",
             },
         }
 
@@ -260,22 +244,10 @@ class CropperApp:
         self.app_settings_checkbox_vars = {}
         self.app_settings_checkboxes = {}
 
-        # Build buttons
-        self.create_buttons(self.app_button_definitions, self.button_bar, tk.HORIZONTAL)
-        # create image options buttons
-        self.create_buttons(self.option_button_def, self.options_frame, tk.VERTICAL)
-        tk.Label(self.options_frame, width=22, height=1).pack() # spacer
-
-        # Status and button hover text
-        self.status_var_default_text = "Ready"
-        self.status_var = tk.StringVar(value=self.status_var_default_text)
-        self.status = ttk.Label(self.button_bar, textvariable=self.status_var, anchor=tk.W)
-        self.status.pack(side=tk.RIGHT)
-
         # Output dimension size label
         self.size_lbl_var = tk.StringVar(value="")
         self.size_lbl = ttk.Label(self.button_bar, textvariable=self.size_lbl_var)
-        self.size_lbl.pack(padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1], anchor=tk.W)
+        self.size_lbl.pack(padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1], side=tk.RIGHT, anchor=tk.W)
 
         # Status bar elements
         self.status_count = ttk.Label(bottom_bar, text="[0/0]")
@@ -285,6 +257,12 @@ class CropperApp:
         self.status_label = ttk.Label(bottom_bar, textvariable=self.status_label_var, anchor=tk.W)
         self.status_label.pack(padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1], anchor=tk.W, fill=tk.X, side=tk.LEFT)
         
+        # Status and button hover text
+        self.status_var_default_text = "Ready"
+        self.status_var = tk.StringVar(value=self.status_var_default_text)
+        self.status = ttk.Label(bottom_bar, textvariable=self.status_var, anchor=tk.W)
+        self.status.pack(padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1], anchor=tk.W, side=tk.RIGHT)
+
         # Mouse events
         self.canvas.bind("<Button-1>", self.on_click)
         self.canvas.bind("<B1-Motion>", self.on_drag)
@@ -376,9 +354,18 @@ class CropperApp:
             self.window.after(50, self.window.destroy) #quit)
             return
 
-        self.show_image()
+        # create app buttons
+        self.create_buttons(self.app_button_definitions, self.button_bar, tk.HORIZONTAL)
+        # create image options buttons
+        self.create_buttons(self.option_button_def, self.options_frame, tk.VERTICAL)
+        tk.Label(self.options_frame, width=22, height=1).pack() # spacer
 
-    def show_image(self) -> None:
+        self.window.update() # after creating the buttons above
+        self.width, self.height = self.window.winfo_width(), self.window.winfo_height()
+
+        self.load_image()
+
+    def load_image(self) -> None:
         if self.idx >= len(self.image_paths):
         #    messagebox.showinfo("Done", "All images have been processed.")
         #    self.root.after(50, self.window.destroy) #quit)
@@ -454,6 +441,37 @@ class CropperApp:
             return Image.open(path)
 
     # ---------- UI helpers ----------
+    def set_theme(self):
+        self.style = ttk.Style()
+        self.style.theme_use('clam')
+        self.style.configure('TFrame', background=WINDOW_BACKGROUND_COLOR, foreground="white")
+        self.style.configure('TLabel', background=WINDOW_BACKGROUND_COLOR, foreground="white")
+        self.style.configure('TCheckbutton', background=WINDOW_BACKGROUND_COLOR, foreground="white")
+        self.style.map('TCheckbutton', 
+            background=[('active', HIGHLIGHT_COLOR)], # When 'active' (hovered), use 'highlight color' background
+            foreground=[('pressed', 'red')], # When 'pressed' (clicked), use 'red' text color
+        )
+        self.style.configure('TButton',
+            bordercolor=WINDOW_BACKGROUND_COLOR,
+            background=WINDOW_BACKGROUND_COLOR, 
+            foreground="white",
+        )
+        self.style.map('TButton',
+            background=[('active', HIGHLIGHT_COLOR)], # When 'active' (hovered), use 'highlight color' background
+            foreground=[('pressed', 'red'), ('disabled', '#666666')], # When 'pressed' (clicked), use 'red' text color
+        )
+        # Remove the "Focus Ring" from Buttons
+        #self.style.layout('TButton',  [
+        #    ('Button.padding', {
+        #        'sticky': 'nswe', 'children': [
+        #            ('Button.label', {'sticky': 'nswe'})
+        #        ],
+        #       "background": [("active", "green2"), ("!disabled", "green4")],
+        #       "fieldbackground": [("!disabled", "green3")],
+        #       "foreground": [("focus", "OliveDrab1"), ("!disabled", "OliveDrab2")]
+        #    })
+        #])
+
     def create_buttons(self, button_definition, target, btn_orient) -> None:
         # Create buttons dynamically
         for name, info in button_definition.items():
@@ -481,7 +499,11 @@ class CropperApp:
 
             # 3) Create the button - COMMAND MUST BE PASSED DIRECTLY!!!
             btn = ttk.Button(target, command=info["command"], name=f"btn_{name}", **btn_kwargs)
-            btn.pack(side=tk.LEFT if btn_orient=="horizontal" else tk.TOP, fill=tk.X)
+            btn.pack(side=tk.LEFT if btn_orient=="horizontal" else tk.TOP, fill=tk.X, padx=LABEL_PADDINGS[0])
+
+            if "disabled_if_single_image" in info and info["disabled_if_single_image"] and len(self.image_paths) == 1:
+                btn.state(["disabled"])
+
             self.app_buttons[name] = btn
 
             # 4) Bind hover tooltip events if enter_tip exists
@@ -576,15 +598,18 @@ class CropperApp:
 
                 # Bind hover tooltip events if enter_tip exists
                 if "enter_tip" in info:
-                    checkbox.bind("<Enter>", lambda e, tip=info["enter_tip"]: self.show_tip(tip))
-                    checkbox.bind("<Leave>", lambda e: self.show_tip())
+                if "toggle_key" in info:
+                    self.window.bind(
+                        f"<{info['toggle_key']}>", 
+                        lambda e, n=name: self.update_image_enhancer_checkbox(n, e)
+                    )
 
         # AFTER all checkboxes exist → update their values
         for name, checkbox in self.image_enhancer_checkboxes.items():
             value = self.image_preferences[name]
             self.image_enhancer_checkbox_vars[name].set(value)
 
-    def update_image_enhancer_checkbox(self, name) -> None:
+    def update_image_enhancer_checkbox(self, name, e=None) -> None:
         if name in self.image_enhancer_checkbox_vars:
             self.image_preferences[name] = False if self.image_preferences[name] == True else True
             self.image_enhancer_checkbox_vars[name].set(self.image_preferences[name])
@@ -679,8 +704,10 @@ class CropperApp:
         if self.image_id is None:
             self.image_id = self.canvas.create_image(self.img_off[0], self.img_off[1], anchor="nw", image=self.tk_img, tags="image_layer")
             self.canvas.tag_lower("image_layer")
+            #print("UPDATE CREATE")
         else: # Update the existing canvas
             self.canvas.itemconfig(self.image_id, image=self.tk_img, tags="image_layer")
+            #print("UPDATE ITEMCONFIG")
 
         self._slider_update_pending = None
 
@@ -859,6 +886,7 @@ class CropperApp:
         if self.original_img is None:
             return
         
+        #print("APPLY WINDOW RESIZE")
         rect_img_raw = self.rect_in_image_coords_raw()
         self.resize_image_and_center_in_window()
         self.update_image_in_canvas()
