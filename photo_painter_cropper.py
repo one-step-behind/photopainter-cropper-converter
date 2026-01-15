@@ -246,11 +246,6 @@ class CropperApp:
         self.app_settings_checkbox_vars = {}
         self.app_settings_checkboxes = {}
 
-        # Output dimension size label
-        self.size_lbl_var = tk.StringVar(value="")
-        self.size_lbl = ttk.Label(self.button_bar, textvariable=self.size_lbl_var)
-        self.size_lbl.pack(padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1], side=tk.RIGHT, anchor=tk.W)
-
         # Status bar elements
         self.status_count = ttk.Label(bottom_bar, text="[0/0]")
         self.status_count.pack(padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1], side=tk.LEFT)
@@ -306,10 +301,12 @@ class CropperApp:
         # State
         self.picture_input_folder: str | None = None
         self.original_img: Image.Image | None = None
+        self.original_img_file_size: int = 0
         self.display_img = None # image to display in window
         self.tk_img: ImageTk.PhotoImage | None = None
         self.image_id = None
         self.image_paths = []
+        self.current_image_path: str = ""
         self.idx = 0
         self.scale: float = 1.0
         self.img_off: tuple[int, int] = (0, 0)
@@ -383,23 +380,24 @@ class CropperApp:
         if self.idx < 0:
             self.idx = len(self.image_paths)-1
 
-        current_image_path = self.image_paths[self.idx]
+        self.current_image_path = self.image_paths[self.idx]
 
         # Load saved preferences BEFORE loading the image
-        pref_loaded = self.load_image_preferences_or_defaults(current_image_path)
+        pref_loaded = self.load_image_preferences_or_defaults(self.current_image_path)
         # Update target_size and ratio for new orientation
         self.update_targetsize_and_ratio()
 
         try:
             self.image_id = None
-            self.original_img = self.load_image_by_exiforient(current_image_path) # EXIF auto-rotate
+            self.original_img = self.load_image_by_exiforient(self.current_image_path) # EXIF auto-rotate
+            self.original_img_file_size = os.stat(self.current_image_path).st_size
             self.display_img = self.original_img.copy()
         except Exception as e:
             if len(self.image_paths) == 1:
-                messagebox.showwarning("Image error", f"Unable to open:\n{current_image_path}\n{e}\nAs it is the only image there's nothing more to do. App will quit now.")
+                messagebox.showwarning("Image error", f"Unable to open:\n{self.current_image_path}\n{e}\nAs it is the only image there's nothing more to do. App will quit now.")
                 self.window.after(50, self.window.destroy) #quit)
             else:
-                messagebox.showwarning("Image error", f"Unable to open:\n{current_image_path}\n{e}\nWe move on to the next one.")
+                messagebox.showwarning("Image error", f"Unable to open:\n{self.current_image_path}\n{e}\nWe move on to the next one.")
                 self.next_image()
             
             return
@@ -414,9 +412,8 @@ class CropperApp:
         self.create_image_enhancer_sliders() # create image options sliders
         self.create_image_enhancer_checkboxes()
         self.create_app_settings_checkboxes()
-        self.update_size_lbl() # after loading state
         self.update_image_in_canvas()
-        self.update_status_label(f"{current_image_path} | {self.original_img.size[0]} x {self.original_img.size[1]} | {'{:,}'.format(os.stat(current_image_path).st_size >> 10).replace(',','.')} kB")
+        self.update_status_label()
         self.draw_crop_marker_grid() # create crop marker
 
     def load_image_by_exiforient(self, path: str):
@@ -664,18 +661,19 @@ class CropperApp:
         else:
             print(f"No Checkbox/Checkbutton found for '{name}' in app_settings_checkbox_vars")
 
-    def update_status_label(self, msg) -> None:
-        """Set status message immediately."""
-        self.status_label_var.set(msg)
+    def update_status_label(self, msg=None) -> None:
+        if msg:
+            self.status_label_var.set(msg)
+        else:
+            source_dims = f"{self.original_img.size[0]}x{self.original_img.size[1]}"
+            target_size = f"{self.target_size[0]}x{self.target_size[1]}"
+            source_file_size = f"{'{:,}'.format(self.original_img_file_size >> 10).replace(',','.')} kB"
+            self.status_label_var.set(f"{self.current_image_path} | {source_dims} => {target_size} | {source_file_size}")
     
     # ---------- Layout & Drawing ----------
     def canvas_size(self):
         # Return REAL canvas size (never force minimum)
         return (self.canvas.winfo_width(), self.canvas.winfo_height())
-
-    def update_size_lbl(self):
-        w, h = self.target_size
-        self.size_lbl_var.set(f"Crop: {w}x{h}")
 
     def resize_image_and_center_in_window(self) -> None:
         cw, ch = self.canvas_size()
@@ -946,7 +944,7 @@ class CropperApp:
         self.rect_h = new_rect_h
 
         # Update title + label + redraw
-        self.update_size_lbl() # after orientation toggle
+        self.update_status_label() # after orientation toggle
         self.update_button_text("orientation", self.image_preferences["orientation"])
         self.clamp_crop_rectangle_to_canvas()
         self.draw_crop_marker_grid()
