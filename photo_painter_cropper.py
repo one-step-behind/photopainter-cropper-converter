@@ -9,6 +9,7 @@ import time
 import re
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+from typing import Literal
 from PIL import Image, ImageTk, ImageFilter, ImageEnhance
 from utils.tooltip import Hovertip
 from utils.converter import Converter
@@ -119,24 +120,37 @@ class CropperApp:
             "Esc=skip"
         )
 
+        # The Frame
         top = ttk.Frame(self.window)
         top.pack(fill=tk.X, side=tk.TOP)
 
+        # top button bar
         self.button_bar = ttk.Frame(top)
         self.button_bar.pack(padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1], anchor=tk.W, fill=tk.X, side=tk.TOP)
 
+        # Frame holding image canvas and options pane
         canvas_with_options = ttk.Frame(window)
         canvas_with_options.pack(fill=tk.BOTH, side=tk.TOP, expand=True)
 
-        # set the attribute "highlightthickness=0" in Canvas will no longer display the border around it
-        self.canvas = tk.Canvas(canvas_with_options, highlightthickness=0, bg=CANVAS_BACKGROUND_COLOR)
+        # image canvas
+        self.canvas = tk.Canvas(canvas_with_options, highlightthickness=0, bg=CANVAS_BACKGROUND_COLOR) # highlightthickness: no border
         self.canvas.pack(fill=tk.BOTH, side=tk.LEFT, expand=True)
 
+        # options pane
         self.options_frame = tk.Frame(canvas_with_options, highlightthickness=0)
         self.options_frame.pack(padx=LABEL_PADDINGS[0], fill=tk.Y, side=tk.RIGHT)
 
+        # bottom status bar
         bottom_bar = ttk.Frame(self.window)#, relief=tk.SUNKEN)
         bottom_bar.pack(fill=tk.X, side=tk.BOTTOM)
+
+        # image counter
+        self.status_count = ttk.Label(bottom_bar, text="[0/0]", anchor=tk.W)
+        self.status_count.pack(padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1], anchor=tk.W, side=tk.LEFT)
+
+        # current image path
+        self.status_label = ttk.Label(bottom_bar, text="Select folder with images…", anchor=tk.W)
+        self.status_label.pack(padx=0, pady=LABEL_PADDINGS[1], anchor=tk.W, fill=tk.X, side=tk.LEFT)
 
         # ---------- Theme ----------
         self.set_theme()
@@ -146,13 +160,15 @@ class CropperApp:
         self.app_settings_def = {
             "save_filelist": {
                 "text": "Save image list",
-                "command": lambda: self.update_app_settings_checkbox("save_filelist"),
-                "enter_tip": "Saves file list of existing images on app exit\nto fileList.txt in export folder(s)\n(landscape & portrait)",
+                "command": lambda e=None: self.update_app_settings_checkbox("save_filelist"),
+                "enter_tip": "Saves file list of existing images on app exit\nto fileList.txt in export folder(s)\n(landscape & portrait) (S)",
+                "toggle_key": ("<s>", "<S>"),
             },
             "exit_after_last_image": {
                 "text": "Exit after last image",
-                "command": lambda: self.update_app_settings_checkbox("exit_after_last_image"),
-                "enter_tip": "Close the app after last image in folder was\nprocessed, otherwise open the first image.",
+                "command": lambda e=None: self.update_app_settings_checkbox("exit_after_last_image"),
+                "enter_tip": "Close the app after last image in folder was\nprocessed, otherwise open the first image. (X)",
+                "toggle_key": ("<x>", "<X>"),
             },
         }
 
@@ -162,18 +178,32 @@ class CropperApp:
                 "command": self.prev_image,
                 "enter_tip": "Previous Image (PAGE_UP)",
                 "disabled_if_single_image": True,
+                "toggle_key": "<Prior>",
             },
             "next": {
                 "default_text": "Next >>",
                 "command": self.next_image,
                 "enter_tip": "Next Image (PAGE_DOWN)",
                 "disabled_if_single_image": True,
+                "toggle_key": "<Next>",
             },
             "save": {
-                "default_text": "Save",
+                "default_text": "Crop and Convert",
                 "command": self.on_confirm,
-                "enter_tip": "Crop and Convert (Enter/S)",
+                "enter_tip": "Crop and Convert (Enter)",
                 "style_config": {"foreground": "green"},
+                "toggle_key": ("<Return>"),
+            },
+        }
+        
+        self.other_app_button_definitions = {
+            "change_folder": {
+                "default_text": "Change folder",
+                "command": self.load_folder,
+                "enter_tip": "Change to another folder of images (C)",
+                "fill": tk.X,
+                "underline": 0,
+                "toggle_key": ("c", "C"),
             },
         }
 
@@ -184,18 +214,21 @@ class CropperApp:
                 "enter_tip": "Toggle Orientation (D)",
                 "fill": tk.X,
                 "underline": 0,
+                "toggle_key": ("o", "O"),
             },
             "fill_mode": {
                 "default_text": "Fill",
                 "command": self.toggle_fill_mode,
                 "enter_tip": "Toggle Fill mode (F)",
                 "underline": 0,
+                "toggle_key": ("f", "F"),
             },
             "target_device": {
                 "default_text": "Device",
                 "command": self.toggle_target_device,
                 "enter_tip": "Toggle Target device (T)",
                 "underline": 0,
+                "toggle_key": ("d", "D"),
             },
         }
         
@@ -226,21 +259,21 @@ class CropperApp:
         self.enhancer_checkboxes_def = {
             "enhancer_edge": {
                 "text": "Edge",
-                "command": lambda: self.update_image_enhancer_checkbox("enhancer_edge"),
+                "command": lambda e=None: self.update_image_enhancer_checkbox("enhancer_edge"),
                 "enter_tip": "Enhance image by Edgeing (1)",
-                "toggle_key": "Key-1",
+                "toggle_key": "<Key-1>",
             },
             "enhancer_smooth": {
                 "text": "Smooth",
-                "command": lambda: self.update_image_enhancer_checkbox("enhancer_smooth"),
+                "command": lambda e=None: self.update_image_enhancer_checkbox("enhancer_smooth"),
                 "enter_tip": "Enhance image by Smoothing (2)",
-                "toggle_key": "Key-2",
+                "toggle_key": "<Key-2>",
             },
             "enhancer_sharpen": {
                 "text": "Sharpen",
-                "command": lambda: self.update_image_enhancer_checkbox("enhancer_sharpen"),
+                "command": lambda e=None: self.update_image_enhancer_checkbox("enhancer_sharpen"),
                 "enter_tip": "Enhance image by Sharpening (3)",
-                "toggle_key": "Key-3",
+                "toggle_key": "<Key-3>",
             },
         }
 
@@ -254,22 +287,8 @@ class CropperApp:
         self.app_settings_checkbox_vars = {}
         self.app_settings_checkboxes = {}
 
-        # Status bar elements
-        self.status_count = ttk.Label(bottom_bar, text="[0/0]")
-        self.status_count.pack(padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1], side=tk.LEFT)
-
-        self.status_label_var = tk.StringVar(value="Select folder with images…")
-        self.status_label = ttk.Label(bottom_bar, textvariable=self.status_label_var, anchor=tk.W)
-        self.status_label.pack(padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1], anchor=tk.W, fill=tk.X, side=tk.LEFT)
-        
-        # Status and button hover text
-        self.status_var_default_text = "Ready"
-        self.status_var = tk.StringVar(value=self.status_var_default_text)
-        self.status = ttk.Label(bottom_bar, textvariable=self.status_var, anchor=tk.W)
-        self.status.pack(padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1], anchor=tk.W, side=tk.RIGHT)
-
         # Mouse events
-        self.canvas.bind("<Button-1>", self.on_click)
+        self.canvas.bind("<Button-1>", self.on_click) # Mouse Left
         self.canvas.bind("<B1-Motion>", self.on_drag)
         self.canvas.bind("<ButtonRelease-1>", self.on_release)
         self.canvas.bind("<MouseWheel>", self.on_wheel)     # mac/win
@@ -277,12 +296,6 @@ class CropperApp:
         self.canvas.bind("<Button-5>", self.on_wheel_linux) # linux down
 
         # Keyboard events
-        self.window.bind("<Return>", self.on_confirm)
-        #self.window.bind_all("<Tab>", self.on_confirm_tab)    # Tab intercept (prevent focus change)
-        self.window.bind("<s>", self.on_confirm)
-        self.window.bind("<S>", self.on_confirm)
-        self.window.bind("<Prior>", self.prev_image) # PAGE UP
-        self.window.bind("<Next>", self.next_image) # PAGE DOWN
         self.window.bind("<Escape>", self.on_skip)
 
         # Keyboard events (movement)
@@ -299,12 +312,6 @@ class CropperApp:
 
         # Various
         self.window.bind("<Configure>", self.on_window_resize)
-        self.window.bind("<o>", self.toggle_orientation)
-        self.window.bind("<O>", self.toggle_orientation)
-        self.window.bind("<f>", self.toggle_fill_mode)
-        self.window.bind("<F>", self.toggle_fill_mode)
-        self.window.bind("<d>", self.toggle_target_device)
-        self.window.bind("<D>", self.toggle_target_device)
 
         # State
         self.picture_input_folder: str | None = None
@@ -343,7 +350,7 @@ class CropperApp:
         self.window.focus_set()
         self.load_folder()
 
-    def load_folder(self) -> None:
+    def load_folder(self, _e=None) -> None:
         """
         Load images from given folder. Called once on app start.
         
@@ -352,26 +359,33 @@ class CropperApp:
         self.picture_input_folder = filedialog.askdirectory(title="Select source folder with photos")
 
         if not self.picture_input_folder:
-            self.window.after(50, self.window.destroy) #quit)
+            if not len(self.image_paths):
+                self.window.after(50, self.window.destroy) #quit)
             return
+        else:
+            self.image_paths = [] # reset on folder change
 
         supported_formats = ["*.jpg", "*.jpeg", "*.png", "*.bmp", "*.gif", "*.tif", "*.tiff", "*.webp"]
         if HEIC_SUPPORT:
             supported_formats.append("*.heic")
             
+        # get the images in folder
         for format in supported_formats:
             self.image_paths.extend(glob.glob(os.path.join(self.picture_input_folder, format)))
 
         if not self.image_paths:
-            messagebox.showerror("No image", "The folder contains no images.")
-            self.window.after(50, self.window.destroy) #quit)
+            messagebox.showerror("No image", "The folder contains no images. Please choose another one.")
+            self.load_folder()
+            #self.window.after(50, self.window.destroy) #quit)
             return
 
-        # create app buttons
-        self.create_buttons(self.app_button_definitions, self.button_bar, tk.HORIZONTAL)
-        # create image options buttons
-        self.create_buttons(self.option_button_def, self.options_frame, tk.VERTICAL)
+        # app buttons
+        self.create_buttons(self.button_bar, self.app_button_definitions, tk.LEFT)
+        # image options buttons
+        self.create_buttons(self.options_frame, self.option_button_def, tk.TOP)
         tk.Label(self.options_frame, width=22, height=1).pack() # spacer
+        # other app buttons
+        self.create_buttons(self.options_frame, self.other_app_button_definitions, tk.BOTTOM)
 
         self.window.update() # after creating the buttons above
         self.width, self.height = self.window.winfo_width(), self.window.winfo_height()
@@ -417,7 +431,10 @@ class CropperApp:
         if not pref_loaded or not self.apply_saved_state():
             self.init_crop_rectangle()
 
-        self.status_count.config(text=f"[{self.idx+1}/{len(self.image_paths)}]")
+        count_img = len(self.image_paths)
+        counter_length = max(4, 3*(math.floor(math.log10(abs(count_img))) + 1))
+        print(counter_length)
+        self.status_count.config(text=f"[{self.idx+1}/{count_img}]", width=counter_length) # O(1): https://pynative.com/python-count-digits-of-number/
         self.create_image_enhancer_sliders() # create image options sliders
         self.create_image_enhancer_checkboxes()
         self.create_app_settings_checkboxes()
@@ -486,9 +503,29 @@ class CropperApp:
         #    })
         #])
 
-    def create_buttons(self, button_definition, target, btn_orient) -> None:
+    def key_bind(self, info, command=None):
+        if "toggle_key" in info:
+            if type(info['toggle_key']) == str:
+                self.window.bind(info['toggle_key'], command if command else info["command"])
+            elif type(info['toggle_key']) == tuple:
+                for bind_key in info['toggle_key']:
+                    self.window.bind(bind_key, command if command else info["command"])
+
+    def create_buttons(self, target, button_definition, side: Literal['left', 'right', 'top', 'bottom']=tk.LEFT) -> None:
+        """
+        Docstring für create_buttons
+        
+        :param self: instance
+        :param target: target widget
+        :param button_definition: definitions of the buttons
+        :param side: side to place the buttons
+        :type side: Literal['left', 'right', 'top', 'bottom']
+        """
         # Create buttons dynamically
         for name, info in button_definition.items():
+
+            if name in self.app_button_vars:
+                continue
 
             # 1) Create helper var object
             dyn = DynamicButtonVar(info["default_text"])
@@ -513,7 +550,7 @@ class CropperApp:
 
             # 3) Create the button - COMMAND MUST BE PASSED DIRECTLY!!!
             btn = ttk.Button(target, command=info["command"], name=f"btn_{name}", **btn_kwargs)
-            btn.pack(side=tk.LEFT if btn_orient=="horizontal" else tk.TOP, fill=tk.X, padx=LABEL_PADDINGS[0])
+            btn.pack(side=side, fill=tk.X, padx=LABEL_PADDINGS[0])
 
             if "disabled_if_single_image" in info and info["disabled_if_single_image"] and len(self.image_paths) == 1:
                 btn.state(["disabled"])
@@ -523,6 +560,8 @@ class CropperApp:
             # 4) Bind hover tooltip events if enter_tip exists
             if "enter_tip" in info:
                 Hovertip(btn, info["enter_tip"], hover_delay=DEFAULT_TOOLTIP_DELAY)
+
+            self.key_bind(info)
 
     def update_button_text(self, button_name, extra_text) -> None:
         """
@@ -569,6 +608,8 @@ class CropperApp:
                 if "enter_tip" in info:
                     Hovertip(slider, info["enter_tip"], hover_delay=DEFAULT_TOOLTIP_DELAY)
 
+                self.key_bind(info)
+
         # AFTER all sliders exist → update their labels correctly
         for name, slider in self.image_enhancer_sliders.items():
             value = self.image_preferences[name]
@@ -611,11 +652,7 @@ class CropperApp:
                 if "enter_tip" in info:
                     Hovertip(checkbox, info["enter_tip"], hover_delay=DEFAULT_TOOLTIP_DELAY)
 
-                if "toggle_key" in info:
-                    self.window.bind(
-                        f"<{info['toggle_key']}>", 
-                        lambda e, n=name: self.update_image_enhancer_checkbox(n, e)
-                    )
+                self.key_bind(info)
 
         # AFTER all checkboxes exist → update their values
         for name, checkbox in self.image_enhancer_checkboxes.items():
@@ -656,6 +693,8 @@ class CropperApp:
                 if "enter_tip" in info:
                     Hovertip(checkbox, info["enter_tip"], hover_delay=DEFAULT_TOOLTIP_DELAY)
 
+                self.key_bind(info)
+
         # AFTER all checkboxes exist → update their values
         for name, checkbox in self.app_settings_checkboxes.items():
             value = self.app_settings[name]
@@ -672,12 +711,12 @@ class CropperApp:
 
     def update_status_label(self, msg=None) -> None:
         if msg:
-            self.status_label_var.set(msg)
+            self.status_label.config(text=msg)
         else:
             source_dims = f"{self.original_img.size[0]}x{self.original_img.size[1]}"
             target_size = f"{self.target_size[0]}x{self.target_size[1]}"
             source_file_size = f"{'{:,}'.format(self.original_img_file_size >> 10).replace(',','.')} kB"
-            self.status_label_var.set(f"{self.current_image_path} | {source_dims} => {target_size} | {source_file_size}")
+            self.status_label.config(text=f"{self.current_image_path} | {source_dims} => {target_size} | {source_file_size}")
     
     # ---------- Layout & Drawing ----------
     def canvas_size(self):
