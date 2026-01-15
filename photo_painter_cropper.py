@@ -6,6 +6,7 @@ import sys
 import math
 import glob
 import time
+import re
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from PIL import Image, ImageTk, ImageFilter, ImageEnhance
@@ -25,13 +26,13 @@ except ImportError:
 
 # ====== CONFIG ======
 APP_TITLE = "PhotoPainterCropper"
-WINDOW_MIN: tuple[int, int] = (1024, 768)
 JPEG_QUALITY: int = 90
 DITHER_METHOD: int = 3 # NONE(0) or FLOYDSTEINBERG(3)
 
 defaults = {
-    "EXPORT_FOLDER": "cropped", # folder where to store cropped images
+    "WINDOW_MIN": (1024, 768),
     "IMAGE_TARGET_SIZE": (800, 480), # exact JPG output image dimensions
+    "EXPORT_FOLDER": "cropped", # folder where to store cropped images
     "ORIENTATION": "landscape", # available_option["ORIENTATION"]
     "FILL_MODE": "blur", # available_option["FILL_MODE"]
     "TARGET_DEVICE": "acep", # available_option["TARGET_DEVICE"]
@@ -105,7 +106,7 @@ class CropperApp:
         self._resize_pending = False
         self._slider_update_pending = None
         self.window = window
-        w, h = self.app_settings["window_min"] if type(self.app_settings["window_min"]) is tuple else tuple(int(item) if item.isdigit() else item for item in self.app_settings["window_min"].split("x"))
+        w, h = self.app_settings["window_min"]
         self.window.minsize(int(w), int(h))
         resource_path = os.path.join(os.path.dirname(__file__), "./_source/icon.ico") if not hasattr(sys, "frozen") else os.path.join(sys.prefix, "./_source/icon.ico")
         self.window.iconbitmap(default=resource_path)
@@ -1113,8 +1114,7 @@ class CropperApp:
         settings = {}
 
         if not os.path.exists(settings_path):
-            settings["window_min"]=WINDOW_MIN
-            settings["save_filelist"]=SAVE_FILELIST
+            settings["window_min"]=defaults["WINDOW_MIN"]
             settings["image_target_size"]=defaults["IMAGE_TARGET_SIZE"]
             settings["image_quality"]=JPEG_QUALITY
             settings["orientation"]=defaults["ORIENTATION"]
@@ -1142,15 +1142,28 @@ class CropperApp:
                         continue
 
                     k, v = line.split("=", 1)
-                    settings[k.strip()] = v.strip()
+                    k = k.strip()
+                    v = v.strip()
+
+                    # convert values to their real counterparts (bool, int, size)
+                    if v == "True" or v == "False":
+                        v = eval(v)
+                    if re.match("^\d+$", str(v)):
+                        v = int(v)
+                    if re.match("^(\d+)x(\d+)$", str(v)):
+                        v = tuple(int(item) if item.isdigit() else item for item in v.split("x"))
+
+                    settings[k] = v
         except Exception:
             return settings
 
-        if settings:
-            settings["image_target_size"] = settings["image_target_size"] if type(settings["image_target_size"]) is tuple else tuple(int(item) if item.isdigit() else item for item in settings["image_target_size"].split("x"))
-            settings["image_quality"] = int(settings["image_quality"])
-            settings["export_raw"] = eval(settings["export_raw"])
-            settings["save_filelist"] = eval(settings["save_filelist"])
+        # window_min and image_target_size needs to be in format: 1024x768 (2-4 digits each)
+        needs_tuple = ("window_min", "image_target_size")
+        r = re.compile("^(\d{2,4})x(\d{2,4})$")
+        # if still no tuple or not matching
+        for need in needs_tuple:
+            if not type(settings[need]) == tuple or (type(settings[need]) == tuple and not r.match(str(f"{settings[need][0]}x{settings[need][1]}"))):
+                settings[need] = defaults[need.upper()]
         
         #print("APP Settings from FILE", settings)
         return settings
@@ -1158,6 +1171,8 @@ class CropperApp:
     def save_app_settings(self) -> str | None:
         settings_path = "./settings.ini"
 
+        # convert tuples to strings
+        self.app_settings["window_min"] = f"{self.app_settings['window_min'][0]}x{self.app_settings['window_min'][1]}"
         self.app_settings["image_target_size"] = f"{self.app_settings['image_target_size'][0]}x{self.app_settings['image_target_size'][1]}"
 
         lines = "\n".join(f"{k}={v}" for k, v in self.app_settings.items())
