@@ -1376,16 +1376,21 @@ class CropperApp:
 
     # ---------- File list progress ----------
     def next_image(self, _e=None) -> None:
-        self.idx += 1
-        self.show_image()
+        if len(self.image_paths) > 1:
+            self.idx += 1
+            self.load_image()
+        else:
+            on_closing("This was the only image in this folder.\nWould you like to close the app now?")
 
     def prev_image(self, _e=None) -> None:
-        self.idx -= 1
-        self.show_image()
+        if len(self.image_paths) > 1:
+            self.idx -= 1
+            self.load_image()
 
     def on_skip(self, _e=None) -> None:
-        print(f"skipped: {self.image_paths[self.idx]}")
-        self.next_image()
+        if len(self.image_paths) > 1:
+            print(f"skipped: {self.image_paths[self.idx]}")
+            self.next_image()
 
     # ---------- Call converter ----------
     def convert_to_bmp(self, in_path: str) -> None:
@@ -1419,8 +1424,8 @@ class CropperApp:
             raise
 
 # ---------- Exit handling ----------
-def on_closing() -> None:
-    if messagebox.askokcancel("Quit", "Do you really want to quit?"):
+def on_closing(text="Do you really want to quit?") -> None:
+    if messagebox.askokcancel("Quit", text):
         # save app state (inf)
         app.save_app_settings()
         app.save_file_list()
