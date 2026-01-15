@@ -416,7 +416,7 @@ class CropperApp:
         self.create_app_settings_checkboxes()
         self.update_size_lbl() # after loading state
         self.update_image_in_canvas()
-        self.update_status_label(f"{current_image_path}")
+        self.update_status_label(f"{current_image_path} | {self.original_img.size[0]} x {self.original_img.size[1]} | {'{:,}'.format(os.stat(current_image_path).st_size >> 10).replace(',','.')} kB")
         self.draw_crop_marker_grid() # create crop marker
 
     def load_image_by_exiforient(self, path: str):
