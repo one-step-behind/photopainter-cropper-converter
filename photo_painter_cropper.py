@@ -381,8 +381,7 @@ class CropperApp:
     def load_image(self) -> None:
         if self.idx >= len(self.image_paths):
             if self.app_settings["exit_after_last_image"]:
-                messagebox.showinfo("Done", "All images have been processed. App closes now.")
-                self.window.after(50, self.window.destroy) #quit)
+                on_closing("showinfo", "Done", "All images have been processed. App closes now.")
                 return
             else:
                 self.idx = 0
@@ -1405,7 +1404,7 @@ class CropperApp:
             self.idx += 1
             self.load_image()
         else:
-            on_closing("This was the only image in this folder.\nWould you like to close the app now?")
+            on_closing("askokcancel", "This was the only image in this folder.\nWould you like to close the app now?")
 
     def prev_image(self, _e=None) -> None:
         if len(self.image_paths) > 1:
@@ -1449,12 +1448,19 @@ class CropperApp:
             raise
 
 # ---------- Exit handling ----------
-def on_closing(text="Do you really want to quit?") -> None:
-    if messagebox.askokcancel("Quit", text):
-        # save app state (inf)
+def on_closing(type="askokcancel", headline="Quit", body="Do you really want to quit?") -> None:
+    def close():
         app.save_app_settings()
         app.save_file_list()
         window.destroy()
+
+    if type == "askokcancel":
+        if messagebox.askokcancel(headline, body):
+            close()
+        
+    if type == "showinfo":
+        messagebox.showinfo(headline, body)
+        close()
 
 def on_quit(event) -> None:
     on_closing()
