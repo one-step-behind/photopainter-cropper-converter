@@ -4,9 +4,8 @@
 import os
 import sys
 import math
-import glob
 import time
-import re
+import fnmatch, re
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from typing import Literal
@@ -128,12 +127,6 @@ class CropperApp:
             "Scroll/+/-=resize (Shift=+fast)  •  "
             "Esc=skip"
         )
-
-        self.supported_formats = ["*.jpg", "*.jpeg", "*.png", "*.bmp", "*.gif", "*.tif", "*.tiff", "*.webp"]
-        if HEIC_SUPPORT:
-            self.supported_formats.append("*.heic")
-        uppers = [x.upper() for x in self.supported_formats]
-        self.supported_formats = [*self.supported_formats, *uppers]
 
         # The Frame
         top = ttk.Frame(self.window)
@@ -382,9 +375,14 @@ class CropperApp:
             self.idx = 0
             self.image_paths = [] # reset on folder change
 
-        # get the images in folder
+        # get the images in folder with case-insensitive extension matching
+        self.supported_formats = ["*.jpg", "*.jpeg", "*.png", "*.bmp", "*.gif", "*.tif", "*.tiff", "*.webp"]
+        if HEIC_SUPPORT:
+            self.supported_formats.append("*.heic")
         for format in self.supported_formats:
-            self.image_paths.extend(glob.glob(os.path.join(self.picture_input_folder, format)))
+            rule = re.compile(fnmatch.translate(format), re.IGNORECASE)
+            file = [os.path.join(self.picture_input_folder, name) for name in os.listdir(self.picture_input_folder) if rule.match(name)]
+            self.image_paths.extend(file)
 
         if not self.image_paths:
             messagebox.showerror("No image", "The folder contains no images. Please choose another one.")
