@@ -28,7 +28,7 @@ This project is an enhanced (much improved for my own needs) version of an image
 
 A sample image:
 
-![sample/sample.jpg](sample/sample.jpg)
+![samples/sample.jpg](samples/sample.jpg)
 
 ...cropped beyond the border:
 
@@ -36,15 +36,15 @@ A sample image:
 
 ...becomes this image as JPG:
 
-![sample/cropped_landscape/sample.jpg](sample/cropped_landscape/sample.jpg)
+![samples/cropped_landscape/sample.jpg](samples/cropped_landscape/sample.jpg)
 
 ...converts to a dithered BMP:
 
-![sample/cropped_landscape/dithered/sample.bmp](sample/cropped_landscape/dithered/sample.bmp)
+![samples/cropped_landscape/dithered/sample.bmp](samples/cropped_landscape/dithered/sample.bmp)
 
 ...and finally maps to a device specific color palette (Waveshare PhotoPainter Pico ACeP 7-color) which looks much punchier on your computer screen:
 
-![sample/cropped_landscape/dithered/pic_acep/sample.bmp](sample/cropped_landscape/dithered/pic_acep/sample.bmp)
+![samples/cropped_landscape/dithered/pic_acep/sample.bmp](samples/cropped_landscape/dithered/pic_acep/sample.bmp)
 
 ...but much right when displayed on the PhotoPainter e-Paper device itself:
 
@@ -98,7 +98,7 @@ Using the direct BMP export of the original Waveshare converter that follows the
 ## Samples and Outputs included
 
 - Example **input** photo and **outputs** from this tool (JPG 800×480) are available in `sample` folder.
-- For convenience, this repository also includes a **BMP file** in `sample/cropped_landscape/dithered/pic_acep` folder created with this converter, so you can copy it directly to the device.
+- For convenience, this repository also includes a **BMP file** in `samples/cropped_landscape/dithered/pic_acep` folder created with this converter, so you can copy it directly to the device.
 
 ## Settings (`settings.ini`)
 
