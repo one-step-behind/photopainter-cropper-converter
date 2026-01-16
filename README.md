@@ -245,6 +245,7 @@ Desktop GUI application (Python & Tkinter) for macOS, Windows and Linux.
 - **UI/App** forked from [@geegeek](https://github.com/geegeek)/[photopainter-cropper](https://github.com/geegeek/photopainter-cropper)
 - inspired by the image processor Gist from [@quark-zju](https://gist.github.com/quark-zju)/[epd-dither-resize-spectra6.py](https://gist.github.com/quark-zju/e488eb206ba66925dc23692170ba49f9) which is a fork of Waveshare's original ConverTo6c_bmp-7.3 converter (Spectra6 6-color version!)
 - Usage of [device color palettes](https://github.com/Utzel-Butzel/epdoptimize/blob/main/src/dither/data/default-palettes.json) from [@Utzel-Butzel](https://github.com/Utzel-Butzel)/[epdoptimize](https://github.com/Utzel-Butzel/epdoptimize/)
+- [HEIC support](https://github.com/myevit/PhotoPainter_image_converter/blob/main/convert.py#L21) taken from [@myevit](https://github.com/myevit/PhotoPainter_image_converter)/[PhotoPainter_image_converter](https://github.com/myevit/PhotoPainter_image_converter)
 
 ### Firmware
 
