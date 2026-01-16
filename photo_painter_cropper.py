@@ -27,23 +27,28 @@ except ImportError:
 
 # ====== CONFIG ======
 APP_TITLE = "PhotoPainterCropper"
-JPEG_QUALITY: int = 90
 DITHER_METHOD: int = 3 # NONE(0) or FLOYDSTEINBERG(3)
 
 defaults = {
     "WINDOW_MIN": (1024, 768),
     "LAST_WINDOW_SIZE": (1024, 768),
-    "IMAGE_TARGET_SIZE": (800, 480), # exact JPG output image dimensions
-    "EXPORT_FOLDER": "cropped", # folder where to store cropped images
-    "ORIENTATION": "landscape", # available_option["ORIENTATION"]
-    "FILL_MODE": "blur", # available_option["FILL_MODE"]
-    "TARGET_DEVICE": "acep", # available_option["TARGET_DEVICE"]
-    "BRIGHTNESS": 1.0, # 1.0: no change
-    "CONTRAST": 1.0, # 1.0: no change
-    "SATURATION": 1.0, # 1.0: no change
+    "IMAGE_TARGET_SIZE": (800, 480),
+    "IMAGE_QUALITY": 90,
+    "ORIENTATION": "landscape",
+    "FILL_MODE": "blur",
+    "TARGET_DEVICE": "acep",
     "ENHANCER_EDGE": False,
-    "ENHANCER_SMOOTH": True,
+    "ENHANCER_SMOOTH": False,
     "ENHANCER_SHARPEN": False,
+    "EXPORT_FOLDER": "cropped",
+    "CONVERT_FOLDER": "dithered",
+    "RAW_FOLDER": "raw",
+    "PIC_FOLDER_ON_DEVICE": "pic",
+    "STATE_SUFFIX": "_ppcrop.txt",
+    "EXPORT_RAW": False,
+    "SAVE_FILELIST": True,
+    "GRID_COLOR":"#00ff00",
+    "EXIT_AFTER_LAST_IMAGE": True,
 }
 
 available_option = {
@@ -52,7 +57,10 @@ available_option = {
     "TARGET_DEVICE": ("acep", "spectra6"),
 }
 
-GRID_COLOR = "#00ff00"   # green rectangle border
+BRIGHTNESS = 1.0
+CONTRAST = 1.0
+SATURATION = 1.0
+
 DEFAULT_CROP_SIZE = 1 # between 0.1 ... 1
 MASK_COLOR = "#000000"          # mask outside crop region
 MASK_STIPPLE = "gray50"
@@ -67,14 +75,6 @@ SCALE_FACTOR_FAST = 1.10            # zoom step with Shift
 
 LABEL_PADDINGS = (5, 5)
 DEFAULT_TOOLTIP_DELAY = 250
-
-STATE_SUFFIX = "_ppcrop.txt"        # file status next to the source image
-CONVERT_FOLDER = "dithered" # folder where to store converted/dithered images
-RAW_FOLDER = "raw" # folder where to store raw images
-EXPORT_RAW = False # should export raw image suitable for SPECTRA6 use?
-PIC_FOLDER_ON_DEVICE = "pic"
-SAVE_FILELIST=True
-EXIT_AFTER_LAST_IMAGE=True
 
 class DynamicButtonVar:
     def __init__(self, default_text):
@@ -1132,9 +1132,9 @@ class CropperApp:
             enhanced_image = enhanced_image.filter(ImageFilter.SHARPEN)
 
         if (
-            float(self.image_preferences["brightness"]) == float(defaults["BRIGHTNESS"]) and
-            float(self.image_preferences["contrast"]) == float(defaults["CONTRAST"]) and
-            float(self.image_preferences["saturation"]) == float(defaults["SATURATION"])
+            float(self.image_preferences["brightness"]) == float(BRIGHTNESS) and
+            float(self.image_preferences["contrast"]) == float(CONTRAST) and
+            float(self.image_preferences["saturation"]) == float(SATURATION)
         ):
             return enhanced_image
 
@@ -1182,22 +1182,22 @@ class CropperApp:
             settings["window_min"]=defaults["WINDOW_MIN"]
             settings["last_window_size"]=defaults["LAST_WINDOW_SIZE"]
             settings["image_target_size"]=defaults["IMAGE_TARGET_SIZE"]
-            settings["image_quality"]=JPEG_QUALITY
+            settings["image_quality"]=defaults["IMAGE_QUALITY"]
             settings["orientation"]=defaults["ORIENTATION"]
             settings["fill_mode"]=defaults["FILL_MODE"]
             settings["target_device"]=defaults["TARGET_DEVICE"]
             settings["enhancer_edge"]=defaults["ENHANCER_EDGE"]
             settings["enhancer_smooth"]=defaults["ENHANCER_SMOOTH"]
             settings["enhancer_sharpen"]=defaults["ENHANCER_SHARPEN"]
-            settings["grid_color"]=GRID_COLOR
+            settings["grid_color"]=defaults["GRID_COLOR"]
             settings["export_folder"]=defaults["EXPORT_FOLDER"]
-            settings["state_suffix"]=STATE_SUFFIX
-            settings["convert_folder"]=CONVERT_FOLDER
-            settings["raw_folder"]=RAW_FOLDER
-            settings["export_raw"]=EXPORT_RAW
-            settings["pic_folder_on_device"]=PIC_FOLDER_ON_DEVICE
-            settings["save_filelist"]=SAVE_FILELIST
-            settings["exit_after_last_image"]=EXIT_AFTER_LAST_IMAGE
+            settings["convert_folder"]=defaults["CONVERT_FOLDER"]
+            settings["raw_folder"]=defaults["RAW_FOLDER"]
+            settings["pic_folder_on_device"]=defaults["PIC_FOLDER_ON_DEVICE"]
+            settings["state_suffix"]=defaults["STATE_SUFFIX"]
+            settings["export_raw"]=defaults["EXPORT_RAW"]
+            settings["save_filelist"]=defaults["SAVE_FILELIST"]
+            settings["exit_after_last_image"]=defaults["EXIT_AFTER_LAST_IMAGE"]
 
             #print("APP Settings from DEFAULTS", settings)
             return settings
@@ -1274,9 +1274,9 @@ class CropperApp:
             self.image_preferences["orientation"] = self.app_settings["orientation"]
             self.image_preferences["fill_mode"] = self.app_settings["fill_mode"]
             self.image_preferences["target_device"] = self.app_settings["target_device"]
-            self.image_preferences["brightness"] = defaults["BRIGHTNESS"]
-            self.image_preferences["contrast"] = defaults["CONTRAST"]
-            self.image_preferences["saturation"] = defaults["SATURATION"]
+            self.image_preferences["brightness"] = BRIGHTNESS
+            self.image_preferences["contrast"] = CONTRAST
+            self.image_preferences["saturation"] = SATURATION
             self.image_preferences["enhancer_edge"] = self.app_settings["enhancer_edge"]
             self.image_preferences["enhancer_smooth"] = self.app_settings["enhancer_smooth"]
             self.image_preferences["enhancer_sharpen"] = self.app_settings["enhancer_sharpen"]

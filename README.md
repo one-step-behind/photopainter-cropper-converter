@@ -28,77 +28,69 @@ Originally developed by **@geegeek** on **macOS** for personal workflow needs, t
 
 A sample image:
 
-<figure class="align-center">
-<img src="sample/sample.jpg" width="900" alt="sample/sample.jpg" />
-</figure>
+![sample/sample.jpg](sample/sample.jpg)
 
 ...cropped beyond the border:
 
-<figure class="align-center">
-<img src="screenshot/001_chooseFrameVerticalPicture.jpg" width="900" alt="screenshot/001_chooseFrameVerticalPicture.jpg" />
-</figure>
+![screenshot/001_chooseFrameVerticalPicture.jpg](screenshot/001_chooseFrameVerticalPicture.jpg)
 
 ...becomes this image as JPG:
 
-<figure class="align-center">
-<img src="sample/cropped_landscape/sample.jpg" width="900" alt="sample/cropped_landscape/sample.jpg" />
-</figure>
+![sample/cropped_landscape/sample.jpg](sample/cropped_landscape/sample.jpg)
 
 ...converts to a dithered BMP:
 
-<figure class="align-center">
-<img src="sample/cropped_landscape/dithered/sample.bmp" width="900" alt="sample/cropped_landscape/dithered/sample.bmp" />
-</figure>
+![sample/cropped_landscape/dithered/sample.bmp](sample/cropped_landscape/dithered/sample.bmp)
 
 ...and finally maps to a device specific color palette (Waveshare PhotoPainter Pico ACeP 7-color) which looks much punchier on your computer screen:
-<figure class="align-center">
-<img src="sample/cropped_landscape/dithered/pic_acep/sample.bmp" width="900" alt="sample/cropped_landscape/dithered/pic_acep/sample.bmp" />
-</figure>
+
+![sample/cropped_landscape/dithered/pic_acep/sample.bmp](sample/cropped_landscape/dithered/pic_acep/sample.bmp)
 
 ...but much right when displayed on the PhotoPainter e-Paper device itself:
-<figure class="align-center">
-<img src="screenshot/002_PhotoPainterRealWorld.jpg" width="900" alt="screenshot/002_PhotoPainterRealWorld.jpg" />
-</figure>
+
+![screenshot/002_PhotoPainterRealWorld.jpg](screenshot/002_PhotoPainterRealWorld.jpg)
 
 ## How to use
 
-**Start the app** and select the folder with the images you want to convert.
+1. **Start the app** and select the folder with the images you want to convert.
 
-Use **mouse/keyboard** to position and size the crop rectangle.
+2. Use **mouse/keyboard** to position and size the crop rectangle.
 
-- **Mouse**:
-  - Drag to move
-  - Scroll to resize (hold **Shift** = faster)
-- **Keyboard**:
-  - Arrows = move (hold **Shift** = faster)
-  - `+` / `-` = resize (hold **Shift** = faster)
-  - **O** = toggle orientation (Landscape ↔ Portrait)
-  - **F** = toggle fill (White ↔ Blur)
-  - **D** = toggle device (ACeP ↔ Spectra6)
-  - **ESC** = skip current image
-  - **PAGE_UP** = previous image without processing current image
-  - **PAGE_DOWN** = next image without processing current image
-  - **Enter** or **S** = process & save current image and go to next
+   - **Mouse**:
+     - Drag to move
+     - Scroll to resize (hold **Shift** = faster)
+   - **Keyboard**:
+     - Arrows = move (hold **Shift** = faster)
+     - `+` / `-` = resize (hold **Shift** = faster)
+     - **O** = toggle orientation (Landscape ↔ Portrait)
+     - **F** = toggle fill (White ↔ Blur)
+     - **D** = toggle device (ACeP ↔ Spectra6)
+     - **ESC** = skip current image
+     - **PAGE_UP** = previous image without processing current image
+     - **PAGE_DOWN** = next image without processing current image
+     - **Enter** or **S** = process & save current image and go to next
 
-Optionally apply some **image optimizations** if you you want.
+   Optionally apply some **image optimizations** if you you want.
 
-Use **Enter** or **S** to crop and convert the image.
+3. Use **Enter** or **S** to crop and convert the image.
 
-- **Cropped JPGs** are saved to `cropped_[landscape|portrait]` next to your originals
-- **Converted BMP** images are saved to `cropped_[landscape|portrait]/dithered` next to your originals
-- **Converted Real-color BMP** images are saved to `cropped_[landscape|portrait]/dithered/pic_[acep|spectra6]` next to your originals
+   - **Cropped JPGs** are saved to `cropped_[landscape|portrait]` next to your originals
+   - **Converted BMP** images are saved to `cropped_[landscape|portrait]/dithered` next to your originals
+   - **Converted Real-color BMP** images are saved to `cropped_[landscape|portrait]/dithered/pic_[acep|spectra6]` next to your originals
 
-**Copy** the converted images to your SD card's `pic` folder.
+   The folders can be set via the `settings.ini`. See **Settings** section.
 
-## Why all these steps?
+4. **Copy** the converted images from `cropped_[landscape|portrait]/dithered/pic_[acep|spectra6]` to your SD card's `pic` folder.
+
+## Why all these convert steps?
 
 This app does the following:
 
 1. **Scale and Crop**
-   — In the first step, the app exports to **JPG 800×480** (landscape) or **480x800** (portrait) by setting the direction in the app.
+   — The app exports the marked area to **JPG 800×480** (landscape) or **480x800** (portrait). The output dimensions can be set in `settings.ini`. Orientation will be set per image in the app.
 2. **Convert JPG → 24-bit BMP**
-   — In the second step the image will be dithered with the Floyd-Steinberg dithering algorithm and saved in a subfolder.
-3. **Convert 24-bit BMP → Real world ePaper Screen RGB**
+   — The image will be dithered with the Floyd-Steinberg dithering algorithm.
+3. **Map 24-bit BMP → Real world ePaper Screen colors**
    — For the final 24-bit BMP device format, it uses part of a Gist by **@quark-zju** with color maps from [epdoptimize](https://github.com/Utzel-Butzel/epdoptimize). It provides way better color/tonal results on the 6- and 7-color panels than a plain BMP export by the original Waveshare converter.
 
 Using the direct BMP export of the original Waveshare converter that follows the device format by using the suggested 6-/7-color palette is rendering the images to look a bit **flat** on the device, somehow like a "vintage" filter. This app applies **dithering** and (kind of) **device calibrated color mapping**. The result **looks way better** on the PhotoPainter device than the export of the original Waveshare converter.
@@ -112,29 +104,31 @@ Using the direct BMP export of the original Waveshare converter that follows the
 
 *"With great power comes great responsibility."*
 
-If it's not existing, the `settings.ini` file will be automatically created the first time after closing the app properly. The next time closing the app, this fill will be updated.
+If it's not existing, the `settings.ini` file will be automatically created the first time after closing the app properly. The next time closing the app, this file will be updated.
 
-Available default settings:
+Available settings and their defaults:
 
-```text
-window_min=1280x960
-image_target_size=800x480
-image_quality=90
-orientation=landscape
-fill_mode=blur
-target_device=acep
-enhancer_edge=False
-enhancer_smooth=True
-enhancer_sharpen=False
-grid_color=#00ff00
-export_folder=cropped
-state_suffix=_ppcrop.txt
-convert_folder=dithered
-raw_folder=raw
-export_raw=False
-pic_folder_on_device=pic
-save_filelist=True
-exit_after_last_image=True
+```ini
+# PhotoPainter app state
+window_min=1024x768        # minimum size of window
+last_window_size=1024x768  # last window dimensions
+image_target_size=800x480  # exact JPG output image dimensions
+image_quality=90           # quality of the JPG output
+orientation=landscape      # landscape, portrait
+fill_mode=blur             # blur, white
+target_device=acep         # acep, spectra6
+enhancer_edge=False        # default for Edge enhancer
+enhancer_smooth=False      # default for Smooth enhancer
+enhancer_sharpen=False     # default for Sharpen enhancer
+grid_color=#00ff00         # rectangle border color
+export_folder=cropped      # folder where to store cropped images
+convert_folder=dithered    # folder where to store converted/dithered images
+raw_folder=raw             # folder where to store raw images
+pic_folder_on_device=pic   # first part of the folder for final image
+state_suffix=_ppcrop.txt   # file extension for sidecar file
+export_raw=False           # should export raw image suitable for direct use?
+save_filelist=True         # save fileList.txt at app exit for both orientations
+exit_after_last_image=True # exit app after last image was processed
 ```
 
 ## Device SD Card layout
