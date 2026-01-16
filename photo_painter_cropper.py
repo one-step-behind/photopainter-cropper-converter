@@ -113,8 +113,15 @@ class CropperApp:
         self.window.geometry(f"{self.app_settings['last_window_size'][0]}x{self.app_settings['last_window_size'][1]}")
         w, h = self.app_settings["window_min"]
         self.window.minsize(int(w), int(h))
-        resource_path = os.path.join(os.path.dirname(__file__), "./_source/icon.ico") if not hasattr(sys, "frozen") else os.path.join(sys.prefix, "./_source/icon.ico")
-        self.window.iconbitmap(default=resource_path)
+
+        if (sys.platform.startswith("win")):
+            resource_path = os.path.join(os.path.dirname(__file__), "./_source/icon.ico") if not hasattr(sys, "frozen") else os.path.join(sys.prefix, "./_source/icon.ico")
+            self.window.iconbitmap(default=resource_path)
+        else:
+            resource_path = os.path.join(os.path.dirname(__file__), "./_source/icon.png") if not hasattr(sys, "frozen") else os.path.join(sys.prefix, "./_source/icon.png")
+            icon = tk.PhotoImage(file=resource_path)
+            self.window.iconphoto(False, icon)
+
         self.window.tk_setPalette(WINDOW_BACKGROUND_COLOR)
         self.window.title(f"{APP_TITLE} – "
             "Drag/Arrows=move (Shift=+fast)  •  "
@@ -125,7 +132,8 @@ class CropperApp:
         self.supported_formats = ["*.jpg", "*.jpeg", "*.png", "*.bmp", "*.gif", "*.tif", "*.tiff", "*.webp"]
         if HEIC_SUPPORT:
             self.supported_formats.append("*.heic")
-
+        uppers = [x.upper() for x in self.supported_formats]
+        self.supported_formats = [*self.supported_formats, *uppers]
 
         # The Frame
         top = ttk.Frame(self.window)
@@ -1209,9 +1217,9 @@ class CropperApp:
                     # convert values to their real counterparts (bool, int, size)
                     if v == "True" or v == "False":
                         v = eval(v)
-                    if re.match("^\d+$", str(v)):
+                    if re.match("^\\d+$", str(v)):
                         v = int(v)
-                    if re.match("^(\d+)x(\d+)$", str(v)):
+                    if re.match("^(\\d+)x(\\d+)$", str(v)):
                         v = tuple(int(item) if item.isdigit() else item for item in v.split("x"))
 
                     settings[k] = v
@@ -1220,10 +1228,10 @@ class CropperApp:
 
         # window_min and image_target_size needs to be in format: 1024x768 (2-4 digits each)
         needs_tuple = ("window_min", "last_window_size", "image_target_size")
-        r = re.compile("^(\d{2,4})x(\d{2,4})$")
+        r = re.compile("^(\\d{2,4})x(\\d{2,4})$")
         # if still no tuple or not matching
         for need in needs_tuple:
-            if not type(settings[need]) == tuple or (type(settings[need]) == tuple and not r.match(str(f"{settings[need][0]}x{settings[need][1]}"))):
+            if not need in settings or not type(settings[need]) == tuple or (type(settings[need]) == tuple and not r.match(str(f"{settings[need][0]}x{settings[need][1]}"))):
                 settings[need] = defaults[need.upper()]
         
         #print("APP Settings from FILE", settings)

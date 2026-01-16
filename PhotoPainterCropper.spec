@@ -5,7 +5,7 @@ a = Analysis(
     ['photo_painter_cropper.py'],
     pathex=[],
     binaries=[],
-    datas=[('_source/icon.ico', '_source')],
+    datas=[('_source/icon.ico', '_source'), ('_source/icon.png', '_source')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

@@ -176,7 +176,6 @@ Virtual environment & installing requirements:
 cd photopainter-cropper-converter
 # create virtual environment for project (also creates folder by name)
 python -m venv .venv
-# create .venv\.gitignore with content "*"
 # install and update PIP
 python -m pip install --upgrade pip
 # activate venv and install requirements
@@ -207,6 +206,19 @@ You can create a standalone executable with pyinstaller:
 pyinstaller --onefile --windowed -i='.\_source\icon.ico' --add-data "_source/icon.ico;_source" --name "PhotoPainterCropper" ".\photo_painter_cropper.py"
 # later you can run compilation with just:
 pyinstaller PhotoPainterCropper.spec
+```
+
+### Linux
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+# if module tkinter not found, install python tk
+(optional) sudo apt-get install python3-tk
+# run script
+python photo_painter_cropper.py
 ```
 
 Quit virtual env:
