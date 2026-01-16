@@ -1,12 +1,10 @@
 # PhotoPainter Cropper & Converter
 
-Interactive image cropper and converter for the **Waveshare PhotoPainter** 7.3" ACeP and Spectra6 version.
+Interactive image cropper and converter for the **Waveshare PhotoPainter**7.3" ACeP (A) and Spectra6 (B) version.
 
-This project is a fork of [@geegeek](https://github.com/geegeek)/[photopainter-cropper](https://github.com/geegeek/photopainter-cropper). Much improved for my own needs.
+The **PhotoPainter Cropper & Converter** helps you to frame the primary subject of each photo within a specified folder, applying a given target size mainly for the mentioned device above with 800×480 or any other user-defined target size. The crop rectangle can extend beyond the original image boundaries, and any resulting empty areas are automatically filled with either *white space* or a *blurred background* derived from the image itself.
 
-This tool helps to frame the primary subject of each photo within a specified folder, applying a fixed aspect ratio - such as 800×480 (landscape) or 480×800 (portrait) or any other user-defined target size. The crop rectangle can extend beyond the original image boundaries, and any resulting empty areas are automatically filled with either *white space* or a *blurred background* derived from the image itself.
-
-Originally developed by **@geegeek** on **macOS** for personal workflow needs, this version here has been enhanced with additional capabilities. It works on Windows and Linux as well as it is written in Python.
+This project is an enhanced (much improved for my own needs) version of an image crop & convert application based on the idea from [@geegeek](https://github.com/geegeek)/[photopainter-cropper](https://github.com/geegeek/photopainter-cropper). It eases the workflow to convert photos into a format that the Waveshare PhotoPainter can handle. It works on MacOS, Windows and Linux which has Python3 installed.
 
 ## Key Features
 
@@ -15,14 +13,16 @@ Originally developed by **@geegeek** on **macOS** for personal workflow needs, t
 - Fixed **800x480** (landscape) or **480x800** (portrait) crop ratio
   — You can set the output dimensions via `image_target_size` in `settings.ini`
 - **ACeP** or **Spectra6** optimized output
-- **Image enhancements** to improve image quality: **Brightness**, **Contrast**, **Saturation**, **Edge**, **Smooth**, **Sharpen**
+- **Image enhancements** — Brightness, Contrast, Saturation, Edge, Smooth, Sharpen
 - Crop rectangle can **exceed image bounds** and empty areas will be filled with **White** or **Blur** background
-- **Per-image state**: A `*_ppcrop.txt` sidecar file (configurable via the `state_suffix` parameter in `settings.ini`) is saved alongside each original image to persist all per-image settings - such as orientation, fill mode, target device, crop dimensions, enhancement values, ... - allowing the application to automatically restore the exact crop rectangle on subsequent runs, which is especially beneficial for large batch workflows
-- App and some image properties configuration via `settings.ini` file (see **Settings** section)
+- **Per-image state**
+  — A `*_ppcrop.txt` sidecar file (configurable via the `state_suffix` parameter in `settings.ini`) is saved alongside each original image to persist all per-image settings allowing the application to automatically restore the exact crop rectangle and settings on subsequent runs
+- App and some image **properties configuration** via `settings.ini` file (see **Settings** section)
 - Crisp **crop area grid lines** aligned to device pixels
 - (optional) **Generate fileList.txt** on app exit
+  — useful for original Mode 2 or custom firmware which uses this file to retrieve image list
 
-\* HEIC support needs `pillow-heif` installed alongside `Pillow`. If you installed pip requirements this should be already the case.
+\* HEIC support needs `pillow-heif` installed alongside `Pillow`. If you're following the **Install & Run** section below you should be all set.
 
 ## How it works
 
