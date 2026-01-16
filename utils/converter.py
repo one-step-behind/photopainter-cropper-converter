@@ -116,8 +116,6 @@ class Converter:
         :param self: instance
         :param in_path: image path
         :type in_path: str
-        :param orientation: landscape | portrait
-        :type orientation: str
         :param target_device: acep | spectra6
         :type target_device: str
         :param convert_folder: folder name, where to store the converted images
