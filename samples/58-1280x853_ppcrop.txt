@@ -1,0 +1,17 @@
+# PhotoPainter crop state
+timestamp=1754949851
+image_name=58-1280x853.jpg
+image_w=1280
+image_h=853
+rect_x1=51.2000
+rect_y1=132.2667
+rect_x2=1228.8000
+rect_y2=837.6889
+rect_nx1=0.040000
+rect_ny1=0.155061
+rect_nx2=0.960000
+rect_ny2=0.982050
+target_w=800
+target_h=480
+ratio=1.666667
+fill_mode=white

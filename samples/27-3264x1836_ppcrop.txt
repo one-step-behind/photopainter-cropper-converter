@@ -1,0 +1,17 @@
+# PhotoPainter crop state
+timestamp=1754949849
+image_name=27-3264x1836.jpg
+image_w=3264
+image_h=1836
+rect_x1=348.1600
+rect_y1=221.2267
+rect_x2=2284.8000
+rect_y2=1381.7600
+rect_nx1=0.106667
+rect_ny1=0.120494
+rect_nx2=0.700000
+rect_ny2=0.752593
+target_w=800
+target_h=480
+ratio=1.666667
+fill_mode=white
