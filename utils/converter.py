@@ -12,7 +12,7 @@ from tkinter import messagebox
 # Target device map based on TARGET_DEVICE
 TARGET_DEVICE_MAP = {
     "acep": {
-        "real_world_rgb": [
+        "calibrated_to_display": [ # epdoptimize
             (25, 30, 33),    # BLACK #191E21
             (241, 241, 241), # WHITE #F1F1F1
             (243, 207, 17),  # YELLOW #F3CF11
@@ -34,7 +34,8 @@ TARGET_DEVICE_MAP = {
 
         # ⚠️ Raw values are hardware-defined, not arbitrary.
         # If your panel uses different codes, adjust accordingly.
-        # can be found via "Color Index" in EPD_7in3f.h
+        # can be found via "Color Index" EPD_7IN3E_[BLACK|WHITE|...]:
+        # https://github.com/waveshareteam/PhotoPainter/blob/master/lib/e-Paper/EPD_7in3f.h#L43-L50
         "device_index_to_raw": [
             0, # BLACK
             1, # WHITE
@@ -47,13 +48,22 @@ TARGET_DEVICE_MAP = {
     },
 
     "spectra6": {
-        "real_world_rgb": [
+        "calibrated_to_display": [ # epdoptimize
             (25, 30, 33),    # BLACK #191E21
             (232, 232, 232), # WHITE #E8E8E8
             (239, 222, 68),  # YELLOW #EFDE44
             (178, 19, 24),   # RED #B21318
             (33, 87, 186),   # BLUE #2157BA
             (18, 95, 32),    # GREEN #125F20
+        ],
+
+        "calibrated_to_display_": [ # IanusInferus
+            (54, 67, 97),    # BLACK #191E21
+            (145, 178, 193), # WHITE #E8E8E8
+            (159, 150, 80),  # YELLOW #EFDE44
+            (122, 61, 78),   # RED #B21318
+            (39, 93, 172),   # BLUE #2157BA
+            (49, 114, 111),   # GREEN #125F20
         ],
 
         "device_rgb": [
@@ -67,6 +77,8 @@ TARGET_DEVICE_MAP = {
 
         # ⚠️ Raw values are hardware-defined, not arbitrary.
         # If your panel uses different codes, adjust accordingly.
+        # can be found via "Color Index" EPD_7IN3F_[BLACK|WHITE|...]:
+        # https://github.com/waveshareteam/PhotoPainter_B/blob/master/lib/e-Paper/EPD_7in3e.h#L43-L49
         "device_index_to_raw": [
             0, # BLACK
             1, # WHITE
@@ -137,12 +149,14 @@ class Converter:
             self.target_device_map = TARGET_DEVICE_MAP[target_device]
             # constant-time lookup table: Faster mapping: real_world_color → index
             self._rgb_to_index = {
-                rgb: i for i, rgb in enumerate(self.target_device_map["real_world_rgb"])
+                rgb: i for i, rgb in enumerate(self.target_device_map["calibrated_to_display"])
             }
 
             # prebuild palette
             palette = (
-                tuple(v for rgb in self.target_device_map["real_world_rgb"] for v in rgb) + self.target_device_map["real_world_rgb"][0] * 249
+                tuple(
+                    v for rgb in self.target_device_map["calibrated_to_display"] for v in rgb
+                ) + self.target_device_map["calibrated_to_display"][0] * (256 - len(self.target_device_map["calibrated_to_display"]))
             )
 
             self._palette_image = Image.new("P", (1, 1))
