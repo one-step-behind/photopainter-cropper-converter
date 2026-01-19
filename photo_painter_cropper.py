@@ -52,7 +52,7 @@ defaults = {
 
 available_option = {
     "ORIENTATION": ("landscape", "portrait"),
-    "FILL_MODE": ("blur", "white"),
+    "FILL_MODE": ("blur", "white", "black"),
     "TARGET_DEVICE": ("acep", "spectra6"),
 }
 
@@ -87,6 +87,9 @@ class DynamicButtonVar:
         else:
             self.var.set(f"{self.default_text}: {extra_text.upper()}")
 
+    def get(self): # get value of tk.StringVar()
+        return self.var.get()
+
 class DynamicSliderVar:
     def __init__(self, default_text):
         self.default_text = default_text
@@ -98,6 +101,9 @@ class DynamicSliderVar:
             self.var.set(self.default_text)
         else:
             self.var.set(f"{self.default_text}: {extra_text}")
+
+    def get(self): # get value of tk.StringVar()
+        return self.var.get()
 
 class CropperApp:
     def __init__(self, window):
@@ -218,6 +224,7 @@ class CropperApp:
 
         self.option_button_def = {
             "orientation": {
+                "widget_type": "button",
                 "default_text": "Orientation",
                 "command": self.toggle_orientation,
                 "enter_tip": "Toggle Orientation (D)",
@@ -226,13 +233,17 @@ class CropperApp:
                 "toggle_key": ("o", "O"),
             },
             "fill_mode": {
+                "widget_type": "combobox", # button, combobox
                 "default_text": "Fill",
                 "command": self.toggle_fill_mode,
+                "postcommand": lambda e=None: self.set_fill_mode("fill_mode"),
+                "values": available_option["FILL_MODE"],
                 "enter_tip": "Toggle Fill mode (F)",
                 "underline": 0,
                 "toggle_key": ("f", "F"),
             },
             "target_device": {
+                "widget_type": "button",
                 "default_text": "Device",
                 "command": self.toggle_target_device,
                 "enter_tip": "Toggle Target device (T)",
@@ -445,9 +456,11 @@ class CropperApp:
         count_img = len(self.image_paths)
         counter_length = max(4, 3*(math.floor(math.log10(abs(count_img))) + 1)) # math: O(1) => https://pynative.com/python-count-digits-of-number/
         self.status_count.config(text=f"[{self.idx+1}/{count_img}]", width=counter_length)
+
         self.create_image_enhancer_sliders() # create image options sliders
         self.create_image_enhancer_checkboxes()
         self.create_app_settings_checkboxes()
+
         self.update_image_in_canvas()
         self.update_status_label()
         self.draw_crop_marker_grid() # create crop marker
@@ -487,6 +500,16 @@ class CropperApp:
         self.style.theme_use('clam')
         self.style.configure('TFrame', background=WINDOW_BACKGROUND_COLOR, foreground="white")
         self.style.configure('TLabel', background=WINDOW_BACKGROUND_COLOR, foreground="white")
+        self.style.configure('TCombobox', 
+            background=WINDOW_BACKGROUND_COLOR,
+            foreground="white",
+            selectbackground=WINDOW_BACKGROUND_COLOR,
+            fieldbackground=WINDOW_BACKGROUND_COLOR,
+            highlightbackground=WINDOW_BACKGROUND_COLOR,
+            activebackground=WINDOW_BACKGROUND_COLOR,
+            deactivatedbackground=WINDOW_BACKGROUND_COLOR,
+            highlightcolor="white"
+        )
         self.style.configure('TCheckbutton', background=WINDOW_BACKGROUND_COLOR, foreground="white")
         self.style.map('TCheckbutton', 
             background=[('active', HIGHLIGHT_COLOR)], # When 'active' (hovered), use 'highlight color' background
@@ -513,7 +536,7 @@ class CropperApp:
         #    })
         #])
 
-    def key_bind(self, info, command=None):
+    def bind_toggle_keys(self, info, command=None):
         if "toggle_key" in info:
             if type(info['toggle_key']) == str:
                 self.window.bind(info['toggle_key'], command if command else info["command"])
@@ -533,7 +556,6 @@ class CropperApp:
         """
         # Create buttons dynamically
         for name, info in button_definition.items():
-
             if name in self.app_button_vars:
                 if "disabled_if_single_image" in info:
                     if info["disabled_if_single_image"] and len(self.image_paths) == 1:
@@ -541,7 +563,7 @@ class CropperApp:
                     else:
                         self.app_buttons[name].state(["!disabled"])
                 continue
-
+            
             # 1) Create helper var object
             dyn = DynamicButtonVar(info["default_text"])
             self.app_button_vars[name] = dyn
@@ -555,17 +577,25 @@ class CropperApp:
             if "width" in info:
                 btn_kwargs["width"] = info["width"]
 
-            if "underline" in info:
-                btn_kwargs["underline"] = info["underline"]
+            # 3) Create the widget - COMMAND MUST BE PASSED DIRECTLY!!!
+            if "widget_type" in info and info["widget_type"] == "combobox":
+                btn = ttk.Combobox(target, values=info["values"], name=f"btn_{name}", **btn_kwargs)
+                btn["state"] = "readonly"
+                btn.pack(side=side, fill=tk.X, padx=LABEL_PADDINGS[0])
 
-            if "style_config" in info:
-                style_name = f"{name}.Custom.TButton"
-                self.style.configure(style_name, **info["style_config"])
-                btn_kwargs["style"] = style_name
+                if "postcommand" in info:
+                    btn.bind('<<ComboboxSelected>>', info["postcommand"])
+            else:
+                if "underline" in info:
+                    btn_kwargs["underline"] = info["underline"]
 
-            # 3) Create the button - COMMAND MUST BE PASSED DIRECTLY!!!
-            btn = ttk.Button(target, command=info["command"], name=f"btn_{name}", **btn_kwargs)
-            btn.pack(side=side, fill=tk.X, padx=LABEL_PADDINGS[0])
+                if "style_config" in info:
+                    style_name = f"{name}.Custom.TButton"
+                    self.style.configure(style_name, **info["style_config"])
+                    btn_kwargs["style"] = style_name
+
+                btn = ttk.Button(target, command=info["command"], name=f"btn_{name}", **btn_kwargs)
+                btn.pack(side=side, fill=tk.X, padx=LABEL_PADDINGS[0])
 
             if "disabled_if_single_image" in info and info["disabled_if_single_image"] and len(self.image_paths) == 1:
                 btn.state(["disabled"])
@@ -576,7 +606,7 @@ class CropperApp:
             if "enter_tip" in info:
                 Hovertip(btn, info["enter_tip"], hover_delay=DEFAULT_TOOLTIP_DELAY)
 
-            self.key_bind(info)
+            self.bind_toggle_keys(info)
 
     def update_button_text(self, button_name, extra_text) -> None:
         """
@@ -623,7 +653,7 @@ class CropperApp:
                 if "enter_tip" in info:
                     Hovertip(slider, info["enter_tip"], hover_delay=DEFAULT_TOOLTIP_DELAY)
 
-                self.key_bind(info)
+                self.bind_toggle_keys(info)
 
         # AFTER all sliders exist → update their labels correctly
         for name, slider in self.image_enhancer_sliders.items():
@@ -667,7 +697,7 @@ class CropperApp:
                 if "enter_tip" in info:
                     Hovertip(checkbox, info["enter_tip"], hover_delay=DEFAULT_TOOLTIP_DELAY)
 
-                self.key_bind(info)
+                self.bind_toggle_keys(info)
 
         # AFTER all checkboxes exist → update their values
         for name, checkbox in self.image_enhancer_checkboxes.items():
@@ -708,7 +738,7 @@ class CropperApp:
                 if "enter_tip" in info:
                     Hovertip(checkbox, info["enter_tip"], hover_delay=DEFAULT_TOOLTIP_DELAY)
 
-                self.key_bind(info)
+                self.bind_toggle_keys(info)
 
         # AFTER all checkboxes exist → update their values
         for name, checkbox in self.app_settings_checkboxes.items():
@@ -1015,8 +1045,16 @@ class CropperApp:
 
         self.canvas.tag_raise("crop_layer")
 
+    def set_fill_mode(self, field) -> None:
+        self.image_preferences["fill_mode"] = self.app_button_vars[field].get()
+
     def toggle_fill_mode(self, _e=None) -> None:
-        self.image_preferences["fill_mode"] = available_option["FILL_MODE"][0] if self.image_preferences["fill_mode"] == available_option["FILL_MODE"][1] else available_option["FILL_MODE"][1]
+        current_idx = available_option["FILL_MODE"].index(self.image_preferences["fill_mode"])
+        if current_idx + 1 > len(available_option["FILL_MODE"]) - 1:
+            current_idx = 0
+        else:
+            current_idx += 1
+        self.image_preferences["fill_mode"] = available_option["FILL_MODE"][current_idx]
         self.update_button_text("fill_mode", self.image_preferences["fill_mode"])
 
     def toggle_target_device(self, _e=None) -> None:
@@ -1151,11 +1189,11 @@ class CropperApp:
         return enhanced_image
 
     def background_only(self, region_scaled_or_none):
-        if self.image_preferences["fill_mode"] == "white" or region_scaled_or_none is None:
-            return Image.new("RGB", self.target_size, "white")
-        else: # blur
+        if self.image_preferences["fill_mode"] == "blur":
             base = region_scaled_or_none.resize(self.target_size, Image.Resampling.LANCZOS)
             return base.filter(ImageFilter.GaussianBlur(radius=25))
+        else: # white, black
+            return Image.new("RGB", self.target_size, self.image_preferences["fill_mode"])
 
     def export_folder_with_orientation(self) -> str:
         return self.app_settings["export_folder"] + '_' + self.image_preferences["orientation"]
