@@ -8,8 +8,9 @@ import time
 import fnmatch, re
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-from typing import Literal
+from typing import Literal, Optional
 from PIL import Image, ImageTk, ImageFilter, ImageEnhance
+from utils.gallery import AsyncThumbnailGallery
 from utils.tooltip import Hovertip
 from utils.converter import Converter
 
@@ -65,7 +66,9 @@ MASK_COLOR = "#000000"          # mask outside crop region
 MASK_STIPPLE = "gray50"
 CANVAS_BACKGROUND_COLOR = "#000000"
 WINDOW_BACKGROUND_COLOR = "#222222"
+BORDER_COLOR = "#333333"
 HIGHLIGHT_COLOR = "#339933"
+FOREGROUND_COLOR = "white"
 
 ARROW_STEP = 1                      # px for step with arrows
 ARROW_STEP_FAST = 10                # px with Shift pressed
@@ -166,6 +169,9 @@ class CropperApp:
         # current image path
         self.status_label = ttk.Label(bottom_bar, text="Select folder with images…", anchor=tk.W)
         self.status_label.pack(padx=0, pady=LABEL_PADDINGS[1], anchor=tk.W, fill=tk.X, side=tk.LEFT)
+
+        # async thumbnail gallery
+        self.gallery: Optional[AsyncThumbnailGallery] = None
 
         # ---------- Theme ----------
         self.set_theme()
@@ -334,11 +340,11 @@ class CropperApp:
         self.window.bind("<Configure>", self.on_window_resize)
 
         # State
-        self.picture_input_folder: str | None = None
-        self.original_img: Image.Image | None = None
+        self.picture_input_folder: Optional[str] = None
+        self.original_img: Optional[Image.Image] = None
         self.original_img_file_size: int = 0
         self.display_img = None # image to display in window
-        self.tk_img: ImageTk.PhotoImage | None = None
+        self.tk_img: Optional[ImageTk.PhotoImage] = None
         self.image_id = None
         self.image_paths = []
         self.current_image_path: str = ""
@@ -408,6 +414,13 @@ class CropperApp:
         tk.Label(self.options_frame, width=22, height=1).pack() # spacer
         # other app buttons
         self.create_buttons(self.options_frame, self.other_app_button_definitions, tk.BOTTOM)
+
+        # Load async gallery
+        if self.gallery is None:
+            self.gallery = AsyncThumbnailGallery(window, self.image_paths, selected_bg=HIGHLIGHT_COLOR, image_bg=BORDER_COLOR, on_select=lambda index: self.set_image_index(index))
+            self.gallery.pack(fill=tk.X, padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1])
+        else:
+            self.gallery.set_images(self.image_paths)
 
         self.window.update() # after creating the buttons above
         self.width, self.height = self.window.winfo_width(), self.window.winfo_height()
@@ -498,34 +511,47 @@ class CropperApp:
     def set_theme(self):
         self.style = ttk.Style()
         self.style.theme_use('clam')
-        self.style.configure('TFrame', background=WINDOW_BACKGROUND_COLOR, foreground="white")
-        self.style.configure('TLabel', background=WINDOW_BACKGROUND_COLOR, foreground="white")
-        self.style.configure('TCombobox', 
-            background=WINDOW_BACKGROUND_COLOR,
-            foreground="white",
-            selectbackground=WINDOW_BACKGROUND_COLOR,
+        self.style.configure('TFrame', background=WINDOW_BACKGROUND_COLOR, foreground=FOREGROUND_COLOR)
+        self.style.configure('TLabel', background=WINDOW_BACKGROUND_COLOR, foreground=FOREGROUND_COLOR)
+
+        self.style.configure("Custom.TCombobox", 
+            background=WINDOW_BACKGROUND_COLOR, # arrow background
             fieldbackground=WINDOW_BACKGROUND_COLOR,
-            highlightbackground=WINDOW_BACKGROUND_COLOR,
-            activebackground=WINDOW_BACKGROUND_COLOR,
-            deactivatedbackground=WINDOW_BACKGROUND_COLOR,
-            highlightcolor="white"
+            foreground=FOREGROUND_COLOR,
+            selectbackground=WINDOW_BACKGROUND_COLOR, # selected entry after selecting entry
+            bordercolor=BORDER_COLOR,
+            lightcolor=BORDER_COLOR,
+            darkcolor=BORDER_COLOR,
+            arrowcolor=BORDER_COLOR,
+            padding=LABEL_PADDINGS[0],
+            borderwidth=1,
         )
-        self.style.configure('TCheckbutton', background=WINDOW_BACKGROUND_COLOR, foreground="white")
+        self.style.map(
+            "Custom.TCombobox",
+            fieldbackground=[("active", HIGHLIGHT_COLOR), ("readonly", WINDOW_BACKGROUND_COLOR), ("disabled", WINDOW_BACKGROUND_COLOR)],
+            background=[("active", HIGHLIGHT_COLOR), ("readonly", WINDOW_BACKGROUND_COLOR), ("pressed", HIGHLIGHT_COLOR)], # arrow
+        )
+        #print(self.style.layout("Custom.TCombobox"))
+                
+        self.style.configure('TCheckbutton', background=WINDOW_BACKGROUND_COLOR, foreground=FOREGROUND_COLOR)
         self.style.map('TCheckbutton', 
             background=[('active', HIGHLIGHT_COLOR)], # When 'active' (hovered), use 'highlight color' background
             foreground=[('pressed', 'red')], # When 'pressed' (clicked), use 'red' text color
         )
+
         self.style.configure('TButton',
             bordercolor=WINDOW_BACKGROUND_COLOR,
             background=WINDOW_BACKGROUND_COLOR, 
-            foreground="white",
+            foreground=FOREGROUND_COLOR,
+            lightcolor=BORDER_COLOR,
+            darkcolor=BORDER_COLOR,
         )
         self.style.map('TButton',
             background=[('active', HIGHLIGHT_COLOR)], # When 'active' (hovered), use 'highlight color' background
             foreground=[('pressed', 'red'), ('disabled', '#666666')], # When 'pressed' (clicked), use 'red' text color
         )
         # Remove the "Focus Ring" from Buttons
-        #self.style.layout('TButton',  [
+        #self.style.layout('TButton', [
         #    ('Button.padding', {
         #        'sticky': 'nswe', 'children': [
         #            ('Button.label', {'sticky': 'nswe'})
@@ -535,6 +561,20 @@ class CropperApp:
         #       "foreground": [("focus", "OliveDrab1"), ("!disabled", "OliveDrab2")]
         #    })
         #])
+
+        self.style.configure("Gallery.Horizontal.TScrollbar",
+            background=BORDER_COLOR,      # thumb color
+            troughcolor=WINDOW_BACKGROUND_COLOR,     # track color
+            bordercolor=BORDER_COLOR,
+            lightcolor=BORDER_COLOR,
+            darkcolor=BORDER_COLOR,
+            arrowcolor=HIGHLIGHT_COLOR,
+        )
+        self.style.map("Gallery.Horizontal.TScrollbar",
+            background=[("active", HIGHLIGHT_COLOR)],
+            troughcolor=[("active", HIGHLIGHT_COLOR)],
+        )
+
 
     def bind_toggle_keys(self, info, command=None):
         if "toggle_key" in info:
@@ -579,7 +619,7 @@ class CropperApp:
 
             # 3) Create the widget - COMMAND MUST BE PASSED DIRECTLY!!!
             if "widget_type" in info and info["widget_type"] == "combobox":
-                btn = ttk.Combobox(target, values=info["values"], name=f"btn_{name}", **btn_kwargs)
+                btn = ttk.Combobox(target, values=info["values"], name=f"btn_{name}", **btn_kwargs, style="Custom.TCombobox")
                 btn["state"] = "readonly"
                 btn.pack(side=side, fill=tk.X, padx=LABEL_PADDINGS[0])
 
@@ -1494,9 +1534,18 @@ class CropperApp:
                     print(f"✔ filelist.txt saved in: {os.path.join(folder, filelistfile)}")
 
     # ---------- File list progress ----------
+    def set_image_index(self, index: int) -> None:
+        if index >= 0 and index < len(self.image_paths):
+            self.idx = index
+            self.load_image()
+        else:
+            print(f"This index does not exists: {index}")
+
     def next_image(self, _e=None) -> None:
         if len(self.image_paths) > 1:
             self.idx += 1
+            if self.gallery is not None:
+                self.gallery.select_index(self.idx)
             self.load_image()
         else:
             on_closing("askokcancel", "This was the only image in this folder.\nWould you like to close the app now?")
@@ -1504,6 +1553,8 @@ class CropperApp:
     def prev_image(self, _e=None) -> None:
         if len(self.image_paths) > 1:
             self.idx -= 1
+            if self.gallery is not None:
+                self.gallery.select_index(self.idx)
             self.load_image()
 
     def on_skip(self, _e=None) -> None:
