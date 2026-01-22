@@ -148,7 +148,7 @@ class AsyncThumbnailGallery(tk.Frame):
             )
 
     def _create_thumbnail(self, path) -> ImageTk.PhotoImage:
-        img = Image.open(path)
+        img = self.load_image_by_exiforient(path) # EXIF auto-rotate
         bg = Image.new("RGBA", (self.thumb_size, self.thumb_size), self.default_bg)
 
         img.thumbnail((self.thumb_size, self.thumb_size), Image.LANCZOS)
@@ -158,6 +158,35 @@ class AsyncThumbnailGallery(tk.Frame):
         bg.paste(img, (x, y))
 
         return ImageTk.PhotoImage(bg)
+    
+    def load_image_by_exiforient(self, path: str):
+        """
+        Loads an image and applies EXIF orientation correction (auto-rotate).
+        Returns an RGB image with correct orientation.
+        """
+        try:
+            image = Image.open(path).convert("RGB")
+
+            try:
+                # modern Pillow: .getexif()
+                exif = image.getexif()
+                exiforient = exif.get(0x0112, 1)  # EXIF Orientation
+            except Exception:
+                exiforient = 1
+
+            # Rotate according to EXIF orientation tag
+            if exiforient == 3:
+                image = image.rotate(180, expand=True)
+            elif exiforient == 6:
+                image = image.rotate(270, expand=True)  # 90° CW
+            elif exiforient == 8:
+                image = image.rotate(90, expand=True)   # 90° CCW
+
+            return image
+
+        except Exception as e:
+            print("EXIF load/rotation failed:", e)
+            return Image.open(path)
 
     # ============================================================
     # UI
