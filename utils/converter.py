@@ -106,7 +106,7 @@ class Converter:
     # -----------------------
     def convert(
         self,
-        in_path: str,
+        img_path: str,
         target_device: str,
         convert_folder: str,
         raw_folder: str,
@@ -173,7 +173,7 @@ class Converter:
         # 1. Loading
         # -----------------------------------------
         report(1, "Loading image…")
-        img = Image.open(in_path).convert("RGB")
+        img = Image.open(img_path).convert("RGB")
 
         # -------------------
         # Palette quantization
@@ -186,9 +186,9 @@ class Converter:
         # Build output paths and save quantized image
         # -------------------
         report(3, "Save BMP…")
-        basedir = os.path.dirname(in_path)
-        output_basename_without_ext = os.path.splitext(os.path.basename(in_path))[0]
-
+        basedir = os.path.dirname(img_path)
+        output_basename_without_ext = os.path.splitext(os.path.basename(img_path))[0]
+ 
         # Prepare folders if not exist
         convert_dir = os.path.join(basedir, f"{convert_folder}")
         convert_out_dir = os.path.join(convert_dir, f"{output_basename_without_ext}.bmp")
@@ -262,7 +262,7 @@ class Converter:
             with open(raw_out_dir, "wb") as f:
                 f.write(raw_bytes)
 
-        print(f"✔ Converted: {in_path}")
+        print(f"✔ Converted: {img_path}")
         print(f"   → Preview BMP: {convert_out_dir}")
         print(f"   → Device BMP : {device_out_dir}")
         if export_raw:

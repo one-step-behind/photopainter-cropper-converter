@@ -57,6 +57,8 @@ available_option = {
     "TARGET_DEVICE": ("acep", "spectra6"),
 }
 
+FILELIST_FILENAME: str = "fileList.txt"
+
 BRIGHTNESS = 1.0
 CONTRAST = 1.0
 SATURATION = 1.0
@@ -329,6 +331,7 @@ class CropperApp:
 
         # Keyboard events
         self.window.bind("<Escape>", self.on_skip)
+        self.window.bind_all("<Tab>", self.on_confirm_tab) # Tab intercept (prevent focus change)
 
         # Keyboard events (movement)
         self.window.bind("<Left>",  lambda e: self.on_arrow(e, -1,  0))
@@ -354,7 +357,7 @@ class CropperApp:
         self.image_id = None
         self.image_paths = []
         self.current_image_path: str = ""
-        self.idx: int = 0
+        self.img_idx: int = 0
         self.scale: float = 1.0
         self.img_off: tuple[int, int] = (0, 0)
         self.disp_size: tuple[int, int] = (0, 0)
@@ -395,7 +398,7 @@ class CropperApp:
                 self.window.after(50, self.window.destroy) #quit)
             return
         else:
-            self.idx = 0
+            self.img_idx = 0
             self.image_paths = [] # reset on folder change
 
         # get the images in folder with case-insensitive extension matching
@@ -406,8 +409,8 @@ class CropperApp:
 
         for format in self.supported_formats:
             rule = re.compile(fnmatch.translate(format), re.IGNORECASE)
-            file = [os.path.join(self.picture_input_folder, name) for name in os.listdir(self.picture_input_folder) if rule.match(name)]
-            self.image_paths.extend(file)
+            file_list = [os.path.normpath(os.path.join(self.picture_input_folder, name)) for name in os.listdir(self.picture_input_folder) if rule.match(name)]
+            self.image_paths.extend(file_list)
 
         if not self.image_paths:
             messagebox.showerror("No image", "The folder contains no images. Please choose another one.")
@@ -435,7 +438,7 @@ class CropperApp:
         self.load_image()
 
     def load_image(self) -> None:
-        self.current_image_path = self.image_paths[self.idx]
+        self.current_image_path = self.image_paths[self.img_idx]
 
         # Load saved preferences BEFORE loading the image
         pref_loaded = self.load_image_preferences_or_defaults(self.current_image_path)
@@ -465,7 +468,7 @@ class CropperApp:
 
         count_img = len(self.image_paths)
         counter_length = max(4, 3*(math.floor(math.log10(abs(count_img))) + 1)) # math: O(1) => https://pynative.com/python-count-digits-of-number/
-        self.status_count.config(text=f"[{self.idx+1}/{count_img}]", width=counter_length)
+        self.status_count.config(text=f"[{self.img_idx+1}/{count_img}]", width=counter_length)
 
         self.create_image_enhancer_sliders() # create image options sliders
         self.create_image_enhancer_checkboxes()
@@ -1000,7 +1003,7 @@ class CropperApp:
 
     def _apply_window_resize(self) -> None:
         """
-        Apply resize
+        Apply window resize
         
         :param self: instance
         """
@@ -1025,13 +1028,10 @@ class CropperApp:
         x2d = self.img_off[0] + int(x2i * self.scale)
         y2d = self.img_off[1] + int(y2i * self.scale)
 
-        #self.rect_w = max(1, x2d - x1d)
-        #self.rect_h = int(self.rect_w / self.ratio)
-        #self.rect_center = ((x1d + x2d)//2, (y1d + y2d)//2)
-
         # reconstruct rectangle while maintaining a fixed ratio
         w = x2d - x1d
         h = y2d - y1d
+
         # ensure based on ratio
         if abs(w / h - self.ratio) > 0.001:
             h = int(w / self.ratio)
@@ -1123,8 +1123,6 @@ class CropperApp:
 
     # ---------- Crop & Save ----------
     def on_confirm(self, _e=None) -> None:
-        in_path = self.image_paths[self.idx]
-
         # 1) raw coordinates (may go outside the borders)
         x1i, y1i, x2i, y2i = self.rect_in_image_coords_raw()
         if x2i <= x1i or y2i <= y1i:
@@ -1150,14 +1148,14 @@ class CropperApp:
 
         # 4) background base (white or blur) + paste sharp part if intersection exists
         if ix2 <= ix1 or iy2 <= iy1:
-            out = self.background_only(None)
+            out_img = self.background_only(None)
         else:
             int_w_orig = ix2 - ix1
             int_h_orig = iy2 - iy1
             int_w_tgt = max(1, int(round(int_w_orig * sx)))
             int_h_tgt = max(1, int(round(int_h_orig * sy)))
             region_scaled = self.original_img.crop((ix1, iy1, ix2, iy2)).resize((int_w_tgt, int_h_tgt), Image.Resampling.LANCZOS)
-            out = self.background_only(region_scaled)
+            out_img = self.background_only(region_scaled)
 
             dx_tgt = int(round((ix1 - x1i) * sx))
             dy_tgt = int(round((iy1 - y1i) * sy))
@@ -1172,19 +1170,19 @@ class CropperApp:
 
             if width > 0 and height > 0:
                 sub = region_scaled.crop((src_x1, src_y1, src_x1 + width, src_y1 + height))
-                out.paste(sub, (dst_x1, dst_y1))
+                out_img.paste(sub, (dst_x1, dst_y1))
 
         # 5) enhance image by given values
-        out = self.enhance_image(out)
+        out_img = self.enhance_image(out_img)
 
         # 6) save image
-        self.save_output(out)
+        self.save_output(out_img)
 
         # 7) save image preferences (txt) next to the source
-        self.save_image_preferences(in_path, x1i, y1i, x2i, y2i)
+        self.save_image_preferences(x1i, y1i, x2i, y2i)
 
         # 8) convert to 24 bit BMP
-        self.convert_to_bmp(in_path)
+        self.convert_to_bmp()
 
         # 9) next image
         self.next_image()
@@ -1231,19 +1229,35 @@ class CropperApp:
             return base.filter(ImageFilter.GaussianBlur(radius=25))
         else: # white, black
             return Image.new("RGB", self.target_size, self.image_preferences["fill_mode"])
-
-    def export_folder_with_orientation(self) -> str:
-        return self.app_settings["export_folder"] + '_' + self.image_preferences["orientation"]
     
     def save_output(self, out_img) -> None:
-        print(f"→ Source: {self.image_paths[self.idx]}")
-        in_path = self.image_paths[self.idx]
-        base = os.path.splitext(os.path.basename(in_path))[0]
-        out_dir = os.path.join(os.path.dirname(in_path), f"{self.export_folder_with_orientation()}")
-        os.makedirs(out_dir, exist_ok=True)
-        out_path = os.path.join(out_dir, f"{base}.jpg")
+        img_path = self.current_image_path
+        print(f"→ Source: {img_path}")
+        out_path = self.out_path(img_path)
         out_img.save(out_path, format="JPEG", quality=self.app_settings["image_quality"], optimize=True, progressive=True)
         print(f"✔ Crop saved: {out_path}")
+
+    # ---------- Path helpers ----------
+    def export_folder_with_orientation(self, orientation: str | None = None) -> str:
+        if not orientation:
+            orientation = self.image_preferences["orientation"]
+
+        return self.app_settings["export_folder"] + "_" + orientation
+
+    def image_state_path(self, img_path: str) -> str:
+        dirname, base_filename, base_ext = self._split_path(img_path)
+        return os.path.join(dirname, f"{base_filename}{self.app_settings['state_suffix']}")
+
+    def out_path(self, img_path: str) -> str:
+        dirname, base_filename, base_ext = self._split_path(img_path)
+        out_dir = os.path.join(dirname, f"{self.export_folder_with_orientation()}") # output folder
+        os.makedirs(out_dir, exist_ok=True) # create folder if not exists
+        return os.path.join(out_dir, f"{base_filename}.jpg") # complete source path & file of cropped image for convert
+    
+    def _split_path(self, path):
+        dirname = os.path.dirname(path) # pure folder name
+        base_filename = os.path.splitext(os.path.basename(path)) # file name and extension
+        return (dirname, base_filename[0], base_filename[1])
 
     # ---------- Persist state ----------
     def load_app_settings_or_defaults(self):
@@ -1307,7 +1321,7 @@ class CropperApp:
             if not need in settings or not type(settings[need]) == tuple or (type(settings[need]) == tuple and not r.match(str(f"{settings[need][0]}x{settings[need][1]}"))):
                 settings[need] = defaults[need.upper()]
         
-        #print("APP Settings from FILE", settings)
+        #print("Loaded APP Settings from file:", settings)
         return settings
 
     def save_app_settings(self) -> str | None:
@@ -1381,7 +1395,8 @@ class CropperApp:
         #print("IMAGE Settings", self.image_preferences)
         return True
 
-    def save_image_preferences(self, img_path: str, x1i: float, y1i: float, x2i: float, y2i: float) -> str | None:
+    def save_image_preferences(self, x1i: float, y1i: float, x2i: float, y2i: float) -> str | None:
+        img_path = self.current_image_path
         path = self.image_state_path(img_path)
 
         iw, ih = self.original_img.size
@@ -1423,15 +1438,8 @@ class CropperApp:
                 f.write("\n".join(lines) + "\n")
 
             print(f"✔ Image preferences saved: {path}")
-
-            return img_path
         except Exception as e:
             print(f"[WARN] Unable to save image preferences: {e}")
-
-    def image_state_path(self, img_path: str) -> str:
-        dirname = os.path.dirname(img_path)
-        basename = os.path.splitext(os.path.basename(img_path))[0]
-        return os.path.join(dirname, f"{basename}{self.app_settings['state_suffix']}")
 
     def _load_keyvalues(self, path: str) -> dict[str, str] | None:
         """
@@ -1511,71 +1519,75 @@ class CropperApp:
             return (None, None, None, None)
 
     def save_file_list(self) -> None:
-        if self.app_settings["save_filelist"]:
-            filelistfile = "fileList.txt"
-            source_folder: str = self.picture_input_folder
-            export_folder: str = self.app_settings["export_folder"]
-            convert_folder: str = self.app_settings["convert_folder"]
-            pic_folder_on_device: str = self.app_settings["pic_folder_on_device"]
-            target_device: str = f"{pic_folder_on_device}_{self.app_settings['target_device']}"
+        if not self.picture_input_folder:
+            return
 
-            for ori in available_option["ORIENTATION"]:
-                folder = os.path.join(source_folder, f"{export_folder}_{ori}", convert_folder, target_device)
+        if self.app_settings["save_filelist"]:
+            for available_orientation in available_option["ORIENTATION"]:
+                folder = os.path.join(
+                    self.picture_input_folder, 
+                    f"{self.export_folder_with_orientation(available_orientation)}", 
+                    self.app_settings["convert_folder"], 
+                    f"{self.app_settings['pic_folder_on_device']}_{self.app_settings['target_device']}",
+                )
+                filelist_filepath = os.path.join(folder, FILELIST_FILENAME)
 
                 if os.path.exists(folder):
-                    filelist = [f for f in os.listdir(folder) if f.endswith('.bmp')]
-                    lines = "\n".join(f"{pic_folder_on_device}/{str(item)}" for item in filelist)
-                    with open(os.path.join(folder, filelistfile), "w", encoding="utf-8", newline='\n') as f:
+                    filelist = [f for f in os.listdir(folder) if f.endswith(".bmp")]
+                    lines = "\n".join(f"{self.app_settings['pic_folder_on_device']}/{str(item)}" for item in filelist)
+                    with open(filelist_filepath, "w", encoding="utf-8", newline="\n") as f:
                         f.write(lines)
 
-                    print(f"✔ filelist.txt saved in: {os.path.join(folder, filelistfile)}")
+                    print(f"✔ {FILELIST_FILENAME} saved in: {filelist_filepath}")
 
     # ---------- File list progress ----------
     def set_image_index(self, index: int) -> None:
         if index >= 0 and index < len(self.image_paths):
-            self.idx = index
+            self.img_idx = index
             self.load_image()
         else:
             print(f"This index does not exists: {index}")
 
     def next_image(self, _e=None) -> None:
         if len(self.image_paths) > 1:
-            self.idx += 1
-            if self.idx >= len(self.image_paths):
+            self.img_idx += 1
+
+            if self.img_idx >= len(self.image_paths):
                 if self.app_settings["exit_after_last_image"]:
                     on_closing("showinfo", "Done", "All images have been processed. App closes now.")
                     return
                 else:
-                    self.idx = 0
+                    self.img_idx = 0
+
             if self.gallery is not None:
-                self.gallery.select_index(self.idx)
+                self.gallery.select_index(self.img_idx)
+
             self.load_image()
         else:
             on_closing("askokcancel", "This was the only image in this folder.\nWould you like to close the app now?")
 
     def prev_image(self, _e=None) -> None:
         if len(self.image_paths) > 1:
-            self.idx -= 1
-            if self.idx < 0:
-                self.idx = len(self.image_paths)-1
+            self.img_idx -= 1
+
+            if self.img_idx < 0:
+                self.img_idx = len(self.image_paths)-1
+
             if self.gallery is not None:
-                self.gallery.select_index(self.idx)
+                self.gallery.select_index(self.img_idx)
+
             self.load_image()
 
     def on_skip(self, _e=None) -> None:
         if len(self.image_paths) > 1:
-            print(f"skipped: {self.image_paths[self.idx]}")
+            print(f"skipped: {self.current_image_path}")
             self.next_image()
 
     # ---------- Call converter ----------
-    def convert_to_bmp(self, in_path: str) -> None:
+    def convert_to_bmp(self) -> None:
         def progress(step, msg):
             self.update_status_label(f"[{step}/5] {msg}")
             self.window.update_idletasks()
-
-        base = os.path.splitext(os.path.basename(in_path))[0]
-        out_dir = os.path.join(os.path.dirname(in_path), f"{self.export_folder_with_orientation()}")
-        out_path = os.path.join(out_dir, f"{base}.jpg").replace('\\', '/') # complete source path & file of cropped image for convert
 
         self.update_status_label("Starting conversion…")
         self.window.update_idletasks() # force GUI update before blocking
@@ -1584,7 +1596,7 @@ class CropperApp:
 
         try:
             converter.convert(
-                in_path=out_path,
+                img_path=self.out_path(self.current_image_path),
                 target_device=self.image_preferences["target_device"],
                 dither_method=DITHER_METHOD,
                 convert_folder=self.app_settings["convert_folder"],
