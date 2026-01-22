@@ -502,7 +502,7 @@ class CropperApp:
 
         except Exception as e:
             print("EXIF load/rotation failed:", e)
-            return Image.open(path)
+            return Image.open(path).convert("RGB")
 
     # ---------- UI helpers ----------
     def set_theme(self):

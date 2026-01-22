@@ -186,7 +186,7 @@ class AsyncThumbnailGallery(tk.Frame):
 
         except Exception as e:
             print("EXIF load/rotation failed:", e)
-            return Image.open(path)
+            return Image.open(path).convert("RGB")
 
     # ============================================================
     # UI
