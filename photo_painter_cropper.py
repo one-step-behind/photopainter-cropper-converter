@@ -435,16 +435,6 @@ class CropperApp:
         self.load_image()
 
     def load_image(self) -> None:
-        if self.idx >= len(self.image_paths):
-            if self.app_settings["exit_after_last_image"]:
-                on_closing("showinfo", "Done", "All images have been processed. App closes now.")
-                return
-            else:
-                self.idx = 0
-
-        if self.idx < 0:
-            self.idx = len(self.image_paths)-1
-
         self.current_image_path = self.image_paths[self.idx]
 
         # Load saved preferences BEFORE loading the image
@@ -1551,6 +1541,12 @@ class CropperApp:
     def next_image(self, _e=None) -> None:
         if len(self.image_paths) > 1:
             self.idx += 1
+            if self.idx >= len(self.image_paths):
+                if self.app_settings["exit_after_last_image"]:
+                    on_closing("showinfo", "Done", "All images have been processed. App closes now.")
+                    return
+                else:
+                    self.idx = 0
             if self.gallery is not None:
                 self.gallery.select_index(self.idx)
             self.load_image()
@@ -1560,6 +1556,8 @@ class CropperApp:
     def prev_image(self, _e=None) -> None:
         if len(self.image_paths) > 1:
             self.idx -= 1
+            if self.idx < 0:
+                self.idx = len(self.image_paths)-1
             if self.gallery is not None:
                 self.gallery.select_index(self.idx)
             self.load_image()
