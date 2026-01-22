@@ -400,8 +400,10 @@ class CropperApp:
 
         # get the images in folder with case-insensitive extension matching
         self.supported_formats = ["*.jpg", "*.jpeg", "*.png", "*.bmp", "*.gif", "*.tif", "*.tiff", "*.webp"]
+
         if HEIC_SUPPORT:
             self.supported_formats.append("*.heic")
+
         for format in self.supported_formats:
             rule = re.compile(fnmatch.translate(format), re.IGNORECASE)
             file = [os.path.join(self.picture_input_folder, name) for name in os.listdir(self.picture_input_folder) if rule.match(name)]
@@ -410,7 +412,6 @@ class CropperApp:
         if not self.image_paths:
             messagebox.showerror("No image", "The folder contains no images. Please choose another one.")
             self.load_folder()
-            #self.window.after(50, self.window.destroy) #quit)
             return
 
         # app buttons
@@ -584,13 +585,13 @@ class CropperApp:
 
     def bind_toggle_keys(self, info, command=None):
         if "toggle_key" in info:
-            if type(info['toggle_key']) == str:
-                self.window.bind(info['toggle_key'], command if command else info["command"])
-            elif type(info['toggle_key']) == tuple:
-                for bind_key in info['toggle_key']:
+            if type(info["toggle_key"]) == str:
+                self.window.bind(info["toggle_key"], command if command else info["command"])
+            elif type(info["toggle_key"]) == tuple:
+                for bind_key in info["toggle_key"]:
                     self.window.bind(bind_key, command if command else info["command"])
 
-    def create_buttons(self, target, button_definition, side: Literal['left', 'right', 'top', 'bottom']=tk.LEFT) -> None:
+    def create_buttons(self, target, button_definition, side: Literal["left", "right", "top", "bottom"]=tk.LEFT) -> None:
         """
         Docstring für create_buttons
         
@@ -598,7 +599,7 @@ class CropperApp:
         :param target: target widget
         :param button_definition: definitions of the buttons
         :param side: side to place the buttons
-        :type side: Literal['left', 'right', 'top', 'bottom']
+        :type side: Literal["left", "right", "top", "bottom"]
         """
         # Create buttons dynamically
         for name, info in button_definition.items():
@@ -1523,9 +1524,9 @@ class CropperApp:
         if self.app_settings["save_filelist"]:
             filelistfile = "fileList.txt"
             source_folder: str = self.picture_input_folder
-            export_folder: str = self.app_settings['export_folder']
+            export_folder: str = self.app_settings["export_folder"]
             convert_folder: str = self.app_settings["convert_folder"]
-            pic_folder_on_device: str = self.app_settings['pic_folder_on_device']
+            pic_folder_on_device: str = self.app_settings["pic_folder_on_device"]
             target_device: str = f"{pic_folder_on_device}_{self.app_settings['target_device']}"
 
             for ori in available_option["ORIENTATION"]:
