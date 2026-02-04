@@ -197,14 +197,14 @@ class CropperApp:
             "save_filelist": {
                 "text": "Save image list",
                 "command": lambda e=None: self.update_app_settings_checkbox("save_filelist"),
-                "enter_tip": "Saves file list of existing images on app exit\nto fileList.txt in export folder(s)\n(landscape & portrait) (S)",
-                "toggle_key": ("<s>", "<S>"),
+                "enter_tip": "Saves file list of existing images on app exit\nto fileList.txt in export folder(s)\n(landscape & portrait) (Ctrl+S)",
+                "toggle_key": ("<Control-s>", "<Control-S>"),
             },
             "exit_after_last_image": {
                 "text": "Exit after last image",
                 "command": lambda e=None: self.update_app_settings_checkbox("exit_after_last_image"),
-                "enter_tip": "Close the app after last image in folder was\nprocessed, otherwise open the first image. (X)",
-                "toggle_key": ("<x>", "<X>"),
+                "enter_tip": "Close the app after last image in folder was\nprocessed, otherwise open the first image. (Ctrl+X)",
+                "toggle_key": ("<Control-x>", "<Control-X>"),
             },
         }
 
@@ -235,11 +235,19 @@ class CropperApp:
         self.other_app_button_definitions = {
             "change_folder": {
                 "default_text": "Change folder",
-                "command": self.load_folder,
-                "enter_tip": "Change to another folder of images (C)",
+                "command": lambda e=None: self.load_folder(),
+                "enter_tip": "Change to another folder of images (Ctrl-L)",
+                "fill": tk.X,
+                "underline": 9,
+                "toggle_key": ("<Control-l>", "<Control-L>"),
+            },
+            "reload_folder": {
+                "default_text": "Reload folder",
+                "command": lambda e=None: self.load_folder(False),
+                "enter_tip": "Reload this folder of images (Ctrl+R)",
                 "fill": tk.X,
                 "underline": 0,
-                "toggle_key": ("c", "C"),
+                "toggle_key": ("<Control-r>", "<Control-R>"),
             },
         }
 
@@ -248,10 +256,10 @@ class CropperApp:
                 "widget_type": "button",
                 "default_text": "Orientation",
                 "command": self.toggle_orientation,
-                "enter_tip": "Toggle Orientation (D)",
+                "enter_tip": "Toggle Orientation (Ctrl+O)",
                 "fill": tk.X,
                 "underline": 0,
-                "toggle_key": ("o", "O"),
+                "toggle_key": ("<Control-o>", "<Control-O>"),
             },
             "fill_mode": {
                 "widget_type": "combobox", # button, combobox
@@ -259,17 +267,17 @@ class CropperApp:
                 "command": self.toggle_fill_mode,
                 "postcommand": lambda e=None: self.set_fill_mode("fill_mode"),
                 "values": available_option["FILL_MODE"],
-                "enter_tip": "Toggle Fill mode (F)",
+                "enter_tip": "Toggle Fill mode (Ctrl+F)",
                 "underline": 0,
-                "toggle_key": ("f", "F"),
+                "toggle_key": ("<Control-f>", "<Control-F>"),
             },
             "target_device": {
                 "widget_type": "button",
                 "default_text": "Device",
                 "command": self.toggle_target_device,
-                "enter_tip": "Toggle Target device (T)",
+                "enter_tip": "Toggle Target device (Ctrl+D)",
                 "underline": 0,
-                "toggle_key": ("d", "D"),
+                "toggle_key": ("<Control-d>", "<Control-D>"),
             },
         }
         
@@ -398,13 +406,17 @@ class CropperApp:
         self.window.focus_set()
         self.load_folder()
 
-    def load_folder(self, _e=None) -> None:
+    def load_folder(self, openNew=True) -> None:
         """
-        Load images from given folder. Called once on app start.
+        Load images from given folder.
+        Called once on app start or when changing or reloading folder.
         
         :param self: instance
+        :param openNew: open new folder or reload
+        :type openNew: bool
         """
-        self.picture_input_folder = filedialog.askdirectory(title="Select source folder with photos")
+        if openNew:
+            self.picture_input_folder = filedialog.askdirectory(title="Select source folder with photos")
 
         if not self.picture_input_folder:
             if not len(self.image_paths):
@@ -1689,5 +1701,5 @@ if __name__ == "__main__":
     window = tk.Tk()
     app = CropperApp(window)
     window.protocol("WM_DELETE_WINDOW", on_closing)
-    window.bind('<Control-c>', on_quit)
+    window.bind('<Control-Alt-c>', on_quit)
     window.mainloop()
