@@ -11,6 +11,7 @@ from tkinter import ttk, filedialog, messagebox
 from typing import Literal, Optional
 from PIL import Image, ImageTk, ImageFilter, ImageEnhance
 from utils.gallery import AsyncThumbnailGallery
+from utils.textoverlay import CanvasTextOverlay
 from utils.tooltip import Hovertip
 from utils.converter import Converter
 
@@ -29,7 +30,7 @@ except ImportError:
 APP_TITLE = "PhotoPainterCropper"
 DITHER_METHOD: int = 3 # NONE(0) or FLOYDSTEINBERG(3)
 
-defaults = {
+defaults:dict = {
     "WINDOW_MIN": (1024, 768),
     "LAST_WINDOW_SIZE": (1024, 768),
     "IMAGE_TARGET_SIZE": (800, 480),
@@ -51,10 +52,21 @@ defaults = {
     "EXIT_AFTER_LAST_IMAGE": True,
 }
 
-available_option = {
+available_option:dict = {
     "ORIENTATION": ("landscape", "portrait"),
     "FILL_MODE": ("blur", "white", "black"),
     "TARGET_DEVICE": ("acep", "spectra6"),
+}
+
+text_overlay_defaults: dict = {
+    "show": False,
+    "text": "Enter your text",
+    "text_color": "#ffffff",
+    "bg_color": "#4d4d32",
+    "bottom": 350,
+    "right": 650,
+    "font_scale_height": 400,
+    "font_scale_divisor": 30,
 }
 
 FILELIST_FILENAME: str = "fileList.txt"
@@ -124,6 +136,7 @@ class CropperApp:
         w, h = self.app_settings["window_min"]
         self.window.minsize(int(w), int(h))
 
+        # set window icon
         if (sys.platform.startswith("win")):
             resource_path = os.path.join(os.path.dirname(__file__), "./_source/icon.ico") if not hasattr(sys, "frozen") else os.path.join(sys.prefix, "./_source/icon.ico")
             self.window.iconbitmap(default=resource_path)
@@ -132,7 +145,6 @@ class CropperApp:
             icon = tk.PhotoImage(file=resource_path)
             self.window.iconphoto(False, icon)
 
-        self.window.tk_setPalette(WINDOW_BACKGROUND_COLOR)
         self.window.title(f"{APP_TITLE} – "
             "Drag/Arrows=move (Shift=+fast)  •  "
             "Scroll/+/-=resize (Shift=+fast)  •  "
@@ -174,6 +186,7 @@ class CropperApp:
 
         # async thumbnail gallery
         self.gallery: Optional[AsyncThumbnailGallery] = None
+        self.text_overlay: Optional[CanvasTextOverlay] = None
 
         # ---------- Theme ----------
         self.set_theme()
@@ -425,6 +438,8 @@ class CropperApp:
         # other app buttons
         self.create_buttons(self.options_frame, self.other_app_button_definitions, tk.BOTTOM)
 
+        self.create_text_overlay()
+
         # Load async gallery
         if self.gallery is None:
             self.gallery = AsyncThumbnailGallery(window, self.image_paths, selected_bg=HIGHLIGHT_COLOR, image_bg=BORDER_COLOR, on_select=lambda index: self.set_image_index(index))
@@ -476,7 +491,8 @@ class CropperApp:
 
         self.update_image_in_canvas()
         self.update_status_label()
-        self.draw_crop_marker_grid() # create crop marker
+        self.draw_crop_marker_grid()
+        self.update_text_overlay()
 
     def load_image_by_exiforient(self, path: str):
         """
@@ -509,6 +525,8 @@ class CropperApp:
 
     # ---------- UI helpers ----------
     def set_theme(self):
+        self.window.tk_setPalette(WINDOW_BACKGROUND_COLOR)
+
         self.style = ttk.Style()
         self.style.theme_use('clam')
         self.style.configure('TFrame', background=WINDOW_BACKGROUND_COLOR, foreground=FOREGROUND_COLOR)
@@ -785,6 +803,11 @@ class CropperApp:
             value = self.app_settings[name]
             self.app_settings_checkbox_vars[name].set(value)
 
+    def create_text_overlay(self):
+        if self.text_overlay is None:
+            # Initialize text overlay
+            self.text_overlay = CanvasTextOverlay(self.options_frame, self.canvas, initial_state=text_overlay_defaults, callback=self.callback_text_overlay)
+
     def update_app_settings_checkbox(self, name) -> None:
         if name in self.app_settings_checkbox_vars:
             self.app_settings[name] = False if self.app_settings[name] == True else True
@@ -830,7 +853,7 @@ class CropperApp:
             self.canvas.tag_lower("image_layer")
             #print("UPDATE CREATE")
         else: # Update the existing canvas
-            self.canvas.itemconfig(self.image_id, image=self.tk_img, tags="image_layer")
+            self.canvas.itemconfig(self.image_id, image=self.tk_img)#, tags="image_layer")
             #print("UPDATE ITEMCONFIG")
 
         self._slider_update_pending = None
@@ -877,6 +900,7 @@ class CropperApp:
         self.rect_w = max(64, min(self.rect_w, max_w))
         self.rect_h = int(self.rect_w / self.ratio)
 
+    # create crop marker
     def draw_crop_marker_grid(self) -> None:
         # snap to have straight lines (no sub-pixels)
         def snap(v): return int(round(v))
@@ -912,7 +936,26 @@ class CropperApp:
         self.canvas.create_line(x1, h1, x2, h1, fill=self.app_settings["grid_color"], dash=dash_pat, width=1, capstyle="butt", joinstyle="miter", tags=("crop_layer",))
         self.canvas.create_line(x1, h2, x2, h2, fill=self.app_settings["grid_color"], dash=dash_pat, width=1, capstyle="butt", joinstyle="miter", tags=("crop_layer",))
 
-        self.canvas.tag_raise("crop_layer")
+        #self.canvas.tag_raise("crop_layer")
+        #self.canvas.tag_lower("crop_layer")
+        #self.canvas.tag_lower("image_layer")
+        #self.canvas.tag_raise("text_layer")
+
+    def callback_text_overlay(self, state = None):
+        if state is not None:
+            print("Overlay state changed:", state)
+            self.image_preferences["text_overlay"] = state
+            self.update_text_overlay()
+
+    def update_text_overlay(self):
+        # set new data for text_overlay
+        if self.text_overlay is not None:
+            self.canvas.tag_raise("text_layer")
+            x1i, y1i, x2i, y2i = self.rect_coords()
+            print("COORDS", x1i, y1i, x2i, y2i)
+            #self.text_overlay.set_position(bottom=x2i, right=y2i)
+            self.text_overlay.set_position(bottom=y2i, right=x2i)
+            self.text_overlay.set_font_scale_height(x2i - x1i)
 
     # ---------- Mouse actions ----------
     def on_click(self, e) -> None:
@@ -980,6 +1023,7 @@ class CropperApp:
         self.rect_h = int(self.rect_w / self.ratio)
         self.clamp_crop_rectangle_to_canvas()
         self.draw_crop_marker_grid()
+        self.update_text_overlay()
 
     def on_window_resize(self, event) -> None:
         """
@@ -1080,7 +1124,7 @@ class CropperApp:
         self.clamp_crop_rectangle_to_canvas()
         self.draw_crop_marker_grid()
 
-        self.canvas.tag_raise("crop_layer")
+        #self.canvas.tag_raise("crop_layer")
 
     def set_fill_mode(self, field) -> None:
         self.image_preferences["fill_mode"] = self.app_button_vars[field].get()
@@ -1175,16 +1219,19 @@ class CropperApp:
         # 5) enhance image by given values
         out_img = self.enhance_image(out_img)
 
-        # 6) save image
+        # 6) render text on image if enabled
+        out_img = self.text_overlay.render_text_overlay_on_image(out_img)
+
+        # 7) save image
         self.save_output(out_img)
 
-        # 7) save image preferences (txt) next to the source
+        # 8) save image preferences (txt) next to the source
         self.save_image_preferences(x1i, y1i, x2i, y2i)
 
-        # 8) convert to 24 bit BMP
+        # 9) convert to 24 bit BMP
         self.convert_to_bmp()
 
-        # 9) next image
+        # 10) next image
         self.next_image()
 
     def enhance_image(self, img) -> Image.Image:
@@ -1367,6 +1414,7 @@ class CropperApp:
             self.image_preferences["enhancer_edge"] = self.app_settings["enhancer_edge"]
             self.image_preferences["enhancer_smooth"] = self.app_settings["enhancer_smooth"]
             self.image_preferences["enhancer_sharpen"] = self.app_settings["enhancer_sharpen"]
+            self.image_preferences["text_overlay"] = text_overlay_defaults
             #print("SET DEFAULT IMAGE PREFS", self.image_preferences, "FROM", self.app_settings)
 
         # update button labels
@@ -1391,6 +1439,13 @@ class CropperApp:
 
             if not self.image_preferences[name] in (True, False):
                 self.image_preferences[name] = defaults[name.upper()]
+
+        if not "text_overlay" in self.image_preferences:
+            self.image_preferences["text_overlay"] = text_overlay_defaults
+        else:
+            if type(self.image_preferences["text_overlay"]) == str:
+                self.image_preferences["text_overlay"] = eval(self.image_preferences["text_overlay"])
+        self.text_overlay.set_all(self.image_preferences["text_overlay"])
 
         #print("IMAGE Settings", self.image_preferences)
         return True
@@ -1431,6 +1486,7 @@ class CropperApp:
             f"enhancer_edge={self.image_preferences['enhancer_edge']}",
             f"enhancer_smooth={self.image_preferences['enhancer_smooth']}",
             f"enhancer_sharpen={self.image_preferences['enhancer_sharpen']}",
+            f"text_overlay={self.image_preferences['text_overlay']}",
         ]
 
         try:
