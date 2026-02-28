@@ -55,7 +55,7 @@ defaults:dict = {
 available_option:dict = {
     "ORIENTATION": ("landscape", "portrait"),
     "FILL_MODE": ("blur", "white", "black"),
-    "TARGET_DEVICE": ("acep", "spectra6"),
+    "TARGET_DEVICE": ("acep", "spectra6", "4color"),
 }
 
 text_overlay_defaults: dict = {
@@ -272,9 +272,10 @@ class CropperApp:
                 "toggle_key": ("<Control-f>", "<Control-F>"),
             },
             "target_device": {
-                "widget_type": "button",
+                "widget_type": "combobox",
                 "default_text": "Device",
                 "command": self.toggle_target_device,
+                "values": available_option["TARGET_DEVICE"],
                 "enter_tip": "Toggle Target device (Ctrl+D)",
                 "underline": 0,
                 "toggle_key": ("<Control-d>", "<Control-D>"),
@@ -1151,7 +1152,12 @@ class CropperApp:
         self.update_button_text("fill_mode", self.image_preferences["fill_mode"])
 
     def toggle_target_device(self, _e=None) -> None:
-        self.image_preferences["target_device"] = available_option["TARGET_DEVICE"][0] if self.image_preferences["target_device"] == available_option["TARGET_DEVICE"][1] else available_option["TARGET_DEVICE"][1]
+        current_idx = available_option["TARGET_DEVICE"].index(self.image_preferences["target_device"])
+        if current_idx + 1 > len(available_option["TARGET_DEVICE"]) - 1:
+            current_idx = 0
+        else:
+            current_idx += 1
+        self.image_preferences["target_device"] = available_option["TARGET_DEVICE"][current_idx]
         self.update_button_text("target_device", self.image_preferences["target_device"])
 
     # ---------- Coordinate helpers ----------

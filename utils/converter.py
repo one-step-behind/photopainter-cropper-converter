@@ -87,7 +87,38 @@ TARGET_DEVICE_MAP = {
             5, # BLUE
             6, # GREEN
         ],
-    }
+    },
+
+    "4color": {
+        "calibrated_to_display": [
+            (0, 0, 0),       # BLACK
+            (255, 255, 255), # WHITE
+            (255, 255, 0),   # YELLOW
+            (255, 0, 0),     # RED
+            # (25, 30, 33),    # BLACK #191E21
+            # (241, 241, 241), # WHITE #F1F1F1
+            # (243, 207, 17),  # YELLOW #F3CF11
+            # (210, 14, 19),   # RED #D20E13
+        ],
+
+        "device_rgb": [
+            (0, 0, 0),       # BLACK
+            (255, 255, 255), # WHITE
+            (255, 255, 0),   # YELLOW
+            (255, 0, 0),     # RED
+        ],
+
+        # ⚠️ Raw values are hardware-defined, not arbitrary.
+        # If your panel uses different codes, adjust accordingly.
+        # can be found via "Color Index" EPD_7IN3F_[BLACK|WHITE|...]:
+        # https://github.com/waveshareteam/e-Paper/blob/master/E-paper_Separate_Program/1in54_e-Paper_G/ESP8266/EPD_1in54g.h#L22-L25
+        "device_index_to_raw": [
+            0, # BLACK
+            1, # WHITE
+            2, # YELLOW
+            3, # RED
+        ],
+    },
 }
 
 class Converter:
