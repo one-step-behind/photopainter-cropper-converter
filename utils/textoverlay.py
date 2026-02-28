@@ -23,7 +23,7 @@ class CanvasTextOverlay:
             "show": False,
             "text": "Sample text",
             "text_color": "#ffffff",
-            "bg_color": "#4d4d32",
+            "bg_color": "#6f6311",
             "bottom": 10,
             "right": 10,
             "font_scale_height": 100,

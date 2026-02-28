@@ -62,7 +62,7 @@ text_overlay_defaults: dict = {
     "show": False,
     "text": "Enter your text",
     "text_color": "#ffffff",
-    "bg_color": "#4d4d32",
+    "bg_color": "#6f6311",
     "bottom": 350,
     "right": 650,
     "font_scale_height": 400,
