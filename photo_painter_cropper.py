@@ -505,7 +505,6 @@ class CropperApp:
         self.update_image_in_canvas()
         self.update_status_label()
         self.draw_crop_marker_grid()
-        self.update_text_overlay()
 
     def load_image_by_exiforient(self, path: str):
         """
@@ -949,10 +948,8 @@ class CropperApp:
         self.canvas.create_line(x1, h1, x2, h1, fill=self.app_settings["grid_color"], dash=dash_pat, width=1, capstyle="butt", joinstyle="miter", tags=("crop_layer",))
         self.canvas.create_line(x1, h2, x2, h2, fill=self.app_settings["grid_color"], dash=dash_pat, width=1, capstyle="butt", joinstyle="miter", tags=("crop_layer",))
 
-        #self.canvas.tag_raise("crop_layer")
-        #self.canvas.tag_lower("crop_layer")
-        #self.canvas.tag_lower("image_layer")
-        #self.canvas.tag_raise("text_layer")
+        # update text overlay when crop marker grid changes
+        self.update_text_overlay()
 
     def callback_text_overlay(self, state = None):
         if state is not None:
@@ -962,10 +959,10 @@ class CropperApp:
 
     def update_text_overlay(self):
         # set new data for text_overlay
-        if self.text_overlay is not None:
+        if self.text_overlay is not None and self.image_preferences["text_overlay"]["show"] is True:
             self.canvas.tag_raise("text_layer")
             x1i, y1i, x2i, y2i = self.rect_coords()
-            print("COORDS", x1i, y1i, x2i, y2i)
+            # print("COORDS", x1i, y1i, x2i, y2i)
             self.text_overlay.set_position(bottom=y2i, right=x2i)
             self.text_overlay.set_font_scale_height(x2i - x1i)
 
@@ -1035,7 +1032,6 @@ class CropperApp:
         self.rect_h = int(self.rect_w / self.ratio)
         self.clamp_crop_rectangle_to_canvas()
         self.draw_crop_marker_grid()
-        self.update_text_overlay()
 
     def on_window_resize(self, event) -> None:
         """
