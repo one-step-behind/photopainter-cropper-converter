@@ -210,7 +210,7 @@ class CanvasTextOverlay:
         # --------------------------------------------------
         # Font scaling (image-only)
         # --------------------------------------------------
-        tk_point_size = max(8, img_height // 20)
+        tk_point_size = max(8, (img_width if img_width < img_height else img_height) // 20)
 
         # Convert points → pixels (96 DPI assumed)
         scale = 96 / 72 # 4 / 3

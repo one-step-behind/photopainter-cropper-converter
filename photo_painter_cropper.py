@@ -966,7 +966,6 @@ class CropperApp:
             self.canvas.tag_raise("text_layer")
             x1i, y1i, x2i, y2i = self.rect_coords()
             print("COORDS", x1i, y1i, x2i, y2i)
-            #self.text_overlay.set_position(bottom=x2i, right=y2i)
             self.text_overlay.set_position(bottom=y2i, right=x2i)
             self.text_overlay.set_font_scale_height(x2i - x1i)
 
