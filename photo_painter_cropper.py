@@ -946,7 +946,7 @@ class CropperApp:
 
     def callback_text_overlay(self, state = None):
         if state is not None:
-            print("Overlay state changed:", state)
+            # print("Overlay state changed:", state)
             self.image_preferences["text_overlay"] = state
             self.update_text_overlay()
 

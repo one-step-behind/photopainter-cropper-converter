@@ -190,7 +190,7 @@ class CanvasTextOverlay:
     # Public API
     # ----------------------
     def set_all(self, payload):
-        print("set all", payload)
+        # print("textoverlay set all", payload)
         self.set_show(payload["show"])
         self.set_text(payload["text"])
         self.set_colors(text_color = payload["text_color"], bg_color=payload["bg_color"])
@@ -243,7 +243,7 @@ class CanvasTextOverlay:
             pts_float = self.font_preview_height / self.system_dpi_scale
             pts = int(max(self.min_font_size, min(self.max_font_size, round(pts_float))))
             self.font.configure(size=pts)
-            print(f"Canvas font set to: {pts}pt (preview_px {self.font_preview_height:.2f}, sys_dpi {self.system_dpi_scale:.3f})")
+            # print(f"Canvas font set to: {pts}pt (preview_px {self.font_preview_height:.2f}, sys_dpi {self.system_dpi_scale:.3f})")
 
     def render_text_overlay_on_image(self, image):
         """
