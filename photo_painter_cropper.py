@@ -8,7 +8,7 @@ import time
 import fnmatch, re
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 from PIL import Image, ImageTk, ImageFilter, ImageEnhance
 from utils.gallery import AsyncThumbnailGallery
 from utils.textoverlay import CanvasTextOverlay
@@ -116,7 +116,7 @@ class CropperApp:
     def __init__(self, window):
         # ---------- Load settings ----------
         self.app_settings = self.load_app_settings_or_defaults()
-        self.image_preferences: dict[str, str | float | bool] = {}
+        self.image_preferences: dict[str, Any] = {}
 
         # ---------- UI ----------
         self._resize_pending = False
@@ -823,6 +823,8 @@ class CropperApp:
         if msg:
             self.status_label.config(text=msg)
         else:
+            if self.original_img is None:
+                return
             source_dims = f"{self.original_img.size[0]}x{self.original_img.size[1]}"
             target_size = f"{self.target_size[0]}x{self.target_size[1]}"
             source_file_size = f"{'{:,}'.format(self.original_img_file_size >> 10).replace(',','.')} kB"
@@ -834,6 +836,7 @@ class CropperApp:
         return (self.canvas.winfo_width(), self.canvas.winfo_height())
 
     def resize_image_and_center_in_window(self) -> None:
+        assert self.original_img is not None
         cw, ch = self.canvas_size()
         iw, ih = self.original_img.size
         self.scale = min(cw / iw, ch / ih)
@@ -1196,6 +1199,7 @@ class CropperApp:
             return
 
         # 2) intersection with the original image
+        assert self.original_img is not None
         iw, ih = self.original_img.size
         ix1 = max(0, math.floor(x1i))
         iy1 = max(0, math.floor(y1i))
@@ -1236,6 +1240,7 @@ class CropperApp:
         out_img = self.enhance_image(out_img)
 
         # 6) render text on image if enabled
+        assert self.text_overlay is not None
         out_img = self.text_overlay.render_text_overlay_on_image(out_img)
 
         # 7) save image
@@ -1413,11 +1418,12 @@ class CropperApp:
         kv_path = self.image_state_path(img_path)
 
         if os.path.exists(kv_path):
-            self.image_preferences = self._load_keyvalues(kv_path)
-            #print("LOADED IMAGE prefs", self.image_preferences)
+            loaded = self._load_keyvalues(kv_path)
+            #print("LOADED IMAGE prefs", loaded)
 
-            if not self.image_preferences:
+            if not loaded:
                 return False
+            self.image_preferences = loaded
 
         if not self.image_preferences: # use app defaults
             self.image_preferences["image_target_size"] = self.app_settings["image_target_size"]
@@ -1461,6 +1467,7 @@ class CropperApp:
         else:
             if type(self.image_preferences["text_overlay"]) == str:
                 self.image_preferences["text_overlay"] = eval(self.image_preferences["text_overlay"])
+        assert self.text_overlay is not None
         self.text_overlay.set_all(self.image_preferences["text_overlay"])
 
         #print("IMAGE Settings", self.image_preferences)
@@ -1470,6 +1477,7 @@ class CropperApp:
         img_path = self.current_image_path
         path = self.image_state_path(img_path)
 
+        assert self.original_img is not None
         iw, ih = self.original_img.size
         nx1 = x1i / iw
         ny1 = y1i / ih
@@ -1542,6 +1550,7 @@ class CropperApp:
         keyvalues = self.image_preferences
 
         # prefer absolute coordinates if the dimensions match
+        assert self.original_img is not None
         iw, ih = self.original_img.size
 
         try:
@@ -1552,10 +1561,10 @@ class CropperApp:
 
         if saved_w == iw and saved_h == ih: # saved values matches real values
             try:
-                x1i: float = float(keyvalues["rect_x1"])
-                y1i: float = float(keyvalues["rect_y1"])
-                x2i: float = float(keyvalues["rect_x2"])
-                y2i: float = float(keyvalues["rect_y2"])
+                x1i = float(keyvalues["rect_x1"])
+                y1i = float(keyvalues["rect_y1"])
+                x2i = float(keyvalues["rect_x2"])
+                y2i = float(keyvalues["rect_y2"])
             except Exception:
                 x1i, y1i, x2i, y2i = self._coords_from_relative_values(keyvalues, iw, ih)
         else:
