@@ -217,6 +217,7 @@ class AsyncThumbnailGallery(tk.Frame):
 
         self.thumbs.append(thumb)
         self.thumb_labels.append(lbl)
+        self.thumb_wrappers.append(wrapper)
 
         img_path = self.image_paths[index]
         sidecar = f"{os.path.splitext(img_path)[0]}_ppcrop.txt"
@@ -234,7 +235,7 @@ class AsyncThumbnailGallery(tk.Frame):
             overlay.place(relx=0.99, rely=0.01, anchor="ne")
 
         # events stay on label
-        lbl.bind("<Button-1>", lambda e, i=index: self.select_index(i, scroll=False))
+        lbl.bind("<Button-1>", lambda e, i=index: self.select_index(i, scroll=True))
         lbl.bind("<MouseWheel>", self._on_mouse_wheel)
         lbl.bind("<Button-4>", lambda e: self.canvas.xview_scroll(-1, "units"))
         lbl.bind("<Button-5>", lambda e: self.canvas.xview_scroll(1, "units"))
@@ -269,13 +270,13 @@ class AsyncThumbnailGallery(tk.Frame):
     def _scroll_index_into_view(self, index) -> None:
         self.update_idletasks()
 
-        lbl = self.thumb_labels[index]
+        wrapper = self.thumb_wrappers[index]
 
         canvas_left = self.canvas.canvasx(0)
         canvas_right = canvas_left + self.canvas.winfo_width()
 
-        item_x = lbl.winfo_x()
-        item_width = lbl.winfo_width()
+        item_x = wrapper.winfo_x()
+        item_width = wrapper.winfo_width()
 
         item_left = item_x
         item_right = item_x + item_width
