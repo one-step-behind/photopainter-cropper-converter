@@ -205,20 +205,25 @@ You can create a standalone executable with pyinstaller:
 
 ```bash
 # build executable first time and auto-generate `.spec` file
-pyinstaller --onefile --windowed -i='.\_source\icon.ico' --add-data "_source/icon.ico;_source" --name "PhotoPainterCropper" ".\photo_painter_cropper.py"
+pyinstaller --onefile --windowed -i='.\_source\icon.ico' --add-data "_source/icon.ico;_source" --add-data "_source/icon.png;_source" --name "PhotoPainterCropper" ".\photo_painter_cropper.py"
 # later you can run compilation with just:
 pyinstaller PhotoPainterCropper.spec
 ```
 
 ### Linux
 
+Don't use the flatpak version. Install from https://code.visualstudio.com/docs/?dv=linux64_deb
+
 ```bash
+# The virtual environment was not created successfully because ensurepip is not available. On Debian/Ubuntu systems, you need to install the python3-venv package using the following command.
+(optional) sudo apt install python3.12-venv
+# if module tkinter not found, install python tk, if missing
+(optional) sudo apt-get install python3-tk
+
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install --upgrade pip
 pip install -r requirements.txt
-# if module tkinter not found, install python tk, if missing
-(optional) sudo apt-get install python3-tk
 # run script
 python3 photo_painter_cropper.py
 ```
