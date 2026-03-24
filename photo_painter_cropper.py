@@ -60,13 +60,15 @@ available_option:dict = {
 
 text_overlay_defaults: dict = {
     "show": False,
-    "text": "Enter your text",
+    "text": "Sample text",
     "text_color": "#ffffff",
     "bg_color": "#6f6311",
-    "bottom": 350,
-    "right": 650,
-    "font_scale_height": 400,
-    "font_scale_divisor": 30,
+    "bottom": 0,
+    "right": 0,
+    "font_divisor": 30.0, # a 30th of the display height
+    "min_font_size": 8,
+    "max_font_size": 96,
+    "image_dpi_scale": 1.0,
 }
 
 FILELIST_FILENAME: str = "fileList.txt"
@@ -961,10 +963,23 @@ class CropperApp:
         # set new data for text_overlay
         if self.text_overlay is not None and self.image_preferences["text_overlay"]["show"] is True:
             self.canvas.tag_raise("text_layer")
-            x1i, y1i, x2i, y2i = self.rect_coords()
-            # print("COORDS", x1i, y1i, x2i, y2i)
-            self.text_overlay.set_position(bottom=y2i, right=x2i)
-            self.text_overlay.set_font_scale_height(x2i - x1i)
+            # Position text overlay for visual feedback on canvas (always bottom-right relative to crop rectangle)
+            x1c, y1c, x2c, y2c = self.rect_coords()
+            self.text_overlay.set_position(bottom=y2c, right=x2c)
+
+            # Compute text size based on final target size (min short side / font_divisor).
+            # This makes landscape and portrait consistent (same proportion).
+            font_divisor = float(self.image_preferences.get("text_overlay", {}).get("font_divisor", text_overlay_defaults["font_divisor"]))
+            font_divisor = max(1.0, font_divisor)
+            raw_target_text_px = min(self.target_size[0], self.target_size[1]) / font_divisor
+
+            crop_display_width = max(1.0, x2c - x1c)
+            target_w = max(1.0, self.target_size[0])
+            preview_text_px = raw_target_text_px * (crop_display_width / target_w)
+
+            preview_text_px = max(1.0, min(256.0, preview_text_px))
+            self.text_overlay.set_font_divisor(font_divisor)
+            self.text_overlay.set_font_px(raw_target_text_px, preview_text_px)
 
     # ---------- Mouse actions ----------
     def on_click(self, e) -> None:

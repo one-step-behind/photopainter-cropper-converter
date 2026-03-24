@@ -6,7 +6,7 @@ class CanvasTextOverlay:
         """
         :param control_frame: tk.Frame where controls (checkbox, entry, color buttons) will be placed
         :param canvas_frame: tk.Canvas where the text_label will be placed
-        :param initial_state: dict with keys: show, text, text_color, bg_color, bottom, right, font_scale_height
+        :param initial_state: dict with keys: show, text, text_color, bg_color, bottom, right, font_divisor, min_font_size, max_font_size, image_dpi_scale
         :param callback: function called when any property changes; receives dict with same keys as initial_state
         """
         self.control_frame = control_frame
@@ -18,35 +18,27 @@ class CanvasTextOverlay:
         self.padding_x = 10 # left, right
         self.padding_y = 5 # top, bottom
 
+        # Get system DPI dynamically from Tkinter
+        # winfo_fpixels('1p') returns the point-to-pixel conversion for the current system
+        self.system_dpi_scale = self.canvas.winfo_fpixels('1p')
+        print(f"System DPI scale detected: {self.system_dpi_scale:.3f} (Tkinter winfo_fpixels)")
 
-        # Default initial state
-        self.default_state = {
-            "show": False,
-            "text": "Sample text",
-            "text_color": "#ffffff",
-            "bg_color": "#6f6311",
-            "bottom": 10,
-            "right": 10,
-            "font_scale_height": 100,
-            "font_scale_divisor": 30,
-            "min_font_size": 8,
-            "max_font_size": 96,
-        }
-
-        if initial_state:
-            self.default_state.update(initial_state)
+        # State from initial_state
+        self.state = initial_state.copy() if initial_state else {}
 
         # State variables
-        self.show_var = tk.BooleanVar(value=self.default_state["show"])
-        self.text_var = tk.StringVar(value=self.default_state["text"])
-        self.text_color = self.default_state["text_color"]
-        self.bg_color = self.default_state["bg_color"]
-        self.bottom = self.default_state["bottom"]
-        self.right = self.default_state["right"]
-        self.font_scale_height = self.default_state["font_scale_height"]
-        self.font_scale_divisor = self.default_state["font_scale_divisor"]
-        self.min_font_size = self.default_state["min_font_size"]
-        self.max_font_size = self.default_state["max_font_size"]
+        self.show_var = tk.BooleanVar(value=self.state.get("show", False))
+        self.text_var = tk.StringVar(value=self.state.get("text", "Sample text"))
+        self.text_color = self.state.get("text_color", "#ffffff")
+        self.bg_color = self.state.get("bg_color", "#6f6311")
+        self.bottom = self.state.get("bottom", 0)
+        self.right = self.state.get("right", 0)
+        self.font_divisor = self.state.get("font_divisor", 30.0)
+        self.font_target_height = 0.0
+        self.font_preview_height = 0.0
+        self.min_font_size = self.state.get("min_font_size", 8)
+        self.max_font_size = self.state.get("max_font_size", 96)
+        self.image_dpi_scale = self.state.get("image_dpi_scale", 1.0)
 
         # Font configuration
         self.font_face = "Segoe UI"
@@ -62,8 +54,8 @@ class CanvasTextOverlay:
             font=self.font,
             fg=self.text_color,
             bg=self.bg_color,
-            padx=self.padding_x,
-            pady=self.padding_y,
+            padx=int(self.padding_x * self.system_dpi_scale),
+            pady=int(self.padding_y * self.system_dpi_scale),
         )
         self.text_window = self.canvas.create_window(
             self.right,
@@ -160,6 +152,10 @@ class CanvasTextOverlay:
         self.set_show(payload["show"])
         self.set_text(payload["text"])
         self.set_colors(text_color = payload["text_color"], bg_color=payload["bg_color"])
+        if "font_divisor" in payload:
+            self.set_font_divisor(payload["font_divisor"])
+        if "image_dpi_scale" in payload:
+            self.set_image_dpi_scale(payload["image_dpi_scale"])
 
     def set_text(self, text):
         self.text_var.set(text)
@@ -184,14 +180,26 @@ class CanvasTextOverlay:
             self.right = right
         self.canvas.coords(self.text_window, self.right, self.bottom)
 
-    def set_font_scale_height(self, height):
-        self.font_scale_height = height
+    def set_font_divisor(self, divisor):
+        """Set relative divisor: target text px = min(target_w,target_h)/divisor."""
+        self.font_divisor = float(max(1.0, divisor))
+
+    def set_font_px(self, target_px, preview_px):
+        self.font_target_height = float(max(1.0, target_px))
+        self.font_preview_height = float(max(1.0, preview_px))
         self.update_font()
 
+    def set_image_dpi_scale(self, scale):
+        """Adjust the DPI scale factor for image rendering (0.8-1.5 typical range)"""
+        self.image_dpi_scale = scale
+
     def update_font(self):
-        if self.font_scale_height > 0:
-            size = int(max(self.min_font_size, min(self.max_font_size, self.font_scale_height // self.font_scale_divisor)))
-            self.font.configure(size=size)
+        if self.font_preview_height > 0:
+            # Convert absolute preview pixel size to font points using system DPI
+            pts_float = self.font_preview_height / self.system_dpi_scale
+            pts = int(max(self.min_font_size, min(self.max_font_size, round(pts_float))))
+            self.font.configure(size=pts)
+            print(f"Canvas font set to: {pts}pt (preview_px {self.font_preview_height:.2f}, sys_dpi {self.system_dpi_scale:.3f})")
 
     def render_text_overlay_on_image(self, image):
         """
@@ -209,14 +217,10 @@ class CanvasTextOverlay:
         img_width, img_height = image.size
 
         # --------------------------------------------------
-        # Font scaling (image-only)
+        # Font scaling (image-only): use absolute final image pixel height.
         # --------------------------------------------------
-        tk_point_size = max(8, (img_width if img_width < img_height else img_height) // 20)
-
-        # Convert points → pixels (96 DPI assumed)
-        scale = 96 / 72 # 4 / 3
-        image_font_px = int(tk_point_size * scale)
-        print("tk_point_size / image_font_px", tk_point_size, image_font_px)
+        image_font_px = int(max(self.min_font_size, min(self.max_font_size, round(self.font_target_height * self.image_dpi_scale))))
+        print(f"Font scaling: target_px={self.font_target_height:.2f}, final_px={image_font_px}, image_dpi_scale={self.image_dpi_scale:.3f}")
 
         font = ImageFont.truetype(self.pil_font_path, image_font_px)
 
@@ -230,8 +234,8 @@ class CanvasTextOverlay:
         # --------------------------------------------------
         # Padding (derived from font size)
         # --------------------------------------------------
-        padding_x = int(self.padding_x * scale)
-        padding_y = int(self.padding_y * scale)
+        padding_x = int(self.padding_x * self.image_dpi_scale)
+        padding_y = int(self.padding_y * self.image_dpi_scale)
 
         # --------------------------------------------------
         # Measure text
@@ -291,6 +295,6 @@ class CanvasTextOverlay:
                 "bg_color": self.bg_color,
                 "bottom": self.bottom,
                 "right": self.right,
-                "font_scale_height": self.font_scale_height,
-                "font_scale_divisor": self.font_scale_divisor,
+                "font_divisor": self.font_divisor,
+                "image_dpi_scale": self.image_dpi_scale,
             })
