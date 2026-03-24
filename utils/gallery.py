@@ -1,6 +1,7 @@
 import threading
 import tkinter as tk
 import os
+import sys
 from tkinter import ttk
 from PIL import Image, ImageTk
 from typing import Callable, Optional, List
@@ -45,7 +46,8 @@ class AsyncThumbnailGallery(tk.Frame):
         self._load_generation = 0
 
         try:
-            self.sidecar_icon = tk.PhotoImage(file="_source/round_check_mark_16.png")
+            resource_path = os.path.join(os.path.dirname(__file__), "../_source/round_check_mark_16.png") if not hasattr(sys, "frozen") else os.path.join(sys.prefix, "./_source/round_check_mark_16.png")
+            self.sidecar_icon = tk.PhotoImage(file=resource_path)
         except Exception:
             self.sidecar_icon = None  # fail-safe
 

@@ -205,7 +205,7 @@ You can create a standalone executable with pyinstaller:
 
 ```bash
 # build executable first time and auto-generate `.spec` file
-pyinstaller --onefile --windowed -i='.\_source\icon.ico' --add-data "_source/icon.ico;_source" --add-data "_source/icon.png;_source" --name "PhotoPainterCropper" ".\photo_painter_cropper.py"
+pyinstaller --onefile --windowed -i='.\_source\icon.ico' --add-data "_source/icon.ico;_source" --add-data "_source/icon.png;_source" --add-data "_source/round_check_mark_16.png;_source" --name "PhotoPainterCropper" ".\photo_painter_cropper.py"
 # later you can run compilation with just:
 pyinstaller PhotoPainterCropper.spec
 ```
