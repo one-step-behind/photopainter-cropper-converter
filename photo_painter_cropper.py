@@ -12,6 +12,7 @@ from typing import Literal, Optional
 from PIL import Image, ImageTk, ImageFilter, ImageEnhance
 from utils.gallery import AsyncThumbnailGallery
 from utils.textoverlay import CanvasTextOverlay
+from utils.textoverlay_defaults import TEXT_OVERLAY_DEFAULTS
 from utils.tooltip import Hovertip
 from utils.converter import Converter
 
@@ -56,19 +57,6 @@ available_option:dict = {
     "ORIENTATION": ("landscape", "portrait"),
     "FILL_MODE": ("blur", "white", "black"),
     "TARGET_DEVICE": ("acep", "spectra6", "4color"),
-}
-
-text_overlay_defaults: dict = {
-    "show": False,
-    "text": "Sample text",
-    "text_color": "#ffffff",
-    "bg_color": "#6f6311",
-    "bottom": 0,
-    "right": 0,
-    "font_divisor": 30.0, # a 30th of the display height
-    "min_font_size": 8,
-    "max_font_size": 96,
-    "image_dpi_scale": 1.0,
 }
 
 FILELIST_FILENAME: str = "fileList.txt"
@@ -820,7 +808,7 @@ class CropperApp:
     def create_text_overlay(self):
         if self.text_overlay is None:
             # Initialize text overlay
-            self.text_overlay = CanvasTextOverlay(self.options_frame, self.canvas, initial_state=text_overlay_defaults, callback=self.callback_text_overlay)
+            self.text_overlay = CanvasTextOverlay(self.options_frame, self.canvas, callback=self.callback_text_overlay)
 
     def update_app_settings_checkbox(self, name) -> None:
         if name in self.app_settings_checkbox_vars:
@@ -969,7 +957,7 @@ class CropperApp:
 
             # Compute text size based on final target size (min short side / font_divisor).
             # This makes landscape and portrait consistent (same proportion).
-            font_divisor = float(self.image_preferences.get("text_overlay", {}).get("font_divisor", text_overlay_defaults["font_divisor"]))
+            font_divisor = float(self.image_preferences.get("text_overlay", {}).get("font_divisor", TEXT_OVERLAY_DEFAULTS["font_divisor"]))
             font_divisor = max(1.0, font_divisor)
             raw_target_text_px = min(self.target_size[0], self.target_size[1]) / font_divisor
 
@@ -1442,7 +1430,7 @@ class CropperApp:
             self.image_preferences["enhancer_edge"] = self.app_settings["enhancer_edge"]
             self.image_preferences["enhancer_smooth"] = self.app_settings["enhancer_smooth"]
             self.image_preferences["enhancer_sharpen"] = self.app_settings["enhancer_sharpen"]
-            self.image_preferences["text_overlay"] = text_overlay_defaults
+            self.image_preferences["text_overlay"] = TEXT_OVERLAY_DEFAULTS.copy()
             #print("SET DEFAULT IMAGE PREFS", self.image_preferences, "FROM", self.app_settings)
 
         # update button labels
@@ -1469,7 +1457,7 @@ class CropperApp:
                 self.image_preferences[name] = defaults[name.upper()]
 
         if not "text_overlay" in self.image_preferences:
-            self.image_preferences["text_overlay"] = text_overlay_defaults
+            self.image_preferences["text_overlay"] = TEXT_OVERLAY_DEFAULTS.copy()
         else:
             if type(self.image_preferences["text_overlay"]) == str:
                 self.image_preferences["text_overlay"] = eval(self.image_preferences["text_overlay"])

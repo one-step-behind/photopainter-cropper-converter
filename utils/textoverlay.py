@@ -1,44 +1,47 @@
 import tkinter as tk
 from tkinter import ttk, colorchooser, font
+from utils.textoverlay_defaults import TEXT_OVERLAY_DEFAULTS, FONT_DIVISOR_MIN, FONT_DIVISOR_MAX
 
 class CanvasTextOverlay:
-    def __init__(self, control_frame, canvas_frame, initial_state=None, callback=None):
+    def __init__(self, control_frame, canvas_frame, callback=None):
         """
         :param control_frame: tk.Frame where controls (checkbox, entry, color buttons) will be placed
         :param canvas_frame: tk.Canvas where the text_label will be placed
-        :param initial_state: dict with keys: show, text, text_color, bg_color, bottom, right, font_divisor, min_font_size, max_font_size, image_dpi_scale
-        :param callback: function called when any property changes; receives dict with same keys as initial_state
+        :param callback: function called when any property changes; receives dict with the same keys as TEXT_OVERLAY_DEFAULTS
         """
         self.control_frame = control_frame
         self.canvas = canvas_frame
         self.canvas.delete("text_layer")
         self.callback = callback
 
-        self.pil_font_path = "./segoeui.ttf"  # adjust if needed
-        self.padding_x = 10 # left, right
-        self.padding_y = 5 # top, bottom
+        self.pil_font_path = "./segoeui.ttf" # adjust if needed
+        self.padding_x = TEXT_OVERLAY_DEFAULTS["padding_x"]
+        self.padding_y = TEXT_OVERLAY_DEFAULTS["padding_y"]
 
         # Get system DPI dynamically from Tkinter
         # winfo_fpixels('1p') returns the point-to-pixel conversion for the current system
         self.system_dpi_scale = self.canvas.winfo_fpixels('1p')
         print(f"System DPI scale detected: {self.system_dpi_scale:.3f} (Tkinter winfo_fpixels)")
 
-        # State from initial_state
-        self.state = initial_state.copy() if initial_state else {}
+        # State from shared defaults.
+        self.state = TEXT_OVERLAY_DEFAULTS.copy()
 
         # State variables
-        self.show_var = tk.BooleanVar(value=self.state.get("show", False))
-        self.text_var = tk.StringVar(value=self.state.get("text", "Sample text"))
-        self.text_color = self.state.get("text_color", "#ffffff")
-        self.bg_color = self.state.get("bg_color", "#6f6311")
-        self.bottom = self.state.get("bottom", 0)
-        self.right = self.state.get("right", 0)
-        self.font_divisor = self.state.get("font_divisor", 30.0)
+        self.show_var = tk.BooleanVar(value=self.state["show"])
+        self.text_var = tk.StringVar(value=self.state["text"])
+        self.text_color = self.state["text_color"]
+        self.bg_color = self.state["bg_color"]
+        self.bottom = self.state["bottom"]
+        self.right = self.state["right"]
+        self.padding_x = self.state["padding_x"]
+        self.padding_y = self.state["padding_y"]
+        self.font_divisor = self._clamp_font_divisor(self.state["font_divisor"])
         self.font_target_height = 0.0
         self.font_preview_height = 0.0
-        self.min_font_size = self.state.get("min_font_size", 8)
-        self.max_font_size = self.state.get("max_font_size", 96)
-        self.image_dpi_scale = self.state.get("image_dpi_scale", 1.0)
+        self.min_font_size = self.state["min_font_size"]
+        self.max_font_size = self.state["max_font_size"]
+        self.image_dpi_scale = self.state["image_dpi_scale"]
+        self._syncing_slider = False
 
         # Font configuration
         self.font_face = "Segoe UI"
