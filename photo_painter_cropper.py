@@ -318,20 +318,20 @@ class CropperApp:
             "enhancer_edge": {
                 "text": "Edge",
                 "command": lambda e=None: self.update_image_enhancer_checkbox("enhancer_edge"),
-                "enter_tip": "Enhance image by Edgeing (1)",
-                "toggle_key": "<Key-1>",
+                "enter_tip": "Enhance image by Edgeing (Ctrl+1)",
+                "toggle_key": "<Control-Key-1>",
             },
             "enhancer_smooth": {
                 "text": "Smooth",
                 "command": lambda e=None: self.update_image_enhancer_checkbox("enhancer_smooth"),
-                "enter_tip": "Enhance image by Smoothing (2)",
-                "toggle_key": "<Key-2>",
+                "enter_tip": "Enhance image by Smoothing (Ctrl+2)",
+                "toggle_key": "<Control-Key-2>",
             },
             "enhancer_sharpen": {
                 "text": "Sharpen",
                 "command": lambda e=None: self.update_image_enhancer_checkbox("enhancer_sharpen"),
-                "enter_tip": "Enhance image by Sharpening (3)",
-                "toggle_key": "<Key-3>",
+                "enter_tip": "Enhance image by Sharpening (Ctrl+3)",
+                "toggle_key": "<Control-Key-3>",
             },
         }
 
