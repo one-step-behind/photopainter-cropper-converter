@@ -421,7 +421,7 @@ class CropperApp:
 
         if not self.picture_input_folder:
             if not len(self.image_paths):
-                self.window.after(50, self.window.destroy) #quit)
+                self.window.after(50, self.window.destroy)
             return
         else:
             self.img_idx = 0

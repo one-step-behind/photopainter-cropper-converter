@@ -1,5 +1,6 @@
 import threading
 import tkinter as tk
+import os
 from tkinter import ttk
 from PIL import Image, ImageTk
 from typing import Callable, Optional, List
@@ -8,21 +9,17 @@ THUMB_SIZE = 80
 PADDING = 12
 
 class AsyncThumbnailGallery(tk.Frame):
-    thumbs: List[ImageTk.PhotoImage]
-    thumb_labels: List[tk.Label]
-    selected_index: Optional[int]
-
     def __init__(
-            self,
-            parent,
-            image_paths: List[str],
-            *,
-            thumb_size: int = THUMB_SIZE,
-            bg: str = "#222222",
-            image_bg: str = "#333333",
-            selected_bg: str = "#add8e6",
-            on_select: Optional[Callable[[int], None]] = None,
-        ):
+        self,
+        parent,
+        image_paths: List[str],
+        *,
+        thumb_size: int = THUMB_SIZE,
+        bg: str = "#222222",
+        image_bg: str = "#333333",
+        selected_bg: str = "#add8e6",
+        on_select: Optional[Callable[[int], None]] = None,
+    ):
         """
         Horizontally scrollable, async-loading thumbnail gallery.
         
@@ -35,18 +32,22 @@ class AsyncThumbnailGallery(tk.Frame):
 
         self.image_paths: List[str] = image_paths
         self.thumb_size: int = thumb_size
-        self.thumbs = []        # list[PhotoImage]
-        self.thumb_labels = []  # list[Label]
+        self.thumb_wrappers: List[tk.Frame] = []
+        self.thumb_labels: List[tk.Label] = []
+        self.thumb_overlays: List[tk.Label | None] = []
+        self.thumbs: List[ImageTk.PhotoImage] = []
         self.selected_index: Optional[int] = None
         self._auto_select_first = True
-
         self.default_bg = bg
         self.image_bg = image_bg
         self.selected_bg = selected_bg   # light blue, or any highlight color you like
-
         self.on_select = on_select
-
         self._load_generation = 0
+
+        try:
+            self.sidecar_icon = tk.PhotoImage(file="_source/round_check_mark_16.png")
+        except Exception:
+            self.sidecar_icon = None  # fail-safe
 
         # ----------------------------
         # Canvas + inner frame
@@ -104,12 +105,17 @@ class AsyncThumbnailGallery(tk.Frame):
         gen = self._load_generation
         self._auto_select_first = True
 
+        for w in self.thumb_wrappers:
+            w.destroy()
+
         # Clear UI
         for lbl in self.thumb_labels:
             lbl.destroy()
 
-        self.thumbs.clear()
+        self.thumb_wrappers.clear()
         self.thumb_labels.clear()
+        self.thumb_overlays.clear()
+        self.thumbs.clear()
 
         # Reset scroll position
         self.selected_index = None
@@ -196,27 +202,48 @@ class AsyncThumbnailGallery(tk.Frame):
         if index < 0 or index >= len(self.image_paths):
             return
 
+        # wrapper frame so overlay doesn't break grid layout
+        wrapper = tk.Frame(self.inner_frame, bg=self.image_bg, bd=0)
+        wrapper.grid(row=0, column=index, padx=2, pady=2)
+
+        # thumbnail label
         lbl = tk.Label(
-            self.inner_frame,
+            wrapper,
             image=thumb,
             bg=self.image_bg,
             borderwidth=1,
         )
-        lbl.grid(row=0, column=index, padx=2, pady=2)
+        lbl.pack()   # inside wrapper instead of grid()
 
         self.thumbs.append(thumb)
         self.thumb_labels.append(lbl)
 
+        img_path = self.image_paths[index]
+        sidecar = f"{os.path.splitext(img_path)[0]}_ppcrop.txt"
+
+        # sidecar overlay
+        if os.path.exists(sidecar) and self.sidecar_icon:
+            overlay = tk.Label(
+                wrapper,
+                image=self.sidecar_icon,   # transparent PNG
+                bd=0,
+                bg=self.image_bg,
+                borderwidth=1,
+                highlightthickness=1
+            )
+            overlay.place(relx=0.99, rely=0.01, anchor="ne")
+
+        # events stay on label
         lbl.bind("<Button-1>", lambda e, i=index: self.select_index(i, scroll=False))
         lbl.bind("<MouseWheel>", self._on_mouse_wheel)
         lbl.bind("<Button-4>", lambda e: self.canvas.xview_scroll(-1, "units"))
         lbl.bind("<Button-5>", lambda e: self.canvas.xview_scroll(1, "units"))
 
-        # Auto-select first thumbnail exactly once
+        # auto-select first thumbnail after it loads (if enabled)
         if index == 0 and self._auto_select_first:
             self._auto_select_first = False
             self.after(0, lambda: self.select_index(0, scroll=False))
-
+            
     def select_index(self, index: int, scroll: bool = True) -> None:
         if index < 0 or index >= len(self.thumb_labels):
             return
@@ -227,8 +254,7 @@ class AsyncThumbnailGallery(tk.Frame):
 
         # Apply new selection
         self.selected_index = index
-        lbl = self.thumb_labels[index]
-        lbl.config(bg=self.selected_bg)
+        self.thumb_labels[index].config(bg=self.selected_bg)
 
         if scroll:
             self._scroll_index_into_view(index)

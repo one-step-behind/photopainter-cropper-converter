@@ -15,8 +15,9 @@ class CanvasTextOverlay:
         self.callback = callback
 
         self.pil_font_path = "./segoeui.ttf"  # adjust if needed
-        self.padding_x = 10
-        self.padding_y = 5
+        self.padding_x = 10 # left, right
+        self.padding_y = 5 # top, bottom
+
 
         # Default initial state
         self.default_state = {
@@ -94,7 +95,7 @@ class CanvasTextOverlay:
         )
         self.checkbox.pack(fill=tk.X)
 
-        # Text entry
+        # Text field
         ttk.Label(self.control_frame, text="Text:").pack(padx=(10, 2))
         self.entry = ttk.Entry(self.control_frame, textvariable=self.text_var, width=30)
         self.entry.pack()
