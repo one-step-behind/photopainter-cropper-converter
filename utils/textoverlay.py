@@ -95,6 +95,28 @@ class CanvasTextOverlay:
         self.entry = ttk.Entry(self.control_frame, textvariable=self.text_var, width=30)
         self.entry.pack()
 
+        # Text size slider. Higher divisors mean smaller text, so the slider
+        # runs from high to low to make left=smaller and right=bigger.
+        self.slider_label = ttk.Label(self.control_frame, text="Text size")
+        self.slider_label.pack(fill=tk.X)
+        self.slider = tk.Scale(
+            self.control_frame,
+            from_=FONT_DIVISOR_MAX,
+            to=FONT_DIVISOR_MIN,
+            resolution=0.5,
+            orient=tk.HORIZONTAL,
+            showvalue=False,
+            takefocus=0,
+            command=self._on_slider_change,
+        )
+        self.slider.pack(fill=tk.X)
+        self._set_slider_from_divisor(self.font_divisor)
+
+        self.slider_hint_frame = ttk.Frame(self.control_frame)
+        self.slider_hint_frame.pack(fill=tk.X)
+        ttk.Label(self.slider_hint_frame, text="Smaller").pack(side=tk.LEFT)
+        ttk.Label(self.slider_hint_frame, text="Bigger").pack(side=tk.RIGHT)
+
         # Text color button
         self.text_color_btn = ttk.Button(
             self.control_frame,
@@ -127,6 +149,12 @@ class CanvasTextOverlay:
         self.text_label.config(text=self.text_var.get())
         self._trigger_callback()
 
+    def _on_slider_change(self, value):
+        if self._syncing_slider:
+            return
+        self.font_divisor = self._clamp_font_divisor(value)
+        self._trigger_callback()
+
     def _pick_text_color(self):
         color = colorchooser.askcolor(initialcolor=self.text_color)[1]
         if color:
@@ -144,8 +172,19 @@ class CanvasTextOverlay:
     def _update_controls_state(self):
         state = "normal" if self.show_var.get() else "disabled"
         self.entry.config(state=state)
+        self.slider.config(state=state)
         self.text_color_btn.config(state=state)
         self.bg_color_btn.config(state=state)
+
+    def _clamp_font_divisor(self, divisor):
+        return float(min(FONT_DIVISOR_MAX, max(FONT_DIVISOR_MIN, float(divisor))))
+
+    def _set_slider_from_divisor(self, divisor):
+        self._syncing_slider = True
+        try:
+            self.slider.set(self._clamp_font_divisor(divisor))
+        finally:
+            self._syncing_slider = False
 
     # ----------------------
     # Public API
@@ -185,7 +224,9 @@ class CanvasTextOverlay:
 
     def set_font_divisor(self, divisor):
         """Set relative divisor: target text px = min(target_w,target_h)/divisor."""
-        self.font_divisor = float(max(1.0, divisor))
+        self.font_divisor = self._clamp_font_divisor(divisor)
+        if hasattr(self, 'slider'):
+            self._set_slider_from_divisor(self.font_divisor)
 
     def set_font_px(self, target_px, preview_px):
         self.font_target_height = float(max(1.0, target_px))
