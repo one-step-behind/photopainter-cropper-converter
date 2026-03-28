@@ -79,6 +79,7 @@ ARROW_STEP = 1                      # px for step with arrows
 ARROW_STEP_FAST = 10                # px with Shift pressed
 SCALE_FACTOR = 1.01                 # zoom step with normal +/-
 SCALE_FACTOR_FAST = 1.10            # zoom step with Shift
+SCALE_FACTOR_SLOW = 1.002           # zoom step with Ctrl+Shift
 
 LABEL_PADDINGS = (5, 5)
 DEFAULT_TOOLTIP_DELAY = 250
@@ -137,8 +138,8 @@ class CropperApp:
             self.window.iconphoto(False, icon)
 
         self.window.title(f"{APP_TITLE} – "
-            "Drag/Arrows=move (Shift=+fast)  •  "
-            "Scroll/+/-=resize (Shift=+fast)  •  "
+            "Drag/Arrows=move (Shift=fast)  •  "
+            "Scroll/+/-=resize (Shift=fast, Ctrl+Shift=slow)  •  "
             "Esc=skip"
         )
 
@@ -1010,16 +1011,27 @@ class CropperApp:
         self.dragging = False
 
     def on_wheel(self, e) -> None:
-        fast = bool(e.state & 0x0001)  # Shift
-        self.resize_rect_mouse(1 if e.delta > 0 else -1, fast)
+        self.resize_rect_mouse(1 if e.delta > 0 else -1, e.state)
 
     def on_wheel_linux(self, e) -> None:
-        fast = bool(e.state & 0x0001)  # Shift
-        self.resize_rect_mouse(1 if e.num == 4 else -1, fast)
+        self.resize_rect_mouse(1 if e.num == 4 else -1, e.state)
 
-    def resize_rect_mouse(self, direction, fast) -> None:
-        speed = SCALE_FACTOR_FAST if fast else SCALE_FACTOR
-        factor = speed if direction > 0 else (1 / speed)
+    def resize_factor_from_state(self, state: int, direction: int) -> float:
+        shift_pressed = bool(state & 0x0001)
+        ctrl_pressed = bool(state & 0x0004)
+
+        # Ctrl+Shift = precision mode (slow)
+        if shift_pressed and ctrl_pressed:
+            speed = SCALE_FACTOR_SLOW
+        elif shift_pressed:
+            speed = SCALE_FACTOR_FAST
+        else:
+            speed = SCALE_FACTOR
+
+        return speed if direction > 0 else (1 / speed)
+
+    def resize_rect_mouse(self, direction, state) -> None:
+        factor = self.resize_factor_from_state(state, direction)
         self.apply_resize_factor(factor)
 
     # ---------- Keyboard actions ----------
@@ -1036,13 +1048,11 @@ class CropperApp:
         self.draw_crop_marker_grid()
 
     def on_plus(self, e) -> None:
-        fast = bool(e.state & 0x0001) # Shift accelerates
-        factor = SCALE_FACTOR_FAST if fast else SCALE_FACTOR
+        factor = self.resize_factor_from_state(e.state, 1)
         self.apply_resize_factor(factor)
 
     def on_minus(self, e) -> None:
-        fast = bool(e.state & 0x0001) # Shift accelerates
-        factor = (1 / SCALE_FACTOR_FAST) if fast else (1 / SCALE_FACTOR)
+        factor = self.resize_factor_from_state(e.state, -1)
         self.apply_resize_factor(factor)
 
     def apply_resize_factor(self, factor) -> None:
