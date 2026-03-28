@@ -20,6 +20,7 @@ class AsyncThumbnailGallery(tk.Frame):
         image_bg: str = "#333333",
         selected_bg: str = "#add8e6",
         on_select: Optional[Callable[[int], None]] = None,
+        on_layout_change: Optional[Callable[[], None]] = None,
     ):
         """
         Horizontally scrollable, async-loading thumbnail gallery.
@@ -43,6 +44,7 @@ class AsyncThumbnailGallery(tk.Frame):
         self.image_bg = image_bg
         self.selected_bg = selected_bg   # light blue, or any highlight color you like
         self.on_select = on_select
+        self.on_layout_change = on_layout_change
         self._load_generation = 0
 
         try:
@@ -323,6 +325,7 @@ class AsyncThumbnailGallery(tk.Frame):
         # Update scrollbar position
         self.scrollbar.set(first, last)
         scrollable = not (first_f <= 0.0 and last_f >= 1.0)
+        visibility_changed = scrollable != self._scrollable
         self._scrollable = scrollable
 
         # Auto-hide logic
@@ -332,3 +335,6 @@ class AsyncThumbnailGallery(tk.Frame):
         else:
             if self.scrollbar.winfo_ismapped():
                 self.scrollbar.pack_forget()
+
+        if visibility_changed and self.on_layout_change:
+            self.after_idle(self.on_layout_change)

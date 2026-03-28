@@ -121,6 +121,7 @@ class CropperApp:
 
         # ---------- UI ----------
         self._resize_pending = False
+        self._gallery_layout_pending = False
         self._slider_update_pending = None
         self.window = window
         self.window.geometry(f"{self.app_settings['last_window_size'][0]}x{self.app_settings['last_window_size'][1]}")
@@ -446,7 +447,14 @@ class CropperApp:
 
         # Load async gallery
         if self.gallery is None:
-            self.gallery = AsyncThumbnailGallery(window, self.image_paths, selected_bg=HIGHLIGHT_COLOR, image_bg=BORDER_COLOR, on_select=lambda index: self.set_image_index(index))
+            self.gallery = AsyncThumbnailGallery(
+                window,
+                self.image_paths,
+                selected_bg=HIGHLIGHT_COLOR,
+                image_bg=BORDER_COLOR,
+                on_select=lambda index: self.set_image_index(index),
+                on_layout_change=self.on_gallery_layout_change,
+            )
             self.gallery.pack(fill=tk.X, padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1])
         else:
             self.gallery.set_images(self.image_paths)
@@ -1050,6 +1058,18 @@ class CropperApp:
             self.image_id = None
             self.canvas.delete("image_layer")
             self.window.after(30, self._apply_window_resize)
+
+    def on_gallery_layout_change(self) -> None:
+        if self.original_img is None or self._gallery_layout_pending:
+            return
+
+        self._gallery_layout_pending = True
+        self.window.after(30, self._apply_gallery_layout_change)
+
+    def _apply_gallery_layout_change(self) -> None:
+        self._gallery_layout_pending = False
+        self.width, self.height = self.window.winfo_width(), self.window.winfo_height()
+        self._apply_window_resize()
 
     def _apply_window_resize(self) -> None:
         """
