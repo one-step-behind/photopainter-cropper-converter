@@ -118,21 +118,23 @@ class CanvasTextOverlay:
         ttk.Label(self.slider_hint_frame, text="Smaller").pack(side=tk.LEFT)
         ttk.Label(self.slider_hint_frame, text="Bigger").pack(side=tk.RIGHT)
 
-        # Text color button
+        self.color_button_row = ttk.Frame(self.control_frame)
+        self.color_button_row.pack(fill=tk.X, padx=5)
+
+        # Text and background color buttons share one row.
         self.text_color_btn = ttk.Button(
-            self.control_frame,
+            self.color_button_row,
             text="Text color",
             command=self._pick_text_color
         )
-        self.text_color_btn.pack(padx=5)
+        self.text_color_btn.pack(side=tk.LEFT)
 
-        # Background color button
         self.bg_color_btn = ttk.Button(
-            self.control_frame,
+            self.color_button_row,
             text="Background color",
             command=self._pick_bg_color
         )
-        self.bg_color_btn.pack()
+        self.bg_color_btn.pack(side=tk.RIGHT)
 
         # Keyboard shortcut: Ctrl+B opens background color picker.
         bind_toggle_keys(
