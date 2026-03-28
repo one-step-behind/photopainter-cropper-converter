@@ -50,6 +50,8 @@ defaults:dict = {
     "STATE_SUFFIX": "_ppcrop.txt",
     "EXPORT_RAW": False,
     "SAVE_FILELIST": True,
+    "SAVE_CANVAS_ZOOM": True,
+    "CANVAS_ZOOM": 1.0,
     "GRID_COLOR":"#00ff00",
     "EXIT_AFTER_LAST_IMAGE": True,
 }
@@ -194,6 +196,12 @@ class CropperApp:
                 "command": lambda e=None: self.update_app_settings_checkbox("save_filelist"),
                 "enter_tip": "Saves file list of existing images on app exit\nto fileList.txt in export folder(s)\n(landscape & portrait) (Ctrl+Shift+S)",
                 "toggle_key": ("<Control-Shift-s>", "<Control-Shift-S>"),
+            },
+            "save_canvas_zoom": {
+                "text": "Remember canvas zoom",
+                "command": lambda e=None: self.update_app_settings_checkbox("save_canvas_zoom"),
+                "enter_tip": "Saves and restores the current canvas zoom\nvalue in settings.ini between app restarts.\n(Ctrl+Shift+Z)",
+                "toggle_key": ("<Control-Shift-z>", "<Control-Shift-Z>"),
             },
             "exit_after_last_image": {
                 "text": "Exit after last image",
@@ -384,7 +392,6 @@ class CropperApp:
         self.rect_h: int = 0
         self.rect_center: tuple[int, int] = (0, 0)
         self.rect_img_raw: Optional[tuple[float, float, float, float]] = None
-        self.canvas_zoom: float = 1.0
         self.dragging: bool = False
         self.drag_offset: tuple[int, int] = (0, 0)
 
@@ -819,6 +826,9 @@ class CropperApp:
         if name in self.app_settings_checkbox_vars:
             self.app_settings[name] = False if self.app_settings[name] == True else True
             self.app_settings_checkbox_vars[name].set(self.app_settings[name])
+
+            if name == "save_canvas_zoom":
+                pass  # canvas_zoom is already live in self.app_settings["canvas_zoom"]
             
             self.window.after_idle(self.update_image_in_canvas)
         else:
@@ -845,7 +855,7 @@ class CropperApp:
         cw, ch = self.canvas_size()
         iw, ih = self.original_img.size
         fit_scale = min(cw / iw, ch / ih)
-        self.scale = fit_scale * self.canvas_zoom
+        self.scale = fit_scale * self.app_settings["canvas_zoom"]
         disp_w = max(1, int(iw * self.scale))
         disp_h = max(1, int(ih * self.scale))
         self.disp_size = (disp_w, disp_h)
@@ -1042,14 +1052,14 @@ class CropperApp:
             return
 
         if direction > 0:
-            new_zoom = min(1.0, self.canvas_zoom * CANVAS_ZOOM_STEP)
+            new_zoom = min(1.0, self.app_settings["canvas_zoom"] * CANVAS_ZOOM_STEP)
         else:
-            new_zoom = max(CANVAS_ZOOM_MIN, self.canvas_zoom / CANVAS_ZOOM_STEP)
+            new_zoom = max(CANVAS_ZOOM_MIN, self.app_settings["canvas_zoom"] / CANVAS_ZOOM_STEP)
 
-        if abs(new_zoom - self.canvas_zoom) < 1e-9:
+        if abs(new_zoom - self.app_settings["canvas_zoom"]) < 1e-9:
             return
 
-        self.canvas_zoom = new_zoom
+        self.app_settings["canvas_zoom"] = round(new_zoom, 4)
         self._apply_window_resize()
 
     def resize_factor_from_state(self, state: int, direction: int) -> float:
@@ -1423,6 +1433,8 @@ class CropperApp:
             settings["state_suffix"]=defaults["STATE_SUFFIX"]
             settings["export_raw"]=defaults["EXPORT_RAW"]
             settings["save_filelist"]=defaults["SAVE_FILELIST"]
+            settings["save_canvas_zoom"]=defaults["SAVE_CANVAS_ZOOM"]
+            settings["canvas_zoom"]=defaults["CANVAS_ZOOM"]
             settings["exit_after_last_image"]=defaults["EXIT_AFTER_LAST_IMAGE"]
 
             #print("APP Settings from DEFAULTS", settings)
@@ -1438,27 +1450,39 @@ class CropperApp:
 
                     k, v = line.split("=", 1)
                     k = k.strip()
-                    v = v.strip()
+                    v_str = v.strip()
 
-                    # convert values to their real counterparts (bool, int, size)
-                    if v == "True" or v == "False":
-                        v = eval(v)
-                    if re.match("^\\d+$", str(v)):
-                        v = int(v)
-                    if re.match("^(\\d+)x(\\d+)$", str(v)):
-                        v = tuple(int(item) if item.isdigit() else item for item in v.split("x"))
+                    # convert values to their real counterparts (bool, int, float, size)
+                    if v_str == "True" or v_str == "False":
+                        v = eval(v_str)
+                    elif re.match("^\\d+$", v_str):
+                        v = int(v_str)
+                    elif re.match("^\\d+\\.\\d+$", v_str):
+                        v = float(v_str)
+                    elif re.match("^(\\d+)x(\\d+)$", v_str):
+                        v = tuple(int(item) if item.isdigit() else item for item in v_str.split("x"))
+                    else:
+                        v = v_str
 
                     settings[k] = v
         except Exception:
             return settings
 
-        # window_min and image_target_size needs to be in format: 1024x768 (2-4 digits each)
+        # window_min, last_window_size and image_target_size needs to be in format: 1024x768 (2-4 digits each)
         needs_tuple = ("window_min", "last_window_size", "image_target_size")
         r = re.compile("^(\\d{2,4})x(\\d{2,4})$")
         # if still no tuple or not matching
         for need in needs_tuple:
             if not need in settings or not type(settings[need]) == tuple or (type(settings[need]) == tuple and not r.match(str(f"{settings[need][0]}x{settings[need][1]}"))):
                 settings[need] = defaults[need.upper()]
+
+        if not isinstance(settings.get("save_canvas_zoom"), bool):
+            settings["save_canvas_zoom"] = defaults["SAVE_CANVAS_ZOOM"]
+
+        if not isinstance(settings.get("canvas_zoom"), (int, float)):
+            settings["canvas_zoom"] = defaults["CANVAS_ZOOM"]
+
+        settings["canvas_zoom"] = max(CANVAS_ZOOM_MIN, min(1.0, float(settings["canvas_zoom"])))
         
         #print("Loaded APP Settings from file:", settings)
         return settings
@@ -1466,10 +1490,13 @@ class CropperApp:
     def save_app_settings(self) -> str | None:
         settings_path = "./settings.ini"
 
+        self.app_settings["canvas_zoom"] = round(self.app_settings["canvas_zoom"], 2) if self.app_settings["save_canvas_zoom"] else defaults["CANVAS_ZOOM"]
+
         # convert tuples to strings
-        self.app_settings["window_min"] = f"{self.app_settings['window_min'][0]}x{self.app_settings['window_min'][1]}"
-        self.app_settings["last_window_size"] = f"{self.app_settings['last_window_size'][0]}x{self.app_settings['last_window_size'][1]}"
-        self.app_settings["image_target_size"] = f"{self.app_settings['image_target_size'][0]}x{self.app_settings['image_target_size'][1]}"
+        # window_min, last_window_size and image_target_size needs to be in format: 1024x768 (2-4 digits each)
+        needs_tuple = ("window_min", "last_window_size", "image_target_size")
+        for need in needs_tuple:
+            self.app_settings[need] = f"{self.app_settings[need][0]}x{self.app_settings[need][1]}"
 
         lines = "\n".join(f"{k}={v}" for k, v in self.app_settings.items())
 
