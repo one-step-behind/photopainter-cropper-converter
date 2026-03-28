@@ -380,6 +380,7 @@ class CropperApp:
         self.rect_w: int = 0
         self.rect_h: int = 0
         self.rect_center: tuple[int, int] = (0, 0)
+        self.rect_img_raw: Optional[tuple[float, float, float, float]] = None
         self.dragging: bool = False
         self.drag_offset: tuple[int, int] = (0, 0)
 
@@ -880,6 +881,18 @@ class CropperApp:
         cy = self.img_off[1] + dh // 2
         self.rect_center = (cx, cy)
         self.clamp_crop_rectangle_to_canvas()
+        self.sync_rect_image_coords_from_display()
+
+    def sync_rect_image_coords_from_display(self) -> tuple[float, float, float, float]:
+        x1d, y1d, x2d, y2d = self.rect_coords()
+        ox, oy = self.img_off
+        self.rect_img_raw = (
+            (x1d - ox) / self.scale,
+            (y1d - oy) / self.scale,
+            (x2d - ox) / self.scale,
+            (y2d - oy) / self.scale,
+        )
+        return self.rect_img_raw
 
     def rect_coords(self) -> tuple[int, int, int, int]:
         cx, cy = self.rect_center
@@ -981,6 +994,7 @@ class CropperApp:
         else:
             self.rect_center = (e.x, e.y)
             self.clamp_crop_rectangle_to_canvas()
+            self.sync_rect_image_coords_from_display()
             self.draw_crop_marker_grid()
 
     def on_drag(self, e) -> None:
@@ -989,6 +1003,7 @@ class CropperApp:
 
         self.rect_center = (e.x - self.drag_offset[0], e.y - self.drag_offset[1])
         self.clamp_crop_rectangle_to_canvas()
+        self.sync_rect_image_coords_from_display()
         self.draw_crop_marker_grid()
 
     def on_release(self, _e) -> None:
@@ -1017,6 +1032,7 @@ class CropperApp:
         step = ARROW_STEP_FAST if (e.state & 0x0001) else ARROW_STEP # Shift accelerates
         self.rect_center = (self.rect_center[0] + dx*step, self.rect_center[1] + dy*step)
         self.clamp_crop_rectangle_to_canvas()
+        self.sync_rect_image_coords_from_display()
         self.draw_crop_marker_grid()
 
     def on_plus(self, e) -> None:
@@ -1037,6 +1053,7 @@ class CropperApp:
         self.rect_w = new_w
         self.rect_h = int(self.rect_w / self.ratio)
         self.clamp_crop_rectangle_to_canvas()
+        self.sync_rect_image_coords_from_display()
         self.draw_crop_marker_grid()
 
     def on_window_resize(self, event) -> None:
@@ -1093,10 +1110,12 @@ class CropperApp:
         self._resize_pending = False
 
     def calculate_display_coordiantes(self, x1i, y1i, x2i, y2i) -> tuple[int,  int, int, int]:
-        x1d = self.img_off[0] + int(x1i * self.scale)
-        y1d = self.img_off[1] + int(y1i * self.scale)
-        x2d = self.img_off[0] + int(x2i * self.scale)
-        y2d = self.img_off[1] + int(y2i * self.scale)
+        self.rect_img_raw = (float(x1i), float(y1i), float(x2i), float(y2i))
+
+        x1d = self.img_off[0] + int(round(x1i * self.scale))
+        y1d = self.img_off[1] + int(round(y1i * self.scale))
+        x2d = self.img_off[0] + int(round(x2i * self.scale))
+        y2d = self.img_off[1] + int(round(y2i * self.scale))
 
         # reconstruct rectangle while maintaining a fixed ratio
         w = x2d - x1d
@@ -1104,7 +1123,7 @@ class CropperApp:
 
         # ensure based on ratio
         if abs(w / h - self.ratio) > 0.001:
-            h = int(w / self.ratio)
+            h = int(round(w / self.ratio))
 
         self.rect_w = w
         self.rect_h = h
@@ -1148,6 +1167,7 @@ class CropperApp:
         self.update_status_label() # after orientation toggle
         self.update_button_text("orientation", self.image_preferences["orientation"])
         self.clamp_crop_rectangle_to_canvas()
+        self.sync_rect_image_coords_from_display()
         self.draw_crop_marker_grid()
 
         #self.canvas.tag_raise("crop_layer")
@@ -1187,14 +1207,10 @@ class CropperApp:
         Converts rectangle (display) -> ORIGINAL image coordinates
         without clamping: they can be negative or > size (out-of-bounds).
         """
-        x1d, y1d, x2d, y2d = self.rect_coords()
-        ox, oy = self.img_off
-        x1i = (x1d - ox) / self.scale
-        y1i = (y1d - oy) / self.scale
-        x2i = (x2d - ox) / self.scale
-        y2i = (y2d - oy) / self.scale
+        if self.rect_img_raw is None:
+            return self.sync_rect_image_coords_from_display()
 
-        return (x1i, y1i, x2i, y2i)
+        return self.rect_img_raw
 
     # ---------- Crop & Save ----------
     def on_confirm(self, _e=None) -> None:
