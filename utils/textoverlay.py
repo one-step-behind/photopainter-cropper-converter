@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, colorchooser, font
 from utils.textoverlay_defaults import TEXT_OVERLAY_DEFAULTS, FONT_DIVISOR_MIN, FONT_DIVISOR_MAX
+from utils.keybinds import bind_toggle_keys
 
 class CanvasTextOverlay:
     def __init__(self, control_frame, canvas_frame, callback=None):
@@ -133,6 +134,13 @@ class CanvasTextOverlay:
         )
         self.bg_color_btn.pack()
 
+        # Keyboard shortcut: Ctrl+B opens background color picker.
+        bind_toggle_keys(
+            self.control_frame.winfo_toplevel(),
+            {"toggle_key": ("<Control-b>", "<Control-B>")},
+            self._on_bg_color_shortcut,
+        )
+
         # Initial state
         self._update_controls_state()
 
@@ -168,6 +176,11 @@ class CanvasTextOverlay:
             self.bg_color = color
             self.text_label.config(bg=color)
             self._trigger_callback()
+
+    def _on_bg_color_shortcut(self, _event=None):
+        if str(self.bg_color_btn.cget("state")) != "disabled":
+            self.bg_color_btn.invoke()
+        return "break"
 
     def _update_controls_state(self):
         state = "normal" if self.show_var.get() else "disabled"

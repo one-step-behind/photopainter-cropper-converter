@@ -15,6 +15,7 @@ from utils.textoverlay import CanvasTextOverlay
 from utils.textoverlay_defaults import TEXT_OVERLAY_DEFAULTS
 from utils.tooltip import Hovertip
 from utils.converter import Converter
+from utils.keybinds import bind_toggle_keys
 
 # Try to import pillow-heif for HEIC support
 try:
@@ -595,15 +596,6 @@ class CropperApp:
             troughcolor=[("active", HIGHLIGHT_COLOR)],
         )
 
-
-    def bind_toggle_keys(self, info, command=None):
-        if "toggle_key" in info:
-            if type(info["toggle_key"]) == str:
-                self.window.bind(info["toggle_key"], command if command else info["command"])
-            elif type(info["toggle_key"]) == tuple:
-                for bind_key in info["toggle_key"]:
-                    self.window.bind(bind_key, command if command else info["command"])
-
     def create_buttons(self, target, button_definition, side: Literal["left", "right", "top", "bottom"]=tk.LEFT) -> None:
         """
         Docstring für create_buttons
@@ -666,7 +658,7 @@ class CropperApp:
             if "enter_tip" in info:
                 Hovertip(btn, info["enter_tip"], hover_delay=DEFAULT_TOOLTIP_DELAY)
 
-            self.bind_toggle_keys(info)
+            bind_toggle_keys(self.window, info)
 
     def update_button_text(self, button_name, extra_text) -> None:
         """
@@ -713,7 +705,7 @@ class CropperApp:
                 if "enter_tip" in info:
                     Hovertip(slider, info["enter_tip"], hover_delay=DEFAULT_TOOLTIP_DELAY)
 
-                self.bind_toggle_keys(info)
+                bind_toggle_keys(self.window, info)
 
         # AFTER all sliders exist → update their labels correctly
         for name, slider in self.image_enhancer_sliders.items():
@@ -757,7 +749,7 @@ class CropperApp:
                 if "enter_tip" in info:
                     Hovertip(checkbox, info["enter_tip"], hover_delay=DEFAULT_TOOLTIP_DELAY)
 
-                self.bind_toggle_keys(info)
+                bind_toggle_keys(self.window, info)
 
         # AFTER all checkboxes exist → update their values
         for name, checkbox in self.image_enhancer_checkboxes.items():
@@ -798,7 +790,7 @@ class CropperApp:
                 if "enter_tip" in info:
                     Hovertip(checkbox, info["enter_tip"], hover_delay=DEFAULT_TOOLTIP_DELAY)
 
-                self.bind_toggle_keys(info)
+                bind_toggle_keys(self.window, info)
 
         # AFTER all checkboxes exist → update their values
         for name, checkbox in self.app_settings_checkboxes.items():
