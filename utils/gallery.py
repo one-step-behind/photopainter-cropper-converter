@@ -159,7 +159,7 @@ class AsyncThumbnailGallery(tk.Frame):
         img = self.load_image_by_exiforient(path) # EXIF auto-rotate
         bg = Image.new("RGBA", (self.thumb_size, self.thumb_size), self.default_bg)
 
-        img.thumbnail((self.thumb_size, self.thumb_size), Image.LANCZOS)
+        img.thumbnail((self.thumb_size, self.thumb_size), Image.Resampling.LANCZOS)
 
         x = (self.thumb_size - img.width) // 2
         y = (self.thumb_size - img.height) // 2
