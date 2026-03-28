@@ -121,7 +121,6 @@ class CropperApp:
 
         # ---------- UI ----------
         self._resize_pending = False
-        self._gallery_layout_pending = False
         self._slider_update_pending = None
         self.window = window
         self.window.geometry(f"{self.app_settings['last_window_size'][0]}x{self.app_settings['last_window_size'][1]}")
@@ -860,6 +859,7 @@ class CropperApp:
             #print("UPDATE CREATE")
         else: # Update the existing canvas
             self.canvas.itemconfig(self.image_id, image=self.tk_img)#, tags="image_layer")
+            self.canvas.coords(self.image_id, self.img_off[0], self.img_off[1])
             #print("UPDATE ITEMCONFIG")
 
         self._slider_update_pending = None
@@ -1077,14 +1077,11 @@ class CropperApp:
             self.window.after(30, self._apply_window_resize)
 
     def on_gallery_layout_change(self) -> None:
-        if self.original_img is None or self._gallery_layout_pending:
+        if self.original_img is None:
             return
 
-        self._gallery_layout_pending = True
-        self.window.after(30, self._apply_gallery_layout_change)
-
-    def _apply_gallery_layout_change(self) -> None:
-        self._gallery_layout_pending = False
+        # Apply synchronously after Tk has processed scrollbar geometry.
+        self.window.update_idletasks()
         self.width, self.height = self.window.winfo_width(), self.window.winfo_height()
         self._apply_window_resize()
 
