@@ -98,7 +98,8 @@ class CanvasTextOverlay:
 
         # Text size slider. Higher divisors mean smaller text, so the slider
         # runs from high to low to make left=smaller and right=bigger.
-        self.slider_label = ttk.Label(self.control_frame, text="Text size")
+        self.slider_label_var = tk.StringVar()
+        self.slider_label = ttk.Label(self.control_frame, textvariable=self.slider_label_var)
         self.slider_label.pack(fill=tk.X)
         self.slider = tk.Scale(
             self.control_frame,
@@ -112,6 +113,7 @@ class CanvasTextOverlay:
         )
         self.slider.pack(fill=tk.X)
         self._set_slider_from_divisor(self.font_divisor)
+        self._update_slider_label(self.font_divisor)
 
         self.slider_hint_frame = ttk.Frame(self.control_frame)
         self.slider_hint_frame.pack(fill=tk.X)
@@ -163,6 +165,7 @@ class CanvasTextOverlay:
         if self._syncing_slider:
             return
         self.font_divisor = self._clamp_font_divisor(value)
+        self._update_slider_label(self.font_divisor)
         self._trigger_callback()
 
     def _pick_text_color(self):
@@ -197,9 +200,14 @@ class CanvasTextOverlay:
     def _set_slider_from_divisor(self, divisor):
         self._syncing_slider = True
         try:
-            self.slider.set(self._clamp_font_divisor(divisor))
+            clamped = self._clamp_font_divisor(divisor)
+            self.slider.set(clamped)
+            self._update_slider_label(clamped)
         finally:
             self._syncing_slider = False
+
+    def _update_slider_label(self, divisor):
+        self.slider_label_var.set(f"Text size: {float(divisor):.1f}")
 
     # ----------------------
     # Public API
