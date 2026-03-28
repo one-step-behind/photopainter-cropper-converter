@@ -2,12 +2,12 @@ TEXT_OVERLAY_DEFAULTS: dict = {
     "show": False,
     "text": "Sample text",
     "text_color": "#ffffff",
-    "bg_color": "#6f6311",
+    "bg_color": "#000000",
     "bottom": 0,
     "right": 0,
-    "padding_x": 10, # left, right
-    "padding_y": 5, # top, bottom
-    "font_divisor": 16.0,
+    "padding_x": 12, # left, right
+    "padding_y": 3, # top, bottom
+    "font_divisor": 26.0,
     "min_font_size": 8,
     "max_font_size": 96,
     "image_dpi_scale": 1.0,

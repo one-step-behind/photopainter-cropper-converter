@@ -128,10 +128,10 @@ class CropperApp:
 
         # set window icon
         if (sys.platform.startswith("win")):
-            resource_path = os.path.join(os.path.dirname(__file__), "./_source/icon.ico") if not hasattr(sys, "frozen") else os.path.join(sys.prefix, "./_source/icon.ico")
+            resource_path = os.path.join(os.path.dirname(__file__), "../_source/icon.ico") if not hasattr(sys, "frozen") else os.path.join(sys.prefix, "./_source/icon.ico")
             self.window.iconbitmap(default=resource_path)
         else:
-            resource_path = os.path.join(os.path.dirname(__file__), "./_source/icon.png") if not hasattr(sys, "frozen") else os.path.join(sys.prefix, "./_source/icon.png")
+            resource_path = os.path.join(os.path.dirname(__file__), "../_source/icon.png") if not hasattr(sys, "frozen") else os.path.join(sys.prefix, "./_source/icon.png")
             icon = tk.PhotoImage(file=resource_path)
             self.window.iconphoto(False, icon)
 
@@ -187,14 +187,14 @@ class CropperApp:
             "save_filelist": {
                 "text": "Save image list",
                 "command": lambda e=None: self.update_app_settings_checkbox("save_filelist"),
-                "enter_tip": "Saves file list of existing images on app exit\nto fileList.txt in export folder(s)\n(landscape & portrait) (Ctrl+S)",
-                "toggle_key": ("<Control-s>", "<Control-S>"),
+                "enter_tip": "Saves file list of existing images on app exit\nto fileList.txt in export folder(s)\n(landscape & portrait) (Ctrl+Shift+S)",
+                "toggle_key": ("<Control-Shift-s>", "<Control-Shift-S>"),
             },
             "exit_after_last_image": {
                 "text": "Exit after last image",
                 "command": lambda e=None: self.update_app_settings_checkbox("exit_after_last_image"),
                 "enter_tip": "Close the app after last image in folder was\nprocessed, otherwise open the first image. (Ctrl+X)",
-                "toggle_key": ("<Control-x>", "<Control-X>"),
+                "toggle_key": ("<Control-Shift-x>", "<Control-Shift-X>"),
             },
         }
 
@@ -216,9 +216,9 @@ class CropperApp:
             "save": {
                 "default_text": "Crop and Convert",
                 "command": self.on_confirm,
-                "enter_tip": "Crop and Convert (Enter)",
+                "enter_tip": "Crop and Convert (Enter, Ctrl+S)",
                 "style_config": {"foreground": "green"},
-                "toggle_key": ("<Return>"),
+                "toggle_key": ("<Return>", "<Control-s>", "<Control-S>"),
             },
         }
         
@@ -1710,9 +1710,14 @@ def on_quit(event) -> None:
     on_closing()
 
 # ---------- Main ----------
-if __name__ == "__main__":
+def main() -> None:
+    global window, app
     window = tk.Tk()
     app = CropperApp(window)
     window.protocol("WM_DELETE_WINDOW", on_closing)
     window.bind('<Control-Alt-c>', on_quit)
     window.mainloop()
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "photopainter-cropper-converter"
+version = "0.1.0"
+description = "Interactive image cropper and converter for Waveshare PhotoPainter"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [
+  { name = "one-step-behind" }
+]
+dependencies = [
+  "Pillow>=10.0.0",
+  "pillow-heif>=1.0.0"
+]
+
+[project.optional-dependencies]
+build = [
+  "pyinstaller>=6.17.0"
+]
+
+[project.scripts]
+photopainter-cropper = "photo_painter_cropper:main"
+
+[tool.setuptools]
+py-modules = ["main", "photo_painter_cropper"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["utils*"]

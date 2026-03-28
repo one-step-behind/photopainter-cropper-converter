@@ -148,90 +148,125 @@ exit_after_last_image=True # exit app after last image was processed
 
 ## Install & Run this project
 
-Clone repo:
+If you are new to Python projects, follow only one OS section below.
+
+### 1. Download the project
 
 ```bash
 git clone https://github.com/one-step-behind/photopainter-cropper-converter.git
+cd photopainter-cropper-converter
 ```
 
-### MacOS
+### 2. macOS
 
-Use the **official** Python for macOS (includes Tkinter).
+Use the official Python installer for macOS (it includes Tkinter).
+
+Create and activate a virtual environment:
 
 ```bash
 /Library/Frameworks/Python.framework/Versions/3.12/bin/python3 -m venv ~/ppainter-venv
 source ~/ppainter-venv/bin/activate
 python -m pip install --upgrade pip
-pip install -r requirements.txt
 ```
 
+Install this project as a package (recommended):
+
 ```bash
-source ~/ppainter-venv/bin/activate
-python photo_painter_cropper.py
+python -m pip install -e .
 ```
 
-### Windows
-
-Virtual environment & installing requirements:
+Start the app:
 
 ```bash
-cd photopainter-cropper-converter
-# create virtual environment for project (also creates folder by name)
+photopainter-cropper
+```
+
+Alternative start method (without package command):
+
+```bash
+python main.py
+```
+
+### 3. Windows (PowerShell)
+
+Create and activate a virtual environment:
+
+```powershell
 python -m venv .venv
-# install and update PIP
+.\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-# activate venv and install requirements
-.\.venv\Scripts\activate
-# it now says:
-# (.venv) PS path\to\photopainter-cropper-converter>
-# install requirements
-python -m pip install -r requirements.txt
 ```
 
-Run script:
+Install this project as a package (recommended):
 
-```bash
-# run script
-python photo_painter_cropper.py
-
-# VSCode
-1. `Ctrl+Shift+P`
-2. enter "Python: Select Interpreter"
-3. select ".\.venv\Scripts\python.exe"
-4. click Run button to run the script
+```powershell
+python -m pip install -e .
 ```
 
-You can create a standalone executable with pyinstaller:
+Start the app:
 
-```bash
-# build executable first time and auto-generate `.spec` file
-pyinstaller --onefile --windowed -i='.\_source\icon.ico' --add-data "_source/icon.ico;_source" --add-data "_source/icon.png;_source" --add-data "_source/round_check_mark_16.png;_source" --name "PhotoPainterCropper" ".\photo_painter_cropper.py"
-# later you can run compilation with just:
-pyinstaller PhotoPainterCropper.spec
+```powershell
+photopainter-cropper
 ```
 
-### Linux
+Alternative start method (without package command):
 
-Don't use the flatpak version. Install from https://code.visualstudio.com/docs/?dv=linux64_deb
+```powershell
+python main.py
+```
+
+VS Code quick setup:
+
+1. Open Command Palette with `Ctrl+Shift+P`
+2. Select `Python: Select Interpreter`
+3. Choose `.venv\Scripts\python.exe`
+4. Use `Run and Debug` with `PhotoPainterCropper (main.py)`
+
+### 4. Linux
+
+If needed (Debian/Ubuntu), install missing venv/tk packages first:
 
 ```bash
-# The virtual environment was not created successfully because ensurepip is not available. On Debian/Ubuntu systems, you need to install the python3-venv package using the following command.
-(optional) sudo apt install python3.12-venv
-# if module tkinter not found, install python tk, if missing
-(optional) sudo apt-get install python3-tk
+sudo apt install python3.12-venv
+sudo apt-get install python3-tk
+```
 
+Create and activate a virtual environment:
+
+```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install --upgrade pip
-pip install -r requirements.txt
-# run script
-python3 photo_painter_cropper.py
 ```
 
-Quit virtual env:
+Install this project as a package (recommended):
 
 ```bash
-# quit venv
+python3 -m pip install -e .
+```
+
+Start the app:
+
+```bash
+photopainter-cropper
+```
+
+Alternative start method (without package command):
+
+```bash
+python3 main.py
+```
+
+### Optional: build a standalone executable with PyInstaller
+
+```bash
+python -m pip install -e ".[build]"
+pyinstaller --onefile --windowed -i='.\_source\icon.ico' --add-data "_source/icon.ico;_source" --add-data "_source/icon.png;_source" --add-data "_source/round_check_mark_16.png;_source" --name "PhotoPainterCropper" ".\main.py"
+```
+
+### Leave virtual environment
+
+```bash
 deactivate
 ```
 
