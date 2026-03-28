@@ -58,24 +58,26 @@ A sample image:
 
    - **Mouse**:
      - Drag to move
-     - Scroll to resize (hold **Shift** = faster)
+     - Scroll to resize (hold **Shift** = faster, **Ctrl**+**Shift** = slower)
+     - `Ctrl`+Scroll to zoom canvas
    - **Keyboard**:
      - `↑`, `↓`, `←`, `→` = move (hold **Shift** = faster)
-     - `+` / `-` = resize (hold **Shift** = faster)
-     - `O` = toggle orientation (Landscape ↔ Portrait)
-     - `F` = toggle fill (White ↔ Blur)
-     - `D` = toggle device (ACeP ↔ Spectra6)
-     - `1` = Edge enhancement
-     - `2` = Smooth image
-     - `3` = Sharpen image
+     - `+` / `-` = resize (hold **Shift** = faster, **Ctrl**+**Shift** = slower)
+     - `Ctrl`+`O` = toggle orientation (Landscape ↔ Portrait)
+     - `Ctrl`+`F` = toggle fill (Blur ↔ White ↔ Black)
+     - `Ctrl`+`D` = toggle device (ACeP ↔ Spectra6 ↔ 4-color)
+     - `Ctrl`+`1` = Edge enhancement
+     - `Ctrl`+`2` = Smooth image
+     - `Ctrl`+`3` = Sharpen image
      - `ESC` = skip current image
      - `PAGE_UP` = previous image without processing current image
      - `PAGE_DOWN` = next image without processing current image
-     - `Enter` = process & save current image and go to next
-     - `S` = Toggle Saving image list to fileList.txt when app is closing
-     - `X` = Toggle to automatically Exit the app after last image in folder was processed/skipped
+     - `Enter`, `Ctrl`+`S` = process & save current image and go to next
+     - `Ctrl`+`Shift`+`S` = Toggle Saving image list to fileList.txt when app is closing
+     - `Ctrl`+`Shift`+`Z` = Toggle Remember canvas zoom when app is closing
+     - `Ctrl`+`Shift`+`X` = Toggle to automatically Exit the app after last image in folder was processed/skipped
 
-   Optionally: apply **image optimizations** like *Brightness*, *Contrast*, *Saturation* if you want.
+   Optionally: apply **image optimizations** with sliders like *Brightness*, *Contrast*, *Saturation*.
 
 3. Use **Enter** or click the "Crop and Convert" button at the top to crop and convert the image.
 
@@ -144,6 +146,8 @@ state_suffix=_ppcrop.txt   # file extension for sidecar file
 export_raw=False           # should export raw image suitable for direct use?
 save_filelist=True         # save fileList.txt at app exit for both orientations
 exit_after_last_image=True # exit app after last image was processed
+save_canvas_zoom=True      # save canvas zoom at exit
+canvas_zoom=0.83           # canvas zoom value
 ```
 
 ## Install & Run this project
