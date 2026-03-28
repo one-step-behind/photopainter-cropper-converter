@@ -23,10 +23,10 @@ build = [
 ]
 
 [project.scripts]
-photopainter-cropper = "photo_painter_cropper:main"
+photopainter-cropper = "utils.cropper_app:main"
 
 [tool.setuptools]
-py-modules = ["main", "photo_painter_cropper"]
+py-modules = ["main"]
 
 [tool.setuptools.packages.find]
 where = ["."]
