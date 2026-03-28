@@ -80,6 +80,8 @@ ARROW_STEP_FAST = 10                # px with Shift pressed
 SCALE_FACTOR = 1.01                 # zoom step with normal +/-
 SCALE_FACTOR_FAST = 1.10            # zoom step with Shift
 SCALE_FACTOR_SLOW = 1.002           # zoom step with Ctrl+Shift
+CANVAS_ZOOM_STEP = 1.10             # Ctrl+wheel zoom step for canvas image
+CANVAS_ZOOM_MIN = 0.25              # minimum relative zoom of fit-to-window scale
 
 LABEL_PADDINGS = (5, 5)
 DEFAULT_TOOLTIP_DELAY = 250
@@ -140,6 +142,7 @@ class CropperApp:
         self.window.title(f"{APP_TITLE} – "
             "Drag/Arrows=move (Shift=fast)  •  "
             "Scroll/+/-=resize (Shift=fast, Ctrl+Shift=slow)  •  "
+            "Ctrl+Scroll=canvas zoom  •  "
             "Esc=skip"
         )
 
@@ -381,6 +384,7 @@ class CropperApp:
         self.rect_h: int = 0
         self.rect_center: tuple[int, int] = (0, 0)
         self.rect_img_raw: Optional[tuple[float, float, float, float]] = None
+        self.canvas_zoom: float = 1.0
         self.dragging: bool = False
         self.drag_offset: tuple[int, int] = (0, 0)
 
@@ -840,7 +844,8 @@ class CropperApp:
         assert self.original_img is not None
         cw, ch = self.canvas_size()
         iw, ih = self.original_img.size
-        self.scale = min(cw / iw, ch / ih)
+        fit_scale = min(cw / iw, ch / ih)
+        self.scale = fit_scale * self.canvas_zoom
         disp_w = max(1, int(iw * self.scale))
         disp_h = max(1, int(ih * self.scale))
         self.disp_size = (disp_w, disp_h)
@@ -1011,10 +1016,41 @@ class CropperApp:
         self.dragging = False
 
     def on_wheel(self, e) -> None:
+        shift_pressed = bool(e.state & 0x0001)
+        ctrl_pressed = bool(e.state & 0x0004)
+
+        # Ctrl+wheel zooms the canvas image while keeping crop coordinates stable.
+        # Ctrl+Shift remains reserved for precision crop resizing.
+        if ctrl_pressed and not shift_pressed:
+            self.zoom_canvas_with_wheel(1 if e.delta > 0 else -1)
+            return
+
         self.resize_rect_mouse(1 if e.delta > 0 else -1, e.state)
 
     def on_wheel_linux(self, e) -> None:
+        shift_pressed = bool(e.state & 0x0001)
+        ctrl_pressed = bool(e.state & 0x0004)
+
+        if ctrl_pressed and not shift_pressed:
+            self.zoom_canvas_with_wheel(1 if e.num == 4 else -1)
+            return
+
         self.resize_rect_mouse(1 if e.num == 4 else -1, e.state)
+
+    def zoom_canvas_with_wheel(self, direction: int) -> None:
+        if self.original_img is None:
+            return
+
+        if direction > 0:
+            new_zoom = min(1.0, self.canvas_zoom * CANVAS_ZOOM_STEP)
+        else:
+            new_zoom = max(CANVAS_ZOOM_MIN, self.canvas_zoom / CANVAS_ZOOM_STEP)
+
+        if abs(new_zoom - self.canvas_zoom) < 1e-9:
+            return
+
+        self.canvas_zoom = new_zoom
+        self._apply_window_resize()
 
     def resize_factor_from_state(self, state: int, direction: int) -> float:
         shift_pressed = bool(state & 0x0001)
