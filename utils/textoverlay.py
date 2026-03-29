@@ -114,7 +114,7 @@ class CanvasTextOverlay:
         self.location_refresh_btn.pack(fill=tk.X, padx=5)
 
         # Text field
-        ttk.Label(self.control_frame, text="Text:").pack(padx=(10, 2))
+        ttk.Label(self.control_frame, text="Text:", justify=tk.LEFT).pack(fill=tk.X, padx=5, pady=(5, 0))
         self.entry = ttk.Entry(self.control_frame, textvariable=self.text_var, width=30)
         self.entry.pack()
 
@@ -122,7 +122,7 @@ class CanvasTextOverlay:
         # runs from high to low to make left=smaller and right=bigger.
         self.slider_label_var = tk.StringVar()
         self.slider_label = ttk.Label(self.control_frame, textvariable=self.slider_label_var, justify=tk.LEFT)
-        self.slider_label.pack(fill=tk.X, padx=5)
+        self.slider_label.pack(fill=tk.X, padx=5, pady=(5, 0))
         self.slider = tk.Scale(
             self.control_frame,
             from_=FONT_DIVISOR_MAX,
@@ -133,17 +133,17 @@ class CanvasTextOverlay:
             takefocus=0,
             command=self._on_slider_change,
         )
-        self.slider.pack(fill=tk.X, padx=5)
+        self.slider.pack(fill=tk.X, padx=5, pady=0)
         self._set_slider_from_divisor(self.font_divisor)
         self._update_slider_label(self.font_divisor)
 
         self.slider_hint_frame = ttk.Frame(self.control_frame)
-        self.slider_hint_frame.pack(fill=tk.X, padx=5)
+        self.slider_hint_frame.pack(fill=tk.X, padx=5, pady=(0, 5))
         ttk.Label(self.slider_hint_frame, text="Smaller").pack(side=tk.LEFT)
         ttk.Label(self.slider_hint_frame, text="Bigger").pack(side=tk.RIGHT)
 
         self.color_button_row = ttk.Frame(self.control_frame)
-        self.color_button_row.pack(fill=tk.X, padx=5)
+        self.color_button_row.pack(fill=tk.X, padx=5, pady=5)
 
         # Text and background color buttons share one row.
         self.text_color_btn = ttk.Button(

@@ -705,7 +705,7 @@ class CropperApp:
                 self.image_enhancer_slider_vars[name] = dyn
 
                 slider_label = ttk.Label(self.options_frame, textvariable=dyn.var, justify=tk.LEFT)
-                slider_label.pack(fill=tk.X, padx=LABEL_PADDINGS[0])
+                slider_label.pack(fill=tk.X, padx=LABEL_PADDINGS[0], pady=(LABEL_PADDINGS[1], 0))
 
                 slider_kwargs = {
                     "name": f"slider_{name}",
@@ -720,7 +720,7 @@ class CropperApp:
 
                 slider = tk.Scale(self.options_frame, command=info["command"], **slider_kwargs)
                 slider.set(value)
-                slider.pack(fill=tk.X)
+                slider.pack(fill=tk.X, padx=LABEL_PADDINGS[0], pady=0)
 
                 self.image_enhancer_sliders[name] = [slider_label, slider]
 
@@ -805,7 +805,7 @@ class CropperApp:
 
                 self.app_settings_checkbox_vars[name] = tk.BooleanVar(value=value)
                 checkbox = ttk.Checkbutton(self.options_frame, command=info["command"], variable=self.app_settings_checkbox_vars[name], **checkbox_kwargs)
-                checkbox.pack(padx = 5, fill=tk.X)
+                checkbox.pack(padx = LABEL_PADDINGS[0], fill=tk.X)
 
                 self.app_settings_checkboxes[name] = checkbox
 
