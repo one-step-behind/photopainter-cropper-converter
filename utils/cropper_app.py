@@ -451,7 +451,7 @@ class CropperApp:
         self.create_buttons(self.button_bar, self.app_button_definitions, tk.LEFT)
         # image options buttons
         self.create_buttons(self.options_frame, self.option_button_def, tk.TOP)
-        tk.Label(self.options_frame, width=22, height=1).pack() # spacer
+        # tk.Label(self.options_frame, width=22, height=1).pack() # spacer
         # other app buttons
         self.create_buttons(self.options_frame, self.other_app_button_definitions, tk.BOTTOM)
 
@@ -478,6 +478,9 @@ class CropperApp:
 
     def load_image(self) -> None:
         self.current_image_path = self.image_paths[self.img_idx]
+
+        if self.text_overlay is not None:
+            self.text_overlay.reset_for_new_image(self.current_image_path)
 
         # Load saved preferences BEFORE loading the image
         pref_loaded = self.load_image_preferences_or_defaults(self.current_image_path)
@@ -702,7 +705,7 @@ class CropperApp:
                 self.image_enhancer_slider_vars[name] = dyn
 
                 slider_label = ttk.Label(self.options_frame, textvariable=dyn.var, justify=tk.LEFT)
-                slider_label.pack(fill=tk.X)
+                slider_label.pack(fill=tk.X, padx=LABEL_PADDINGS[0])
 
                 slider_kwargs = {
                     "name": f"slider_{name}",
@@ -761,7 +764,7 @@ class CropperApp:
 
                 self.image_enhancer_checkbox_vars[name] = tk.BooleanVar(value=value)
                 checkbox = ttk.Checkbutton(self.options_frame, command=info["command"], variable=self.image_enhancer_checkbox_vars[name], **checkbox_kwargs)
-                checkbox.pack(padx = 5, pady = 5, fill=tk.X)
+                checkbox.pack(padx=LABEL_PADDINGS[0], fill=tk.X)
 
                 self.image_enhancer_checkboxes[name] = checkbox
 
@@ -802,7 +805,7 @@ class CropperApp:
 
                 self.app_settings_checkbox_vars[name] = tk.BooleanVar(value=value)
                 checkbox = ttk.Checkbutton(self.options_frame, command=info["command"], variable=self.app_settings_checkbox_vars[name], **checkbox_kwargs)
-                checkbox.pack(padx = 5, pady = 5, fill=tk.X)
+                checkbox.pack(padx = 5, fill=tk.X)
 
                 self.app_settings_checkboxes[name] = checkbox
 
@@ -1565,8 +1568,18 @@ class CropperApp:
         else:
             if type(self.image_preferences["text_overlay"]) == str:
                 self.image_preferences["text_overlay"] = eval(self.image_preferences["text_overlay"])
+        self.image_preferences["text_overlay"].setdefault("use_location", False)
+        self.image_preferences["text_overlay"].setdefault("derived_location", None)
         assert self.text_overlay is not None
         self.text_overlay.set_all(self.image_preferences["text_overlay"])
+        derived_location = self.text_overlay.set_image_context(
+            self.current_image_path,
+            cached_location=self.image_preferences["text_overlay"].get("derived_location"),
+            force_refresh=False,
+        )
+        self.image_preferences["text_overlay"]["derived_location"] = derived_location
+        if self.image_preferences["text_overlay"].get("use_location"):
+            self.image_preferences["text_overlay"]["text"] = self.text_overlay.text_var.get()
 
         #print("IMAGE Settings", self.image_preferences)
         return True
