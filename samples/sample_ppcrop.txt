@@ -1,5 +1,5 @@
 # PhotoPainter image preferences
-timestamp=1768510845
+timestamp=1774803552
 image_name=sample.jpg
 image_w=1000
 image_h=1000
@@ -17,9 +17,10 @@ ratio=1.666667
 orientation=landscape
 fill_mode=blur
 target_device=acep
-brightness=0.8
+brightness=1.05
 contrast=1.5
-saturation=1.0
+saturation=1.05
 enhancer_edge=False
 enhancer_smooth=False
-enhancer_sharpen=True
+enhancer_sharpen=False
+text_overlay={'show': True, 'use_location': False, 'derived_location': None, 'text': 'Stones and Water', 'text_color': '#ffffff', 'bg_color': '#000000', 'bottom': 677, 'right': 1047, 'font_divisor': 26.0, 'image_dpi_scale': 1.0}
