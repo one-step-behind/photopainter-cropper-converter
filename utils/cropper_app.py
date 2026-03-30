@@ -35,6 +35,7 @@ DITHER_METHOD: int = 3 # NONE(0) or FLOYDSTEINBERG(3)
 defaults:dict = {
     "WINDOW_MIN": (1024, 768),
     "LAST_WINDOW_SIZE": (1024, 768),
+    "LAST_WINDOW_POSITION": (0, 0),
     "IMAGE_TARGET_SIZE": (800, 480),
     "IMAGE_QUALITY": 90,
     "ORIENTATION": "landscape",
@@ -128,7 +129,12 @@ class CropperApp:
         self._resize_pending = False
         self._slider_update_pending = None
         self.window = window
-        self.window.geometry(f"{self.app_settings['last_window_size'][0]}x{self.app_settings['last_window_size'][1]}")
+        
+        x_lws, y_lws = self.app_settings['last_window_size']        
+        geometry = f"{int(x_lws)}x{int(y_lws)}"
+        x_lwp, y_lwp = self.app_settings["last_window_position"]
+        geometry += f"{int(x_lwp):+d}{int(y_lwp):+d}"
+        self.window.geometry(geometry)
         w, h = self.app_settings["window_min"]
         self.window.minsize(int(w), int(h))
 
@@ -396,6 +402,7 @@ class CropperApp:
         self.drag_offset: tuple[int, int] = (0, 0)
 
         self.width, self.height = (0, 0)
+        self.pos_x, self.pos_y = (0, 0)
 
         # Start
         self.window.after_idle(self.delayed_start)
@@ -1127,13 +1134,17 @@ class CropperApp:
         if self._resize_pending:
             self.window.after_cancel(self._resize_pending)
 
-        if(event.widget == self.window and (self.width != event.width or self.height != event.height)):
-            self._resize_pending = True
-            self.width, self.height = event.width, event.height
-
-            self.image_id = None
-            self.canvas.delete("image_layer")
-            self.window.after(30, self._apply_window_resize)
+        if(event.widget == self.window):
+            if (self.pos_x != event.x or self.pos_y != event.y):
+                self.pos_x, self.pos_y = event.x, event.y
+                self.app_settings["last_window_position"] = (int(self.pos_x), int(self.pos_y))
+            if (self.width != event.width or self.height != event.height):
+                self._resize_pending = True
+                self.width, self.height = event.width, event.height
+                self.app_settings["last_window_size"] = (int(self.width), int(self.height))
+                self.image_id = None
+                self.canvas.delete("image_layer")
+                self.window.after(30, self._apply_window_resize)
 
     def on_gallery_layout_change(self) -> None:
         if self.original_img is None:
@@ -1162,7 +1173,6 @@ class CropperApp:
         self.calculate_display_coordiantes(x1i, y1i, x2i, y2i)
         self.clamp_crop_rectangle_to_canvas()
         self.draw_crop_marker_grid()
-        self.app_settings["last_window_size"] = (self.width, self.height)
         self._resize_pending = False
 
     def calculate_display_coordiantes(self, x1i, y1i, x2i, y2i) -> tuple[int,  int, int, int]:
@@ -1420,6 +1430,7 @@ class CropperApp:
         if not os.path.exists(settings_path):
             settings["window_min"]=defaults["WINDOW_MIN"]
             settings["last_window_size"]=defaults["LAST_WINDOW_SIZE"]
+            settings["last_window_position"]=defaults["LAST_WINDOW_POSITION"]
             settings["image_target_size"]=defaults["IMAGE_TARGET_SIZE"]
             settings["image_quality"]=defaults["IMAGE_QUALITY"]
             settings["orientation"]=defaults["ORIENTATION"]
@@ -1462,8 +1473,8 @@ class CropperApp:
                         v = int(v_str)
                     elif re.match("^\\d+\\.\\d+$", v_str):
                         v = float(v_str)
-                    elif re.match("^(\\d+)x(\\d+)$", v_str):
-                        v = tuple(int(item) if item.isdigit() else item for item in v_str.split("x"))
+                    elif re.match("^(-?\\d+)x(-?\\d+)$", v_str):
+                        v = tuple(int(item) for item in v_str.split("x"))
                     else:
                         v = v_str
 
@@ -1471,13 +1482,16 @@ class CropperApp:
         except Exception:
             return settings
 
-        # window_min, last_window_size and image_target_size needs to be in format: 1024x768 (2-4 digits each)
-        needs_tuple = ("window_min", "last_window_size", "image_target_size")
-        r = re.compile("^(\\d{2,4})x(\\d{2,4})$")
-        # if still no tuple or not matching
-        for need in needs_tuple:
-            if not need in settings or not type(settings[need]) == tuple or (type(settings[need]) == tuple and not r.match(str(f"{settings[need][0]}x{settings[need][1]}"))):
+        # size tuples must be in format: 1024x768 (2-4 digits each)
+        needs_size_tuple = ("window_min", "last_window_size", "image_target_size")
+        size_pattern = re.compile("^(\\d{2,4})x(\\d{2,4})$")
+        for need in needs_size_tuple:
+            if not need in settings or not isinstance(settings[need], tuple) or not size_pattern.match(f"{settings[need][0]}x{settings[need][1]}"):
                 settings[need] = defaults[need.upper()]
+
+        # position tuple can be negative and should allow smaller coordinates like 0x0
+        if "last_window_position" not in settings or not isinstance(settings["last_window_position"], tuple):
+            settings["last_window_position"] = defaults["LAST_WINDOW_POSITION"]
 
         if not isinstance(settings.get("save_canvas_zoom"), bool):
             settings["save_canvas_zoom"] = defaults["SAVE_CANVAS_ZOOM"]
@@ -1497,9 +1511,10 @@ class CropperApp:
 
         # convert tuples to strings
         # window_min, last_window_size and image_target_size needs to be in format: 1024x768 (2-4 digits each)
-        needs_tuple = ("window_min", "last_window_size", "image_target_size")
+        needs_tuple = ("window_min", "last_window_size", "last_window_position", "image_target_size")
         for need in needs_tuple:
-            self.app_settings[need] = f"{self.app_settings[need][0]}x{self.app_settings[need][1]}"
+            x, y = self.app_settings[need]
+            self.app_settings[need] = f"{int(x)}x{int(y)}"
 
         lines = "\n".join(f"{k}={v}" for k, v in self.app_settings.items())
 
