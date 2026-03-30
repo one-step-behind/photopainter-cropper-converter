@@ -174,6 +174,8 @@ class CropperApp:
         # options pane
         self.options_frame = tk.Frame(canvas_with_options, highlightthickness=0)
         self.options_frame.pack(padx=LABEL_PADDINGS[0], fill=tk.Y, side=tk.RIGHT)
+        self.options_bottom_row = ttk.Frame(self.options_frame)
+        self.options_bottom_row.pack(fill=tk.X, side=tk.BOTTOM, pady=(LABEL_PADDINGS[1], 0))
 
         # bottom status bar
         bottom_bar = ttk.Frame(self.window)#, relief=tk.SUNKEN)
@@ -246,6 +248,7 @@ class CropperApp:
                 "default_text": "Change folder",
                 "command": lambda e=None: self.load_folder(),
                 "enter_tip": "Change to another folder of images (Ctrl-L)",
+                "expand": True,
                 "fill": tk.X,
                 "underline": 9,
                 "toggle_key": ("<Control-l>", "<Control-L>"),
@@ -254,6 +257,7 @@ class CropperApp:
                 "default_text": "Reload folder",
                 "command": lambda e=None: self.load_folder(False),
                 "enter_tip": "Reload this folder of images (Ctrl+R)",
+                "expand": True,
                 "fill": tk.X,
                 "underline": 0,
                 "toggle_key": ("<Control-r>", "<Control-R>"),
@@ -459,8 +463,8 @@ class CropperApp:
         # image options buttons
         self.create_buttons(self.options_frame, self.option_button_def, tk.TOP)
         # tk.Label(self.options_frame, width=22, height=1).pack() # spacer
-        # other app buttons
-        self.create_buttons(self.options_frame, self.other_app_button_definitions, tk.BOTTOM)
+        # other app buttons (side by side) at the bottom of the options pane
+        self.create_buttons(self.options_bottom_row, self.other_app_button_definitions, tk.LEFT)
 
         self.create_text_overlay()
 
@@ -655,6 +659,12 @@ class CropperApp:
                 "textvariable": dyn.var,
                 "takefocus": 0,
             }
+            pack_kwargs = {
+                "side": side,
+                "fill": info.get("fill", tk.X),
+                "padx": LABEL_PADDINGS[0],
+                "expand": info.get("expand", False),
+            }
 
             if "width" in info:
                 btn_kwargs["width"] = info["width"]
@@ -663,7 +673,7 @@ class CropperApp:
             if "widget_type" in info and info["widget_type"] == "combobox":
                 btn = ttk.Combobox(target, values=info["values"], name=f"btn_{name}", **btn_kwargs, style="Custom.TCombobox")
                 btn["state"] = "readonly"
-                btn.pack(side=side, fill=tk.X, padx=LABEL_PADDINGS[0])
+                btn.pack(**pack_kwargs)
 
                 if "postcommand" in info:
                     btn.bind('<<ComboboxSelected>>', info["postcommand"])
@@ -677,7 +687,7 @@ class CropperApp:
                     btn_kwargs["style"] = style_name
 
                 btn = ttk.Button(target, command=info["command"], name=f"btn_{name}", **btn_kwargs)
-                btn.pack(side=side, fill=tk.X, padx=LABEL_PADDINGS[0])
+                btn.pack(**pack_kwargs)
 
             if "disabled_if_single_image" in info and info["disabled_if_single_image"] and len(self.image_paths) == 1:
                 btn.state(["disabled"])
