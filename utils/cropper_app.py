@@ -124,6 +124,7 @@ class CropperApp:
         # ---------- Load settings ----------
         self.app_settings = self.load_app_settings_or_defaults()
         self.image_preferences: dict[str, Any] = {}
+        self.image_sidecar_has_orientation: bool = False
 
         # ---------- UI ----------
         self._resize_pending = False
@@ -495,8 +496,6 @@ class CropperApp:
 
         # Load saved preferences BEFORE loading the image
         pref_loaded = self.load_image_preferences_or_defaults(self.current_image_path)
-        # Update target_size and ratio for new orientation
-        self.update_targetsize_and_ratio()
 
         try:
             self.image_id = None
@@ -512,6 +511,27 @@ class CropperApp:
                 self.next_image()
             
             return
+
+        if self.image_preferences.get("orientation") not in available_option["ORIENTATION"]:
+            self.image_preferences["orientation"] = self.app_settings["orientation"]
+            self.update_button_text("orientation", self.image_preferences["orientation"])
+
+        if not self.image_sidecar_has_orientation:
+            inferred_orientation = None
+            if self.original_img is not None:
+                iw, ih = self.original_img.size
+                if iw > 0 and ih > 0:
+                    inferred_orientation = "portrait" if ih > iw else "landscape"
+
+            self.image_preferences["orientation"] = (
+                inferred_orientation
+                if inferred_orientation in available_option["ORIENTATION"]
+                else self.app_settings["orientation"]
+            )
+            self.update_button_text("orientation", self.image_preferences["orientation"])
+
+        # Update target_size and ratio after final orientation has been resolved.
+        self.update_targetsize_and_ratio()
 
         self.resize_image_and_center_in_window()
 
@@ -1546,6 +1566,7 @@ class CropperApp:
 
     def load_image_preferences_or_defaults(self, img_path: str) -> bool:
         self.image_preferences = {} # reset to default to prevent usage of old data
+        self.image_sidecar_has_orientation = False
         kv_path = self.image_state_path(img_path)
 
         if os.path.exists(kv_path):
@@ -1554,6 +1575,8 @@ class CropperApp:
 
             if not loaded:
                 return False
+
+            self.image_sidecar_has_orientation = loaded.get("orientation") in available_option["ORIENTATION"]
             self.image_preferences = loaded
 
         if not self.image_preferences: # use app defaults
