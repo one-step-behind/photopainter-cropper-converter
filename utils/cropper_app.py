@@ -3,6 +3,7 @@
 
 import os
 import sys
+import ast
 import math
 import time
 import re
@@ -542,7 +543,7 @@ class CropperApp:
             self.init_crop_rectangle()
 
         count_img = len(self.image_paths)
-        counter_length = max(4, 3*(math.floor(math.log10(abs(count_img))) + 1)) # math: O(1) => https://pynative.com/python-count-digits-of-number/
+        counter_length = max(4, 3 * len(str(count_img)))
         self.status_count.config(text=f"[{self.img_idx+1}/{count_img}]", width=counter_length)
 
         self.create_image_enhancer_sliders() # create image options sliders
@@ -1504,7 +1505,7 @@ class CropperApp:
                     v_str = v.strip()
 
                     # convert values to their real counterparts (bool, int, float, size)
-                    if v_str == "True" or v_str == "False":
+                    if v_str in ("True", "False"):
                         v = v_str == "True"
                     elif re.match("^\\d+$", v_str):
                         v = int(v_str)
@@ -1621,11 +1622,19 @@ class CropperApp:
             if not self.image_preferences[name] in (True, False):
                 self.image_preferences[name] = defaults[name.upper()]
 
-        if not "text_overlay" in self.image_preferences:
+        if "text_overlay" not in self.image_preferences:
             self.image_preferences["text_overlay"] = TEXT_OVERLAY_DEFAULTS.copy()
         else:
-            if type(self.image_preferences["text_overlay"]) == str:
-                self.image_preferences["text_overlay"] = eval(self.image_preferences["text_overlay"])
+            if isinstance(self.image_preferences["text_overlay"], str):
+                try:
+                    parsed_text_overlay = ast.literal_eval(self.image_preferences["text_overlay"])
+                except (ValueError, SyntaxError):
+                    parsed_text_overlay = None
+
+                if isinstance(parsed_text_overlay, dict):
+                    self.image_preferences["text_overlay"] = parsed_text_overlay
+                else:
+                    self.image_preferences["text_overlay"] = TEXT_OVERLAY_DEFAULTS.copy()
         self.image_preferences["text_overlay"].setdefault("use_location", False)
         self.image_preferences["text_overlay"].setdefault("derived_location", None)
         assert self.text_overlay is not None
