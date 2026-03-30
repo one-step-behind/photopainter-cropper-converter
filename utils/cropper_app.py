@@ -1107,6 +1107,11 @@ class CropperApp:
         return "break"  # avoid changing Tab focus
 
     def on_arrow(self, e, dx, dy) -> None:
+        focused = self.window.focus_get()
+        if isinstance(focused, (tk.Entry, ttk.Entry, tk.Text)):
+            # Keep cursor navigation inside text widgets.
+            return
+
         step = ARROW_STEP_FAST if (e.state & 0x0001) else ARROW_STEP # Shift accelerates
         self.rect_center = (self.rect_center[0] + dx*step, self.rect_center[1] + dy*step)
         self.clamp_crop_rectangle_to_canvas()
