@@ -89,19 +89,15 @@ class CanvasTextOverlay:
         )
         self.checkbox.pack(fill=tk.X, padx=5)
 
-        self.location_checkbox_style = "OverlayLocation.TCheckbutton"
         self.control_style = ttk.Style(self.control_frame)
-        self.control_style.map(
-            self.location_checkbox_style,
-            foreground=[("disabled", "#666666")],
-        )
+        self._configure_overlay_styles()
 
         self.location_checkbox = ttk.Checkbutton(
             self.control_frame,
             text="Location",
             variable=self.location_var,
             command=self._on_location_change,
-            style=self.location_checkbox_style,
+            style=self.overlay_checkbutton_style,
         )
         self.location_checkbox.pack(fill=tk.X, padx=5)
 
@@ -114,14 +110,25 @@ class CanvasTextOverlay:
         self.location_refresh_btn.pack(fill=tk.X, padx=5)
 
         # Text field
-        ttk.Label(self.control_frame, text="Text:", justify=tk.LEFT).pack(fill=tk.X, padx=5, pady=(5, 0))
+        self.text_caption_label = ttk.Label(
+            self.control_frame,
+            text="Text:",
+            justify=tk.LEFT,
+            style=self.overlay_label_style,
+        )
+        self.text_caption_label.pack(fill=tk.X, padx=5, pady=(5, 0))
         self.entry = ttk.Entry(self.control_frame, textvariable=self.text_var, width=30)
         self.entry.pack()
 
         # Text size slider. Higher divisors mean smaller text, so the slider
         # runs from high to low to make left=smaller and right=bigger.
         self.slider_label_var = tk.StringVar()
-        self.slider_label = ttk.Label(self.control_frame, textvariable=self.slider_label_var, justify=tk.LEFT)
+        self.slider_label = ttk.Label(
+            self.control_frame,
+            textvariable=self.slider_label_var,
+            justify=tk.LEFT,
+            style=self.overlay_label_style,
+        )
         self.slider_label.pack(fill=tk.X, padx=5, pady=(5, 0))
         self.slider = tk.Scale(
             self.control_frame,
@@ -139,8 +146,17 @@ class CanvasTextOverlay:
 
         self.slider_hint_frame = ttk.Frame(self.control_frame)
         self.slider_hint_frame.pack(fill=tk.X, padx=5, pady=(0, 5))
-        ttk.Label(self.slider_hint_frame, text="Smaller").pack(side=tk.LEFT)
-        ttk.Label(self.slider_hint_frame, text="Bigger").pack(side=tk.RIGHT)
+        self.slider_hint_left = ttk.Label(self.slider_hint_frame, text="Smaller", style=self.overlay_label_style)
+        self.slider_hint_left.pack(side=tk.LEFT)
+        self.slider_hint_right = ttk.Label(self.slider_hint_frame, text="Bigger", style=self.overlay_label_style)
+        self.slider_hint_right.pack(side=tk.RIGHT)
+
+        self.overlay_labels = (
+            self.text_caption_label,
+            self.slider_label,
+            self.slider_hint_left,
+            self.slider_hint_right,
+        )
 
         self.color_button_row = ttk.Frame(self.control_frame)
         self.color_button_row.pack(fill=tk.X, padx=5, pady=5)
@@ -171,6 +187,48 @@ class CanvasTextOverlay:
 
         # Initial state
         self._update_controls_state()
+
+    def _configure_overlay_styles(self):
+        self.overlay_label_style = "OverlayControl.TLabel"
+        self.overlay_label_disabled_style = "OverlayControl.Disabled.TLabel"
+        self.overlay_checkbutton_style = "OverlayControl.TCheckbutton"
+        self.overlay_entry_style = "OverlayControl.TEntry"
+        self.overlay_entry_disabled_style = "OverlayControl.Disabled.TEntry"
+
+        normal_fg = self.control_style.lookup("TLabel", "foreground") or "white"
+        normal_entry_bg = self.control_style.lookup("TEntry", "fieldbackground") or "white"
+        disabled_entry_bg = "#666666"
+        base_entry_style = {
+            "borderwidth": 0,
+            "relief": "flat",
+            "padding": 0,
+        }
+        normal_entry_colors = {
+            "fieldbackground": normal_entry_bg,
+            "lightcolor": normal_entry_bg,
+            "darkcolor": normal_entry_bg,
+            "bordercolor": normal_entry_bg,
+        }
+        disabled_entry_colors = {
+            "fieldbackground": disabled_entry_bg,
+            "lightcolor": disabled_entry_bg,
+            "darkcolor": disabled_entry_bg,
+            "bordercolor": disabled_entry_bg,
+        }
+        self.control_style.configure(self.overlay_label_style, foreground=normal_fg)
+        self.control_style.configure(self.overlay_label_disabled_style, foreground=disabled_entry_bg)
+        self.control_style.configure(self.overlay_checkbutton_style, foreground=normal_fg)
+        self.control_style.configure(self.overlay_entry_style, **base_entry_style, **normal_entry_colors)
+        self.control_style.configure(self.overlay_entry_disabled_style, **base_entry_style, **disabled_entry_colors)
+        self.control_style.map(
+            self.overlay_checkbutton_style,
+            foreground=[("disabled", disabled_entry_bg)],
+        )
+
+    def _set_overlay_labels_dimmed(self, dimmed: bool):
+        style_name = self.overlay_label_disabled_style if dimmed else self.overlay_label_style
+        for label in self.overlay_labels:
+            label.config(style=style_name)
 
 
     # ----------------------
@@ -251,6 +309,8 @@ class CanvasTextOverlay:
 
     def _update_controls_state(self):
         state = "normal" if self.show_var.get() else "disabled"
+        self._set_overlay_labels_dimmed(state != "normal")
+        self.entry.config(style=self.overlay_entry_style if state == "normal" else self.overlay_entry_disabled_style)
         self.entry.config(state=state)
         self.slider.config(state=state)
         self.text_color_btn.config(state=state)
