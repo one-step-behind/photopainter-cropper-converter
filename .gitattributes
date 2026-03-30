@@ -2,3 +2,4 @@
 *.jpg binary
 *.jpeg binary
 *.png binary
+*.py text eol=lf
