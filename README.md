@@ -14,13 +14,14 @@ This project is an enhanced (much improved for my own needs) version of an image
   — You can set the output dimensions via `image_target_size` in `settings.ini`
 - **ACeP** or **Spectra6** optimized output
 - **Image enhancements** — Brightness, Contrast, Saturation, Edge, Smooth, Sharpen (Brightness, Contrast and Sharpening can introduce visual artifacts in the converted image)
-- Crop rectangle can **exceed image bounds** and empty areas will be filled with **White** or **Blur** background
+- Crop rectangle can **exceed image bounds** and empty areas will be filled with **White**, **Black** or **Blur** background
+- Add a user defined **text** or **Geolocation** automatically retrieved from EXIF geo-coordinates if available in image
 - **Per-image state**
   — A `*_ppcrop.txt` sidecar file (configurable via the `state_suffix` parameter in `settings.ini`) is saved alongside each original image to persist all per-image settings allowing the application to automatically restore the exact crop rectangle and settings on subsequent runs
 - App and some image **properties configuration** via `settings.ini` file (see **Settings** section)
 - Crisp **crop area grid lines** aligned to device pixels
 - (optional) **Generate fileList.txt** on app exit
-  — useful for original Mode 2 or custom firmware which uses this file to retrieve image list
+  — useful for original firmware *Mode 2* or custom firmware which uses this file to retrieve image list (mostly named as *Mode 3*)
 
 \* HEIC support needs `pillow-heif` installed alongside `Pillow`. If you're following the **Install & Run** section below you should be all set.
 
@@ -54,7 +55,7 @@ A sample image:
 
 1. **Start the app** and select the folder with the images you want to convert.
 
-2. Use **mouse/keyboard** to position and size the crop rectangle.
+2. Use **mouse/keyboard** to position and size the crop rectangle and modify.
 
    - **Mouse**:
      - Drag to move
@@ -79,7 +80,7 @@ A sample image:
 
    Optionally: apply **image optimizations** with sliders like *Brightness*, *Contrast*, *Saturation*.
 
-3. Use **Enter** or click the "Crop and Convert" button at the top to crop and convert the image.
+3. Use **Enter**/**Ctrl+S** or click the "Crop and Convert" button at the top to crop and convert the image.
 
    - **Cropped JPGs** are saved to `cropped_[landscape|portrait]` next to your originals
    - **Converted BMP** images are saved to `cropped_[landscape|portrait]/dithered` next to your originals
@@ -129,6 +130,7 @@ Available settings and their defaults:
 # PhotoPainter app state
 window_min=1024x768        # minimum size of window
 last_window_size=1024x768  # last window dimensions
+last_window_position=10x10 # last window position
 image_target_size=800x480  # exact JPG output image dimensions
 image_quality=90           # quality of the JPG output
 orientation=landscape      # landscape, portrait
@@ -273,12 +275,6 @@ pyinstaller --onefile --windowed -i='.\_source\icon.ico' --add-data "_source/ico
 ```bash
 deactivate
 ```
-
-## Project Type (GitHub Topics)
-
-Desktop GUI application (Python & Tkinter) for macOS, Windows and Linux.
-
-`app`, `desktop`, `gui`, `tkinter`, `pillow`, `macos`, `windows`, `linux`, `cross-platform`, `image-processing`, `image-manipulation`, `waveshare`, `photopainter`, `epaper`, `e-paper`, `raspberry`, `rp2050`, `acep`, `spectra6`, `cropper`, `converter`
 
 ## References
 
