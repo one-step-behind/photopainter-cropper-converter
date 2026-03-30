@@ -118,7 +118,7 @@ class CanvasTextOverlay:
         )
         self.text_caption_label.pack(fill=tk.X, padx=5, pady=(5, 0))
         self.entry = ttk.Entry(self.control_frame, textvariable=self.text_var, width=30)
-        self.entry.pack()
+        self.entry.pack(fill=tk.X, padx=7)
 
         # Text size slider. Higher divisors mean smaller text, so the slider
         # runs from high to low to make left=smaller and right=bigger.
@@ -201,7 +201,7 @@ class CanvasTextOverlay:
         base_entry_style = {
             "borderwidth": 0,
             "relief": "flat",
-            "padding": 0,
+            "padding": 2,
         }
         normal_entry_colors = {
             "fieldbackground": normal_entry_bg,
