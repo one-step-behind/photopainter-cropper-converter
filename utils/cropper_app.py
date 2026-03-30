@@ -5,7 +5,7 @@ import os
 import sys
 import math
 import time
-import fnmatch, re
+import re
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from typing import Any, Literal, Optional
@@ -449,10 +449,12 @@ class CropperApp:
         if HEIC_SUPPORT:
             self.supported_formats.append("*.heic")
 
-        for format in self.supported_formats:
-            rule = re.compile(fnmatch.translate(format), re.IGNORECASE)
-            file_list = [os.path.normpath(os.path.join(self.picture_input_folder, name)) for name in os.listdir(self.picture_input_folder) if rule.match(name)]
-            self.image_paths.extend(file_list)
+        # Build extension set once and scan the folder only once.
+        allowed_exts = {fmt[1:].lower() for fmt in self.supported_formats}
+        for name in os.listdir(self.picture_input_folder):
+            ext = os.path.splitext(name)[1].lower()
+            if ext in allowed_exts:
+                self.image_paths.append(os.path.normpath(os.path.join(self.picture_input_folder, name)))
 
         if not self.image_paths:
             messagebox.showerror("No image", "The folder contains no images. Please choose another one.")
@@ -1503,7 +1505,7 @@ class CropperApp:
 
                     # convert values to their real counterparts (bool, int, float, size)
                     if v_str == "True" or v_str == "False":
-                        v = eval(v_str)
+                        v = v_str == "True"
                     elif re.match("^\\d+$", v_str):
                         v = int(v_str)
                     elif re.match("^\\d+\\.\\d+$", v_str):
@@ -1610,8 +1612,11 @@ class CropperApp:
             if not name in self.image_preferences:
                 self.image_preferences[name] = self.app_settings[name] if name in self.app_settings else defaults[name.upper()] # app default or project default
 
-            if type(self.image_preferences[name]) == str:
-                self.image_preferences[name] = eval(self.image_preferences[name]) # just eval() True/False to get true bool
+            if isinstance(self.image_preferences[name], str):
+                if self.image_preferences[name] == "True":
+                    self.image_preferences[name] = True
+                elif self.image_preferences[name] == "False":
+                    self.image_preferences[name] = False
 
             if not self.image_preferences[name] in (True, False):
                 self.image_preferences[name] = defaults[name.upper()]
