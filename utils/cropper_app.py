@@ -10,7 +10,7 @@ import re
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from typing import Any, Literal, Optional
-from PIL import Image, ImageTk, ImageFilter, ImageEnhance
+from PIL import Image, ImageTk, ImageFilter, ImageEnhance, ImageOps
 from utils.gallery import AsyncThumbnailGallery
 from utils.textoverlay import CanvasTextOverlay
 from utils.textoverlay_defaults import TEXT_OVERLAY_DEFAULTS
@@ -28,6 +28,10 @@ except ImportError:
     HEIC_SUPPORT = False
     print("Warning: pillow-heif not installed. HEIC files will not be processed.")
     print("To enable HEIC support, install with: pip install pillow-heif")
+
+SUPPORTED_IMAGE_FORMATS = ["*.jpg", "*.jpeg", "*.png", "*.bmp", "*.gif", "*.tif", "*.tiff", "*.webp"]
+if HEIC_SUPPORT:
+    SUPPORTED_IMAGE_FORMATS.append("*.heic")
 
 # ====== CONFIG ======
 APP_TITLE = "PhotoPainterCropper"
@@ -433,34 +437,41 @@ class CropperApp:
         :param openNew: open new folder or reload
         :type openNew: bool
         """
-        if openNew:
-            self.picture_input_folder = filedialog.askdirectory(title="Select source folder with photos")
+        # Get images in folder with case-insensitive extension matching.
+        # Keep current image list until a new valid folder has been confirmed.
+        had_loaded_images = bool(self.image_paths)
+        allowed_exts = {fmt[1:].lower() for fmt in SUPPORTED_IMAGE_FORMATS}
+        prompt_folder = openNew
+        while True:
+            scan_folder = self.picture_input_folder
+            if prompt_folder:
+                selected_folder = filedialog.askdirectory(title="Select source folder with photos")
+                if not selected_folder:
+                    if not had_loaded_images:
+                        self.window.after(50, self.window.destroy)
+                    return
+                scan_folder = selected_folder
 
-        if not self.picture_input_folder:
-            if not len(self.image_paths):
-                self.window.after(50, self.window.destroy)
-            return
-        else:
-            self.img_idx = 0
-            self.image_paths = [] # reset on folder change
+            if not scan_folder:
+                if not had_loaded_images:
+                    self.window.after(50, self.window.destroy)
+                return
 
-        # get the images in folder with case-insensitive extension matching
-        self.supported_formats = ["*.jpg", "*.jpeg", "*.png", "*.bmp", "*.gif", "*.tif", "*.tiff", "*.webp"]
+            found_paths = []
 
-        if HEIC_SUPPORT:
-            self.supported_formats.append("*.heic")
+            for name in os.listdir(scan_folder):
+                ext = os.path.splitext(name)[1].lower()
+                if ext in allowed_exts:
+                    found_paths.append(os.path.normpath(os.path.join(scan_folder, name)))
 
-        # Build extension set once and scan the folder only once.
-        allowed_exts = {fmt[1:].lower() for fmt in self.supported_formats}
-        for name in os.listdir(self.picture_input_folder):
-            ext = os.path.splitext(name)[1].lower()
-            if ext in allowed_exts:
-                self.image_paths.append(os.path.normpath(os.path.join(self.picture_input_folder, name)))
+            if found_paths:
+                self.picture_input_folder = scan_folder
+                self.img_idx = 0
+                self.image_paths = found_paths
+                break
 
-        if not self.image_paths:
             messagebox.showerror("No image", "The folder contains no images. Please choose another one.")
-            self.load_folder()
-            return
+            prompt_folder = True
 
         # app buttons
         self.create_buttons(self.button_bar, self.app_button_definitions, tk.LEFT)
@@ -559,29 +570,9 @@ class CropperApp:
         Loads an image and applies EXIF orientation correction (auto-rotate).
         Returns an RGB image with correct orientation.
         """
-        try:
-            image = Image.open(path).convert("RGB")
-
-            try:
-                # modern Pillow: .getexif()
-                exif = image.getexif()
-                exiforient = exif.get(0x0112, 1)  # EXIF Orientation
-            except Exception:
-                exiforient = 1
-
-            # Rotate according to EXIF orientation tag
-            if exiforient == 3:
-                image = image.rotate(180, expand=True)
-            elif exiforient == 6:
-                image = image.rotate(270, expand=True)  # 90° CW
-            elif exiforient == 8:
-                image = image.rotate(90, expand=True)   # 90° CCW
-
-            return image
-
-        except Exception as e:
-            print("EXIF load/rotation failed:", e)
-            return Image.open(path).convert("RGB")
+        with Image.open(path) as image:
+            transposed = ImageOps.exif_transpose(image)
+            return transposed.convert("RGB")
 
     # ---------- UI helpers ----------
     def set_theme(self):
@@ -1507,12 +1498,18 @@ class CropperApp:
                     # convert values to their real counterparts (bool, int, float, size)
                     if v_str in ("True", "False"):
                         v = v_str == "True"
-                    elif re.match("^\\d+$", v_str):
+                    elif v_str.isdigit():
                         v = int(v_str)
-                    elif re.match("^\\d+\\.\\d+$", v_str):
-                        v = float(v_str)
-                    elif re.match("^(-?\\d+)x(-?\\d+)$", v_str):
-                        v = tuple(int(item) for item in v_str.split("x"))
+                    elif "." in v_str:
+                        try:
+                            v = float(v_str)
+                        except ValueError:
+                            v = v_str
+                    elif "x" in v_str:
+                        try:
+                            v = tuple(int(item) for item in v_str.split("x"))
+                        except ValueError:
+                            v = v_str
                     else:
                         v = v_str
 
