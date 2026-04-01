@@ -1,13 +1,16 @@
+import os
+import queue
+import sys
 import threading
 import tkinter as tk
-import os
-import sys
 from tkinter import ttk
-from PIL import Image, ImageTk
 from typing import Callable, Optional, List
+
+from PIL import Image, ImageOps, ImageTk
 
 THUMB_SIZE = 80
 PADDING = 12
+
 
 class AsyncThumbnailGallery(tk.Frame):
     def __init__(
@@ -23,118 +26,97 @@ class AsyncThumbnailGallery(tk.Frame):
         on_layout_change: Optional[Callable[[], None]] = None,
     ):
         """
-        Horizontally scrollable, async-loading thumbnail gallery.
-        
-        :param self: instance
-        :param master: TK instance
-        :param image_paths: path for images
-        :param on_click: double click handler
+        Single-row, horizontally scrollable, async-loading thumbnail gallery.
+        Rendering is virtualized, so only visible thumbnails are drawn.
         """
         super().__init__(parent, bg=bg)
 
         self.image_paths: List[str] = image_paths
         self.thumb_size: int = thumb_size
-        self.thumb_wrappers: List[tk.Frame] = []
-        self.thumb_labels: List[tk.Label] = []
-        self.thumb_overlays: List[tk.Label | None] = []
-        self.thumbs: List[ImageTk.PhotoImage] = []
         self.selected_index: Optional[int] = None
         self._auto_select_first = True
         self.default_bg = bg
         self.image_bg = image_bg
-        self.selected_bg = selected_bg   # light blue, or any highlight color you like
+        self.selected_bg = selected_bg
         self.on_select = on_select
         self.on_layout_change = on_layout_change
+
         self._load_generation = 0
+        self._thumb_queue: queue.Queue = queue.Queue()
+
+        self._thumb_pad = 2
+        self._cell_span = self.thumb_size + (self._thumb_pad * 2)
+        self._row_height = self.thumb_size + (self._thumb_pad * 2)
+
+        self._scroll_offset_px = 0
+        self._drag_x = 0
+        self._scrollable = False
+
+        self._thumb_pil: dict[int, Image.Image] = {}
+        self._thumb_tk: dict[int, ImageTk.PhotoImage] = {}
+        self._visible_items: dict[int, tuple[int, Optional[int], int]] = {}
+        self._sidecar_exists: List[bool] = []
 
         try:
-            resource_path = os.path.join(os.path.dirname(__file__), "../_source/round_check_mark_16.png") if not hasattr(sys, "frozen") else os.path.join(sys.prefix, "./_source/round_check_mark_16.png")
+            if not hasattr(sys, "frozen"):
+                resource_path = os.path.join(os.path.dirname(__file__), "../_source/round_check_mark_16.png")
+            else:
+                resource_path = os.path.join(sys.prefix, "./_source/round_check_mark_16.png")
             self.sidecar_icon = tk.PhotoImage(file=resource_path)
         except Exception:
-            self.sidecar_icon = None  # fail-safe
+            self.sidecar_icon = None
 
-        # ----------------------------
-        # Canvas + inner frame
-        # ----------------------------
         self.canvas = tk.Canvas(
             self,
-            height=self.thumb_size + PADDING,
+            height=self._compute_canvas_height(),
             highlightthickness=0,
             bg=self.default_bg,
             background=self.default_bg,
         )
         self.canvas.pack(fill=tk.X, expand=True)
 
-        self.inner_frame = tk.Frame(self.canvas, bg=bg)
-        self.canvas_window = self.canvas.create_window((0, 0), window=self.inner_frame, anchor="nw")
-
-        self.inner_frame.bind("<Configure>", self._update_scrollregion)
         self.canvas.bind("<Configure>", self._resize_canvas)
 
-        # Horizontal scrollbar
         self.scrollbar = ttk.Scrollbar(
             self,
             orient="horizontal",
-            command=self.canvas.xview,
+            command=self._on_scrollbar,
             style="Gallery.Horizontal.TScrollbar",
         )
-        # do not pack it yet — auto-hide logic controls that
-        #self.scrollbar.pack(fill=tk.X)
 
-        # ----------------------------
-        # Scrolling (horizontal only)
-        # ----------------------------
-        self._scrollable: bool = False
-        self.canvas.configure(xscrollcommand=self._on_xscroll)
         self.canvas.bind("<MouseWheel>", self._on_mouse_wheel)
-        self.canvas.bind("<Button-4>", lambda e: self.canvas.xview_scroll(-1, "units"))
-        self.canvas.bind("<Button-5>", lambda e: self.canvas.xview_scroll(1, "units"))
+        self.canvas.bind("<Button-4>", lambda e: self._scroll_units(-1))
+        self.canvas.bind("<Button-5>", lambda e: self._scroll_units(1))
         self.canvas.bind("<ButtonPress-1>", self._drag_start)
         self.canvas.bind("<B1-Motion>", self._drag_move)
 
-        # ----------------------------
-        # Async load
-        # ----------------------------
-        threading.Thread(
-            target=self._load_thumbnails_async,
-            daemon=True
-        ).start()
+        self._prepare_sidecar_flags()
+
+        threading.Thread(target=self._load_thumbnails_async, daemon=True).start()
+        self.after(10, self._drain_thumbnail_queue)
 
     def set_images(self, image_paths: List[str]) -> None:
         """
         Replace gallery contents without recreating the widget.
         """
-        # Invalidate any running loaders
         self._load_generation += 1
         gen = self._load_generation
         self._auto_select_first = True
 
-        for w in self.thumb_wrappers:
-            w.destroy()
-
-        # Clear UI
-        for lbl in self.thumb_labels:
-            lbl.destroy()
-
-        self.thumb_wrappers.clear()
-        self.thumb_labels.clear()
-        self.thumb_overlays.clear()
-        self.thumbs.clear()
-
-        # Reset scroll position
-        self.selected_index = None
-        self.canvas.xview_moveto(0)
+        self._clear_visible_items()
+        self._thumb_pil.clear()
+        self._thumb_tk.clear()
 
         self.image_paths = image_paths
+        self._prepare_sidecar_flags()
 
-        # ----------------------------
-        # Restart async load
-        # ----------------------------
-        threading.Thread(
-            target=self._load_thumbnails_async,
-            args=(gen,),
-            daemon=True
-        ).start()
+        self.selected_index = None
+        self._scroll_offset_px = 0
+        self.canvas.configure(height=self._compute_canvas_height())
+        self._update_scrollbar()
+        self._render_visible_thumbnails()
+
+        threading.Thread(target=self._load_thumbnails_async, args=(gen,), daemon=True).start()
 
     # ============================================================
     # Thumbnail loading
@@ -145,164 +127,269 @@ class AsyncThumbnailGallery(tk.Frame):
             generation = self._load_generation
 
         for index, path in enumerate(self.image_paths):
-            # Abort if a newer generation exists
             if generation != self._load_generation:
                 return
 
-            thumb = self._create_thumbnail(path)
-            self.after(
-                0,
-                self._add_thumbnail,
-                index,
-                thumb,
-            )
+            try:
+                thumb_image = self._create_thumbnail_image(path)
+            except Exception as exc:
+                print(f"Thumbnail load failed for '{path}': {exc}")
+                thumb_image = Image.new("RGBA", (self.thumb_size, self.thumb_size), self.default_bg)
+            self._thumb_queue.put((generation, index, thumb_image))
 
-    def _create_thumbnail(self, path) -> ImageTk.PhotoImage:
-        img = self.load_image_by_exiforient(path) # EXIF auto-rotate
-        bg = Image.new("RGBA", (self.thumb_size, self.thumb_size), self.default_bg)
+    def _drain_thumbnail_queue(self) -> None:
+        processed = 0
+        max_per_tick = 24
 
-        img.thumbnail((self.thumb_size, self.thumb_size), Image.Resampling.LANCZOS)
+        while processed < max_per_tick:
+            try:
+                generation, index, thumb_image = self._thumb_queue.get_nowait()
+            except queue.Empty:
+                break
 
-        x = (self.thumb_size - img.width) // 2
-        y = (self.thumb_size - img.height) // 2
-        bg.paste(img, (x, y))
+            if generation == self._load_generation:
+                self._thumb_pil[index] = thumb_image
+                if index in self._visible_items:
+                    self._render_thumbnail(index)
+                if index == 0 and self._auto_select_first and self.image_paths:
+                    self._auto_select_first = False
+                    self.after(0, lambda: self.select_index(0, scroll=False))
+            processed += 1
 
-        return ImageTk.PhotoImage(bg)
-    
+        if self.winfo_exists():
+            self.after(10, self._drain_thumbnail_queue)
+
+    def _create_thumbnail_image(self, path) -> Image.Image:
+        img = self.load_image_by_exiforient(path)
+        # Leave 1 px on each side so the rectangle fill remains visible.
+        inner = self.thumb_size - 2
+        img.thumbnail((inner, inner), Image.Resampling.LANCZOS)
+        return img.convert("RGB")
+
     def load_image_by_exiforient(self, path: str):
         """
         Loads an image and applies EXIF orientation correction (auto-rotate).
         Returns an RGB image with correct orientation.
         """
-        try:
-            image = Image.open(path).convert("RGB")
-
-            try:
-                # modern Pillow: .getexif()
-                exif = image.getexif()
-                exiforient = exif.get(0x0112, 1)  # EXIF Orientation
-            except Exception:
-                exiforient = 1
-
-            # Rotate according to EXIF orientation tag
-            if exiforient == 3:
-                image = image.rotate(180, expand=True)
-            elif exiforient == 6:
-                image = image.rotate(270, expand=True)  # 90° CW
-            elif exiforient == 8:
-                image = image.rotate(90, expand=True)   # 90° CCW
-
-            return image
-
-        except Exception as e:
-            print("EXIF load/rotation failed:", e)
-            return Image.open(path).convert("RGB")
+        with Image.open(path) as image:
+            transposed = ImageOps.exif_transpose(image)
+            return transposed.convert("RGB")
 
     # ============================================================
-    # UI
+    # Virtualized rendering
     # ============================================================
 
-    def _add_thumbnail(self, index: int, thumb: ImageTk.PhotoImage) -> None:
+    def _compute_canvas_height(self) -> int:
+        return self._row_height + PADDING
+
+    def _prepare_sidecar_flags(self) -> None:
+        self._sidecar_exists = []
+        for img_path in self.image_paths:
+            sidecar = f"{os.path.splitext(img_path)[0]}_ppcrop.txt"
+            self._sidecar_exists.append(os.path.exists(sidecar))
+
+    def _logical_width(self) -> int:
+        return len(self.image_paths) * self._cell_span
+
+    def _viewport_width(self) -> int:
+        w = self.canvas.winfo_width()
+        return w if w > 1 else 1
+
+    def _max_scroll_offset(self) -> int:
+        return max(0, self._logical_width() - self._viewport_width())
+
+    def _set_scroll_offset(self, new_offset: int) -> None:
+        bounded = max(0, min(new_offset, self._max_scroll_offset()))
+        if bounded == self._scroll_offset_px and self._visible_items:
+            return
+
+        self._scroll_offset_px = bounded
+        self._render_visible_thumbnails()
+        self._update_scrollbar()
+
+    def _visible_index_range(self) -> tuple[int, int]:
+        total = len(self.image_paths)
+        if total == 0:
+            return 0, 0
+
+        viewport = self._viewport_width()
+        start = self._scroll_offset_px // self._cell_span
+        end = (self._scroll_offset_px + viewport) // self._cell_span + 1
+
+        buffer_items = 3
+        start = max(0, start - buffer_items)
+        end = min(total, end + buffer_items)
+
+        return start, end
+
+    def _clear_visible_items(self) -> None:
+        for _, (bg_id, overlay_id, img_id) in list(self._visible_items.items()):
+            self.canvas.delete(bg_id)
+            self.canvas.delete(img_id)
+            if overlay_id is not None:
+                self.canvas.delete(overlay_id)
+        self._visible_items.clear()
+        self._thumb_tk.clear()
+
+    def _render_visible_thumbnails(self) -> None:
+        start, end = self._visible_index_range()
+        wanted = set(range(start, end))
+
+        for index in list(self._visible_items.keys()):
+            if index not in wanted:
+                bg_id, overlay_id, img_id = self._visible_items.pop(index)
+                self.canvas.delete(bg_id)
+                self.canvas.delete(img_id)
+                if overlay_id is not None:
+                    self.canvas.delete(overlay_id)
+                self._thumb_tk.pop(index, None)
+
+        for index in range(start, end):
+            self._render_thumbnail(index)
+
+    def _render_thumbnail(self, index: int) -> None:
         if index < 0 or index >= len(self.image_paths):
             return
 
-        # wrapper frame so overlay doesn't break grid layout
-        wrapper = tk.Frame(self.inner_frame, bg=self.image_bg, bd=0)
-        wrapper.grid(row=0, column=index, padx=2, pady=2)
+        cell_left = index * self._cell_span - self._scroll_offset_px
+        x0 = cell_left + self._thumb_pad
+        y0 = self._thumb_pad
+        x1 = x0 + self.thumb_size
+        y1 = y0 + self.thumb_size
 
-        # thumbnail label
-        lbl = tk.Label(
-            wrapper,
-            image=thumb,
-            bg=self.image_bg,
-            borderwidth=1,
+        fill_color = self.image_bg
+        outline_color = self.selected_bg if index == self.selected_index else ""
+        outline_width = 1 if index == self.selected_index else 0
+        tag = f"thumb-{index}"
+
+        thumb_pil = self._thumb_pil.get(index)
+        thumb_tk = self._thumb_tk.get(index)
+        if thumb_pil is not None and thumb_tk is None:
+            thumb_tk = ImageTk.PhotoImage(thumb_pil)
+            self._thumb_tk[index] = thumb_tk
+
+        has_overlay = (
+            self.sidecar_icon is not None
+            and index < len(self._sidecar_exists)
+            and self._sidecar_exists[index]
         )
-        lbl.pack()   # inside wrapper instead of grid()
 
-        self.thumbs.append(thumb)
-        self.thumb_labels.append(lbl)
-        self.thumb_wrappers.append(wrapper)
+        if index in self._visible_items:
+            bg_id, overlay_id, img_id = self._visible_items[index]
+            self.canvas.coords(bg_id, x0, y0, x1, y1)
+            self.canvas.itemconfigure(bg_id, fill=fill_color, outline=outline_color, width=outline_width)
+            self.canvas.coords(img_id, (x0 + x1) // 2, (y0 + y1) // 2)
+            self.canvas.itemconfigure(img_id, image=thumb_tk if thumb_tk is not None else "")
 
-        img_path = self.image_paths[index]
-        sidecar = f"{os.path.splitext(img_path)[0]}_ppcrop.txt"
+            if has_overlay:
+                if overlay_id is None:
+                    overlay_id = self.canvas.create_image(x1 - 1, y0 + 1, image=self.sidecar_icon, anchor="ne", tags=(tag,))
+                else:
+                    self.canvas.coords(overlay_id, x1 - 1, y0 + 1)
+                    self.canvas.itemconfigure(overlay_id, image=self.sidecar_icon)
+            else:
+                if overlay_id is not None:
+                    self.canvas.delete(overlay_id)
+                    overlay_id = None
 
-        # sidecar overlay
-        if os.path.exists(sidecar) and self.sidecar_icon:
-            overlay = tk.Label(
-                wrapper,
-                image=self.sidecar_icon,   # transparent PNG
-                bd=0,
-                bg=self.image_bg,
-                borderwidth=1,
-                highlightthickness=1
+            self._visible_items[index] = (bg_id, overlay_id, img_id)
+        else:
+            bg_id = self.canvas.create_rectangle(
+                x0,
+                y0,
+                x1,
+                y1,
+                fill=fill_color,
+                outline=outline_color,
+                width=outline_width,
+                tags=(tag,),
             )
-            overlay.place(relx=0.99, rely=0.01, anchor="ne")
+            img_id = self.canvas.create_image(
+                (x0 + x1) // 2,
+                (y0 + y1) // 2,
+                image=thumb_tk if thumb_tk is not None else "",
+                anchor="center",
+                tags=(tag,),
+            )
+            overlay_id = None
+            if has_overlay:
+                overlay_id = self.canvas.create_image(x1 - 1, y0 + 1, image=self.sidecar_icon, anchor="ne", tags=(tag,))
 
-        # events stay on label
-        lbl.bind("<Button-1>", lambda e, i=index: self.select_index(i, scroll=True))
-        lbl.bind("<MouseWheel>", self._on_mouse_wheel)
-        lbl.bind("<Button-4>", lambda e: self.canvas.xview_scroll(-1, "units"))
-        lbl.bind("<Button-5>", lambda e: self.canvas.xview_scroll(1, "units"))
+            self.canvas.tag_bind(tag, "<Button-1>", lambda e, i=index: self.select_index(i, scroll=True))
+            self.canvas.tag_bind(tag, "<Button-4>", lambda e: self._scroll_units(-1))
+            self.canvas.tag_bind(tag, "<Button-5>", lambda e: self._scroll_units(1))
 
-        # auto-select first thumbnail after it loads (if enabled)
-        if index == 0 and self._auto_select_first:
-            self._auto_select_first = False
-            self.after(0, lambda: self.select_index(0, scroll=False))
-            
+            self._visible_items[index] = (bg_id, overlay_id, img_id)
+
+    # ============================================================
+    # Selection
+    # ============================================================
+
     def select_index(self, index: int, scroll: bool = True) -> None:
-        if index < 0 or index >= len(self.thumb_labels):
+        if index < 0 or index >= len(self.image_paths):
             return
 
-        # Clear previous selection
-        if self.selected_index is not None:
-            self.thumb_labels[self.selected_index].config(bg=self.image_bg)
-
-        # Apply new selection
         self.selected_index = index
-        self.thumb_labels[index].config(bg=self.selected_bg)
 
         if scroll:
             self._scroll_index_into_view(index)
+        else:
+            self._render_visible_thumbnails()
 
         if self.on_select:
             self.on_select(index)
 
-    # ============================================================
-    # Scrolling helpers
-    # ============================================================
-
     def _scroll_index_into_view(self, index) -> None:
-        self.update_idletasks()
+        item_left = index * self._cell_span
+        item_right = item_left + self._cell_span
+        view_left = self._scroll_offset_px
+        view_right = self._scroll_offset_px + self._viewport_width()
 
-        wrapper = self.thumb_wrappers[index]
+        if item_left < view_left:
+            self._set_scroll_offset(item_left)
+        elif item_right > view_right:
+            self._set_scroll_offset(item_right - self._viewport_width())
+        else:
+            self._render_visible_thumbnails()
 
-        canvas_left = self.canvas.canvasx(0)
-        canvas_right = canvas_left + self.canvas.winfo_width()
-
-        item_x = wrapper.winfo_x()
-        item_width = wrapper.winfo_width()
-
-        item_left = item_x
-        item_right = item_x + item_width
-
-        if item_left < canvas_left:
-            self.canvas.xview_moveto(item_left / self.inner_frame.winfo_width())
-        elif item_right > canvas_right:
-            offset = item_right - self.canvas.winfo_width()
-            self.canvas.xview_moveto(offset / self.inner_frame.winfo_width())
-
-    def _update_scrollregion(self, event=None) -> None:
-        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+    # ============================================================
+    # Scrolling
+    # ============================================================
 
     def _resize_canvas(self, event) -> None:
-        self.canvas.itemconfigure(self.canvas_window, height=event.height)
+        self.canvas.configure(height=self._compute_canvas_height())
+        # Clamp scroll offset in case the viewport grew or shrank.
+        self._scroll_offset_px = max(0, min(self._scroll_offset_px, self._max_scroll_offset()))
+        # Bypass _set_scroll_offset: its early-return guard blocks re-render on resize.
+        self._render_visible_thumbnails()
+        self._update_scrollbar()
+        if self.on_layout_change:
+            self.after_idle(self.on_layout_change)
+
+    def _on_scrollbar(self, action: str, *args) -> None:
+        if action == "moveto" and args:
+            fraction = float(args[0])
+            self._set_scroll_offset(int(round(fraction * self._max_scroll_offset())))
+            return
+
+        if action == "scroll" and len(args) >= 2:
+            count = int(args[0])
+            what = args[1]
+            if what == "pages":
+                delta = count * self._viewport_width()
+            else:
+                delta = count * max(1, self._cell_span // 3)
+            self._set_scroll_offset(self._scroll_offset_px + delta)
+
+    def _scroll_units(self, units: int) -> None:
+        self._set_scroll_offset(self._scroll_offset_px + (units * max(1, self._cell_span // 3)))
 
     def _on_mouse_wheel(self, event) -> None:
         if not self._scrollable:
             return
 
-        delta = -1 if event.delta > 0 else 1
-        self.canvas.xview_scroll(delta, "units")
+        delta_units = -1 if event.delta > 0 else 1
+        self._scroll_units(delta_units)
 
     def _drag_start(self, event) -> None:
         if not self._scrollable:
@@ -315,20 +402,27 @@ class AsyncThumbnailGallery(tk.Frame):
             return
 
         dx = self._drag_x - event.x
-        self.canvas.xview_scroll(int(dx / 2), "units")
+        self._set_scroll_offset(self._scroll_offset_px + dx)
         self._drag_x = event.x
 
-    def _on_xscroll(self, first: float, last: float) -> None:
-        first_f = float(first)
-        last_f = float(last)
+    def _update_scrollbar(self) -> None:
+        logical_width = self._logical_width()
+        viewport = self._viewport_width()
 
-        # Update scrollbar position
+        if logical_width <= 0 or logical_width <= viewport:
+            first = 0.0
+            last = 1.0
+            scrollable = False
+        else:
+            first = self._scroll_offset_px / logical_width
+            last = min(1.0, (self._scroll_offset_px + viewport) / logical_width)
+            scrollable = True
+
         self.scrollbar.set(first, last)
-        scrollable = not (first_f <= 0.0 and last_f >= 1.0)
+
         visibility_changed = scrollable != self._scrollable
         self._scrollable = scrollable
 
-        # Auto-hide logic
         if scrollable:
             if not self.scrollbar.winfo_ismapped():
                 self.scrollbar.pack(fill=tk.X)
