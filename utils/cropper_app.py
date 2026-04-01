@@ -755,6 +755,12 @@ class CropperApp:
 
                 self.image_enhancer_sliders[name] = [slider_label, slider]
 
+                # Mouse scroll support
+                resolution = info["resolution"] if "resolution" in info else 0.05
+                slider.bind("<MouseWheel>", lambda e, n=name, r=resolution: self._on_slider_scroll(e, n, r))
+                slider.bind("<Button-4>",   lambda e, n=name, r=resolution: self._on_slider_scroll_linux(e, n, r,  1))
+                slider.bind("<Button-5>",   lambda e, n=name, r=resolution: self._on_slider_scroll_linux(e, n, r, -1))
+
                 # Bind hover tooltip events if enter_tip exists
                 if "enter_tip" in info:
                     Hovertip(slider, info["enter_tip"], hover_delay=DEFAULT_TOOLTIP_DELAY)
@@ -766,6 +772,23 @@ class CropperApp:
             value = self.image_preferences[name]
             self.image_enhancer_slider_vars[name].update(value)
             self.image_enhancer_sliders[name][1].set(value)
+
+    def _on_slider_scroll(self, e, name: str, resolution: float) -> str:
+        slider = self.image_enhancer_sliders[name][1]
+        direction = 1 if e.delta > 0 else -1
+        new_val = round(slider.get() + direction * resolution, 10)
+        new_val = max(slider.cget("from"), min(slider.cget("to"), new_val))
+        slider.set(new_val)
+        self.schedule_slider_update(name, new_val)
+        return "break"
+
+    def _on_slider_scroll_linux(self, e, name: str, resolution: float, direction: int) -> str:
+        slider = self.image_enhancer_sliders[name][1]
+        new_val = round(slider.get() + direction * resolution, 10)
+        new_val = max(slider.cget("from"), min(slider.cget("to"), new_val))
+        slider.set(new_val)
+        self.schedule_slider_update(name, new_val)
+        return "break"
 
     def schedule_slider_update(self, slider_label, value) -> None:
         if self._slider_update_pending:
