@@ -60,6 +60,9 @@ defaults:dict = {
     "CANVAS_ZOOM": 1.0,
     "GRID_COLOR":"#00ff00",
     "EXIT_AFTER_LAST_IMAGE": True,
+    "GALLERY_SHOW_LANDSCAPE": True,
+    "GALLERY_SHOW_PORTRAIT": True,
+    "GALLERY_SHOW_UNPROCESSED": False,
 }
 
 available_option:dict = {
@@ -494,6 +497,10 @@ class CropperApp:
                 image_bg=BORDER_COLOR,
                 on_select=lambda index: self.set_image_index(index),
                 on_layout_change=self.on_gallery_layout_change,
+                show_landscape=self.app_settings.get("gallery_show_landscape", True),
+                show_portrait=self.app_settings.get("gallery_show_portrait", True),
+                show_unprocessed=self.app_settings.get("gallery_show_unprocessed", False),
+                on_filter_change=lambda ls, pt, up: self.app_settings.update({"gallery_show_landscape": ls, "gallery_show_portrait": pt, "gallery_show_unprocessed": up}),
             )
             self.gallery.pack(fill=tk.X, padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1])
         else:
@@ -555,9 +562,15 @@ class CropperApp:
         if not pref_loaded or not self.apply_saved_state():
             self.init_crop_rectangle()
 
-        count_img = len(self.image_paths)
+        total_img = len(self.image_paths)
+        if self.gallery is not None and self.gallery.filtered_count() < total_img:
+            filtered_pos = (self.gallery._filtered_pos_by_source.get(self.img_idx) or 0) + 1
+            count_img = self.gallery.filtered_count()
+        else:
+            filtered_pos = self.img_idx + 1
+            count_img = total_img
         counter_length = max(4, 3 * len(str(count_img)))
-        self.status_count.config(text=f"[{self.img_idx+1}/{count_img}]", width=counter_length)
+        self.status_count.config(text=f"[{filtered_pos}/{count_img}]", width=counter_length)
 
         self.create_image_enhancer_sliders() # create image options sliders
         self.create_image_enhancer_checkboxes()
@@ -1591,6 +1604,9 @@ class CropperApp:
             settings["save_canvas_zoom"]=defaults["SAVE_CANVAS_ZOOM"]
             settings["canvas_zoom"]=defaults["CANVAS_ZOOM"]
             settings["exit_after_last_image"]=defaults["EXIT_AFTER_LAST_IMAGE"]
+            settings["gallery_show_landscape"]=defaults["GALLERY_SHOW_LANDSCAPE"]
+            settings["gallery_show_portrait"]=defaults["GALLERY_SHOW_PORTRAIT"]
+            settings["gallery_show_unprocessed"]=defaults["GALLERY_SHOW_UNPROCESSED"]
 
             #print("APP Settings from DEFAULTS", settings)
             return settings
@@ -1647,6 +1663,13 @@ class CropperApp:
             settings["canvas_zoom"] = defaults["CANVAS_ZOOM"]
 
         settings["canvas_zoom"] = max(CANVAS_ZOOM_MIN, min(1.0, float(settings["canvas_zoom"])))
+
+        if not isinstance(settings.get("gallery_show_landscape"), bool):
+            settings["gallery_show_landscape"] = defaults["GALLERY_SHOW_LANDSCAPE"]
+        if not isinstance(settings.get("gallery_show_portrait"), bool):
+            settings["gallery_show_portrait"] = defaults["GALLERY_SHOW_PORTRAIT"]
+        if not isinstance(settings.get("gallery_show_unprocessed"), bool):
+            settings["gallery_show_unprocessed"] = defaults["GALLERY_SHOW_UNPROCESSED"]
         
         #print("Loaded APP Settings from file:", settings)
         return settings
@@ -1917,33 +1940,43 @@ class CropperApp:
             print(f"This index does not exists: {index}")
 
     def next_image(self, _e=None) -> None:
-        if len(self.image_paths) > 1:
-            self.img_idx += 1
+        navigable = self.gallery.filtered_count() if self.gallery is not None else len(self.image_paths)
+        if navigable > 1:
+            if self.gallery is not None:
+                next_idx = self.gallery.next_filtered_index(self.img_idx)
+            else:
+                next_idx = self.img_idx + 1 if self.img_idx + 1 < len(self.image_paths) else None
 
-            if self.img_idx >= len(self.image_paths):
+            if next_idx is None:
                 if self.app_settings["exit_after_last_image"]:
                     on_closing("showinfo", "Done", "All images have been processed. App closes now.")
                     return
                 else:
-                    self.img_idx = 0
+                    next_idx = self.gallery._filtered_indices[0] if self.gallery is not None and self.gallery._filtered_indices else 0
 
+            self.img_idx = next_idx
             if self.gallery is not None:
                 self.gallery.select_index(self.img_idx)
-
             self.load_image()
+        elif navigable == 1 and self.app_settings["exit_after_last_image"]:
+            on_closing("showinfo", "Done", "All images have been processed. App closes now.")
         else:
-            on_closing("askokcancel", "This was the only image in this folder.\nWould you like to close the app now?")
+            on_closing("askokcancel", "This was the only image in this folder.", "This was the only image in this folder.\nWould you like to close the app now?")
 
     def prev_image(self, _e=None) -> None:
-        if len(self.image_paths) > 1:
-            self.img_idx -= 1
+        navigable = self.gallery.filtered_count() if self.gallery is not None else len(self.image_paths)
+        if navigable > 1:
+            if self.gallery is not None:
+                prev_idx = self.gallery.prev_filtered_index(self.img_idx)
+            else:
+                prev_idx = self.img_idx - 1 if self.img_idx - 1 >= 0 else None
 
-            if self.img_idx < 0:
-                self.img_idx = len(self.image_paths)-1
+            if prev_idx is None:
+                prev_idx = self.gallery._filtered_indices[-1] if self.gallery is not None and self.gallery._filtered_indices else len(self.image_paths) - 1
 
+            self.img_idx = prev_idx
             if self.gallery is not None:
                 self.gallery.select_index(self.img_idx)
-
             self.load_image()
 
     def on_skip(self, _e=None) -> None:

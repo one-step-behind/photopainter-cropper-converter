@@ -11,6 +11,9 @@ from PIL import Image, ImageOps, ImageTk
 THUMB_SIZE = 80
 PADDING = 12
 
+_EXIF_ORIENTATION_TAG = 0x0112
+_EXIF_SWAP_ORIENTATIONS = frozenset({5, 6, 7, 8})
+
 
 class AsyncThumbnailGallery(tk.Frame):
     def __init__(
@@ -24,6 +27,10 @@ class AsyncThumbnailGallery(tk.Frame):
         selected_bg: str = "#add8e6",
         on_select: Optional[Callable[[int], None]] = None,
         on_layout_change: Optional[Callable[[], None]] = None,
+        show_landscape: bool = True,
+        show_portrait: bool = True,
+        show_unprocessed: bool = False,
+        on_filter_change: Optional[Callable[[bool, bool, bool], None]] = None,
     ):
         """
         Single-row, horizontally scrollable, async-loading thumbnail gallery.
@@ -34,7 +41,6 @@ class AsyncThumbnailGallery(tk.Frame):
         self.image_paths: List[str] = image_paths
         self.thumb_size: int = thumb_size
         self.selected_index: Optional[int] = None
-        self._auto_select_first = True
         self.default_bg = bg
         self.image_bg = image_bg
         self.selected_bg = selected_bg
@@ -56,6 +62,17 @@ class AsyncThumbnailGallery(tk.Frame):
         self._thumb_tk: dict[int, ImageTk.PhotoImage] = {}
         self._visible_items: dict[int, tuple[int, Optional[int], int]] = {}
         self._sidecar_exists: List[bool] = []
+        self._is_landscape: List[Optional[bool]] = []
+        self._filtered_indices: List[int] = []
+        self._filtered_pos_by_source: dict[int, int] = {}
+
+        self._show_landscape: bool = show_landscape
+        self._show_portrait: bool = show_portrait
+        self._show_unprocessed: bool = show_unprocessed
+        self.on_filter_change: Optional[Callable[[bool, bool, bool], None]] = on_filter_change
+        self.show_landscape_var = tk.BooleanVar(value=show_landscape)
+        self.show_portrait_var = tk.BooleanVar(value=show_portrait)
+        self.show_unprocessed_var = tk.BooleanVar(value=show_unprocessed)
 
         try:
             if not hasattr(sys, "frozen"):
@@ -65,6 +82,53 @@ class AsyncThumbnailGallery(tk.Frame):
             self.sidecar_icon = tk.PhotoImage(file=resource_path)
         except Exception:
             self.sidecar_icon = None
+
+        self.filter_bar = tk.Frame(self, bg=self.default_bg)
+        self.filter_bar.pack(fill=tk.X, pady=(0, 2))
+
+        tk.Label(self.filter_bar, text="Show:", bg=self.default_bg, fg="white").pack(side=tk.LEFT, padx=(4, 6))
+        tk.Checkbutton(
+            self.filter_bar,
+            text="Landscape",
+            variable=self.show_landscape_var,
+            command=self._on_filter_change,
+            bg=self.default_bg,
+            fg="white",
+            selectcolor=self.image_bg,
+            activebackground=self.default_bg,
+            activeforeground="white",
+            highlightthickness=0,
+            bd=0,
+            takefocus=0,
+        ).pack(side=tk.LEFT)
+        tk.Checkbutton(
+            self.filter_bar,
+            text="Portrait",
+            variable=self.show_portrait_var,
+            command=self._on_filter_change,
+            bg=self.default_bg,
+            fg="white",
+            selectcolor=self.image_bg,
+            activebackground=self.default_bg,
+            activeforeground="white",
+            highlightthickness=0,
+            bd=0,
+            takefocus=0,
+        ).pack(side=tk.LEFT, padx=(4, 0))
+        tk.Checkbutton(
+            self.filter_bar,
+            text="Unprocessed",
+            variable=self.show_unprocessed_var,
+            command=self._on_filter_change,
+            bg=self.default_bg,
+            fg="white",
+            selectcolor=self.image_bg,
+            activebackground=self.default_bg,
+            activeforeground="white",
+            highlightthickness=0,
+            bd=0,
+            takefocus=0,
+        ).pack(side=tk.LEFT, padx=(4, 0))
 
         self.canvas = tk.Canvas(
             self,
@@ -90,7 +154,8 @@ class AsyncThumbnailGallery(tk.Frame):
         self.canvas.bind("<ButtonPress-1>", self._drag_start)
         self.canvas.bind("<B1-Motion>", self._drag_move)
 
-        self._prepare_sidecar_flags()
+        self._prepare_image_flags()
+        self._rebuild_filtered_indices(None)
 
         threading.Thread(target=self._load_thumbnails_async, daemon=True).start()
         self.after(10, self._drain_thumbnail_queue)
@@ -101,16 +166,15 @@ class AsyncThumbnailGallery(tk.Frame):
         """
         self._load_generation += 1
         gen = self._load_generation
-        self._auto_select_first = True
 
         self._clear_visible_items()
         self._thumb_pil.clear()
         self._thumb_tk.clear()
 
         self.image_paths = image_paths
-        self._prepare_sidecar_flags()
+        self._prepare_image_flags()
+        self._rebuild_filtered_indices(self.selected_index)
 
-        self.selected_index = None
         self._scroll_offset_px = 0
         self.canvas.configure(height=self._compute_canvas_height())
         self._update_scrollbar()
@@ -122,45 +186,102 @@ class AsyncThumbnailGallery(tk.Frame):
     # Thumbnail loading
     # ============================================================
 
+    def _read_oriented_is_landscape(self, path: str) -> Optional[bool]:
+        """
+        Read oriented image dimensions from file headers only (no pixel data).
+        Uses PIL lazy loading and the raw EXIF orientation tag.
+        """
+        try:
+            with Image.open(path) as img:
+                w, h = img.size
+                try:
+                    tag = img.getexif().get(_EXIF_ORIENTATION_TAG, 1)
+                    if tag in _EXIF_SWAP_ORIENTATIONS:
+                        w, h = h, w
+                except Exception:
+                    pass
+                return w >= h
+        except Exception:
+            return None
+
     def _load_thumbnails_async(self, generation=None) -> None:
         if generation is None:
             generation = self._load_generation
 
+        # Pass 1: header-only reads — populates orientation for the filter immediately.
+        # PIL lazy-loads, so Image.open() + .size + .getexif() read only the file header.
+        orientations: dict[int, Optional[bool]] = {}
         for index, path in enumerate(self.image_paths):
             if generation != self._load_generation:
                 return
+            is_landscape = self._read_oriented_is_landscape(path)
+            orientations[index] = is_landscape
+            if is_landscape is not None:
+                self._thumb_queue.put((generation, index, None, is_landscape))
 
+        # Pass 2: full pixel load + thumbnail generation.
+        # Only loads images that currently match the filter; filtered-out images are
+        # loaded on demand via _start_fill_thread_if_needed when the filter is expanded.
+        for index, path in enumerate(self.image_paths):
+            if generation != self._load_generation:
+                return
+            if index in self._thumb_pil:
+                continue
+            is_landscape = orientations.get(index)
+            if is_landscape is not None:
+                if not ((is_landscape and self._show_landscape) or (not is_landscape and self._show_portrait)):
+                    continue
             try:
-                thumb_image = self._create_thumbnail_image(path)
+                img = self.load_image_by_exiforient(path)
+                is_landscape = img.width >= img.height
+                thumb_image = self._create_thumbnail_image(img)
             except Exception as exc:
                 print(f"Thumbnail load failed for '{path}': {exc}")
                 thumb_image = Image.new("RGBA", (self.thumb_size, self.thumb_size), self.default_bg)
-            self._thumb_queue.put((generation, index, thumb_image))
+                is_landscape = None
+            self._thumb_queue.put((generation, index, thumb_image, is_landscape))
 
     def _drain_thumbnail_queue(self) -> None:
         processed = 0
         max_per_tick = 24
+        orientation_changed = False
+        needs_render: list[int] = []
 
         while processed < max_per_tick:
             try:
-                generation, index, thumb_image = self._thumb_queue.get_nowait()
+                generation, index, thumb_image, is_landscape = self._thumb_queue.get_nowait()
             except queue.Empty:
                 break
 
             if generation == self._load_generation:
-                self._thumb_pil[index] = thumb_image
-                if index in self._visible_items:
-                    self._render_thumbnail(index)
-                if index == 0 and self._auto_select_first and self.image_paths:
-                    self._auto_select_first = False
-                    self.after(0, lambda: self.select_index(0, scroll=False))
+                previous_orientation = self._is_landscape[index] if index < len(self._is_landscape) else None
+                if index < len(self._is_landscape):
+                    self._is_landscape[index] = is_landscape
+
+                if previous_orientation != is_landscape:
+                    orientation_changed = True
+
+                if thumb_image is not None:
+                    self._thumb_pil[index] = thumb_image
+                    needs_render.append(index)
+
             processed += 1
+
+        # One filter rebuild per tick (not one per item) to avoid redundant work.
+        if orientation_changed:
+            self._rebuild_filtered_indices(self.selected_index, notify=True)
+            self._render_visible_thumbnails()
+        elif needs_render:
+            for index in needs_render:
+                if index in self._visible_items:
+                    pos = self._filtered_pos_by_source.get(index)
+                    if pos is not None:
+                        self._render_thumbnail(index, pos)
 
         if self.winfo_exists():
             self.after(10, self._drain_thumbnail_queue)
 
-    def _create_thumbnail_image(self, path) -> Image.Image:
-        img = self.load_image_by_exiforient(path)
+    def _create_thumbnail_image(self, img: Image.Image) -> Image.Image:
         # Leave 1 px on each side so the rectangle fill remains visible.
         inner = self.thumb_size - 2
         img.thumbnail((inner, inner), Image.Resampling.LANCZOS)
@@ -175,6 +296,36 @@ class AsyncThumbnailGallery(tk.Frame):
             transposed = ImageOps.exif_transpose(image)
             return transposed.convert("RGB")
 
+    def _start_fill_thread_if_needed(self) -> None:
+        gen = self._load_generation
+        missing = [
+            (idx, self.image_paths[idx])
+            for idx in self._filtered_indices
+            if idx not in self._thumb_pil and idx < len(self.image_paths)
+        ]
+        if missing:
+            threading.Thread(
+                target=self._load_specific_thumbnails_async,
+                args=(gen, missing),
+                daemon=True,
+            ).start()
+
+    def _load_specific_thumbnails_async(self, generation: int, items: list[tuple[int, str]]) -> None:
+        for index, path in items:
+            if generation != self._load_generation:
+                return
+            if index in self._thumb_pil:
+                continue
+            try:
+                img = self.load_image_by_exiforient(path)
+                is_landscape = img.width >= img.height
+                thumb_image = self._create_thumbnail_image(img)
+            except Exception as exc:
+                print(f"Thumbnail load failed for '{path}': {exc}")
+                thumb_image = Image.new("RGBA", (self.thumb_size, self.thumb_size), self.default_bg)
+                is_landscape = None
+            self._thumb_queue.put((generation, index, thumb_image, is_landscape))
+
     # ============================================================
     # Virtualized rendering
     # ============================================================
@@ -182,14 +333,72 @@ class AsyncThumbnailGallery(tk.Frame):
     def _compute_canvas_height(self) -> int:
         return self._row_height + PADDING
 
-    def _prepare_sidecar_flags(self) -> None:
+    def _prepare_image_flags(self) -> None:
         self._sidecar_exists = []
+        self._is_landscape = [None] * len(self.image_paths)
         for img_path in self.image_paths:
             sidecar = f"{os.path.splitext(img_path)[0]}_ppcrop.txt"
             self._sidecar_exists.append(os.path.exists(sidecar))
 
+    def _rebuild_filtered_indices(self, anchor_source_index: Optional[int], notify: bool = False) -> None:
+        show_landscape = bool(self.show_landscape_var.get())
+        show_portrait = bool(self.show_portrait_var.get())
+        show_unprocessed = bool(self.show_unprocessed_var.get())
+
+        self._filtered_indices = []
+        for index, is_landscape in enumerate(self._is_landscape):
+            has_sidecar = self._sidecar_exists[index] if index < len(self._sidecar_exists) else False
+            # When "Unprocessed" filter is active, skip images that already have a sidecar.
+            if show_unprocessed and has_sidecar:
+                continue
+            # Unknown orientation stays visible until its thumbnail is loaded.
+            if is_landscape is None:
+                self._filtered_indices.append(index)
+            elif (is_landscape and show_landscape) or ((not is_landscape) and show_portrait):
+                self._filtered_indices.append(index)
+
+        self._filtered_pos_by_source = {src: pos for pos, src in enumerate(self._filtered_indices)}
+
+        next_selected = self._choose_nearest_filtered(anchor_source_index)
+        self.selected_index = next_selected
+
+        if notify and next_selected is not None and self.on_select is not None:
+            self.on_select(next_selected)
+
+    def _choose_nearest_filtered(self, anchor_source_index: Optional[int]) -> Optional[int]:
+        if not self._filtered_indices:
+            return None
+
+        if anchor_source_index is None:
+            return self._filtered_indices[0]
+
+        if anchor_source_index in self._filtered_pos_by_source:
+            return anchor_source_index
+
+        return min(self._filtered_indices, key=lambda idx: (abs(idx - anchor_source_index), idx < anchor_source_index))
+
+    def _on_filter_change(self) -> None:
+        # At least one orientation option must remain checked.
+        if not self.show_landscape_var.get() and not self.show_portrait_var.get():
+            # Revert whichever one just got unchecked by restoring it to the current flag.
+            self.show_landscape_var.set(self._show_landscape)
+            self.show_portrait_var.set(self._show_portrait)
+            return
+        self._show_landscape = bool(self.show_landscape_var.get())
+        self._show_portrait = bool(self.show_portrait_var.get())
+        self._show_unprocessed = bool(self.show_unprocessed_var.get())
+        if self.on_filter_change:
+            self.on_filter_change(self._show_landscape, self._show_portrait, self._show_unprocessed)
+        anchor = self.selected_index
+        self._rebuild_filtered_indices(anchor_source_index=anchor, notify=True)
+        self._scroll_offset_px = 0
+        self._clear_visible_items()
+        self._update_scrollbar()
+        self._render_visible_thumbnails()
+        self._start_fill_thread_if_needed()
+
     def _logical_width(self) -> int:
-        return len(self.image_paths) * self._cell_span
+        return len(self._filtered_indices) * self._cell_span
 
     def _viewport_width(self) -> int:
         w = self.canvas.winfo_width()
@@ -208,7 +417,7 @@ class AsyncThumbnailGallery(tk.Frame):
         self._update_scrollbar()
 
     def _visible_index_range(self) -> tuple[int, int]:
-        total = len(self.image_paths)
+        total = len(self._filtered_indices)
         if total == 0:
             return 0, 0
 
@@ -233,7 +442,7 @@ class AsyncThumbnailGallery(tk.Frame):
 
     def _render_visible_thumbnails(self) -> None:
         start, end = self._visible_index_range()
-        wanted = set(range(start, end))
+        wanted = {self._filtered_indices[pos] for pos in range(start, end)}
 
         for index in list(self._visible_items.keys()):
             if index not in wanted:
@@ -244,14 +453,15 @@ class AsyncThumbnailGallery(tk.Frame):
                     self.canvas.delete(overlay_id)
                 self._thumb_tk.pop(index, None)
 
-        for index in range(start, end):
-            self._render_thumbnail(index)
+        for pos in range(start, end):
+            source_index = self._filtered_indices[pos]
+            self._render_thumbnail(source_index, pos)
 
-    def _render_thumbnail(self, index: int) -> None:
+    def _render_thumbnail(self, index: int, filtered_pos: int) -> None:
         if index < 0 or index >= len(self.image_paths):
             return
 
-        cell_left = index * self._cell_span - self._scroll_offset_px
+        cell_left = filtered_pos * self._cell_span - self._scroll_offset_px
         x0 = cell_left + self._thumb_pad
         y0 = self._thumb_pad
         x1 = x0 + self.thumb_size
@@ -325,8 +535,38 @@ class AsyncThumbnailGallery(tk.Frame):
     # Selection
     # ============================================================
 
+    def next_filtered_index(self, current_source_index: int) -> Optional[int]:
+        """Return the next source index after current in the filtered list, or None if already at the end."""
+        if not self._filtered_indices:
+            return None
+        pos = self._filtered_pos_by_source.get(current_source_index)
+        if pos is None:
+            return self._choose_nearest_filtered(current_source_index)
+        next_pos = pos + 1
+        if next_pos >= len(self._filtered_indices):
+            return None
+        return self._filtered_indices[next_pos]
+
+    def prev_filtered_index(self, current_source_index: int) -> Optional[int]:
+        """Return the previous source index before current in the filtered list, or None if already at the start."""
+        if not self._filtered_indices:
+            return None
+        pos = self._filtered_pos_by_source.get(current_source_index)
+        if pos is None:
+            return self._choose_nearest_filtered(current_source_index)
+        prev_pos = pos - 1
+        if prev_pos < 0:
+            return None
+        return self._filtered_indices[prev_pos]
+
+    def filtered_count(self) -> int:
+        return len(self._filtered_indices)
+
     def select_index(self, index: int, scroll: bool = True) -> None:
         if index < 0 or index >= len(self.image_paths):
+            return
+
+        if index not in self._filtered_pos_by_source:
             return
 
         self.selected_index = index
@@ -340,7 +580,11 @@ class AsyncThumbnailGallery(tk.Frame):
             self.on_select(index)
 
     def _scroll_index_into_view(self, index) -> None:
-        item_left = index * self._cell_span
+        filtered_pos = self._filtered_pos_by_source.get(index)
+        if filtered_pos is None:
+            return
+
+        item_left = filtered_pos * self._cell_span
         item_right = item_left + self._cell_span
         view_left = self._scroll_offset_px
         view_right = self._scroll_offset_px + self._viewport_width()

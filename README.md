@@ -151,6 +151,9 @@ save_filelist=True         # save fileList.txt at app exit for both orientations
 exit_after_last_image=True # exit app after last image was processed
 save_canvas_zoom=True      # save canvas zoom at exit
 canvas_zoom=0.83           # canvas zoom value
+gallery_show_landscape=True    # show landscape images
+gallery_show_portrait=True     # show portrait images
+gallery_show_unprocessed=False # show unprocessed images only
 ```
 
 ## Install & Run this project
