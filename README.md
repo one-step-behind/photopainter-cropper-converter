@@ -73,6 +73,7 @@ A sample image:
      - `ESC` = skip current image
      - `PAGE_UP` = previous image without processing current image
      - `PAGE_DOWN` = next image without processing current image
+     - `Ctrl`+`A` = maximize and center crop marker
      - `Enter`, `Ctrl`+`S` = process & save current image and go to next
      - `Ctrl`+`Shift`+`S` = Toggle Saving image list to fileList.txt when app is closing
      - `Ctrl`+`Shift`+`Z` = Toggle Remember canvas zoom when app is closing

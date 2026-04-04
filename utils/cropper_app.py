@@ -385,6 +385,7 @@ class CropperApp:
             self.window.bind(ks, self.on_plus)
         for ks in ("<minus>", "<KP_Subtract>"):
             self.window.bind(ks, self.on_minus)
+        self.window.bind("<Control-a>", self.on_select_all)
 
         # Various
         self.window.bind("<Configure>", self.on_window_resize)
@@ -1151,6 +1152,20 @@ class CropperApp:
 
         step = ARROW_STEP_FAST if (e.state & 0x0001) else ARROW_STEP # Shift accelerates
         self.rect_center = (self.rect_center[0] + dx*step, self.rect_center[1] + dy*step)
+        self.clamp_crop_rectangle_to_canvas()
+        self.sync_rect_image_coords_from_display()
+        self.draw_crop_marker_grid()
+
+    def on_select_all(self, _e=None) -> None:
+        """Maximize crop marker to the largest possible size fitting the image, centered."""
+        dw, dh = self.disp_size
+        # Largest rect that fits within the displayed image while keeping the target ratio
+        max_w = min(dw, int(dh * self.ratio))
+        max_h = int(max_w / self.ratio)
+        self.rect_w = max(64, max_w)
+        self.rect_h = max(1, max_h)
+        # Center on the displayed image
+        self.rect_center = (self.img_off[0] + dw // 2, self.img_off[1] + dh // 2)
         self.clamp_crop_rectangle_to_canvas()
         self.sync_rect_image_coords_from_display()
         self.draw_crop_marker_grid()
