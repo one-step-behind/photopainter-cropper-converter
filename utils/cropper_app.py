@@ -153,12 +153,7 @@ class CropperApp:
             icon = tk.PhotoImage(file=resource_path)
             self.window.iconphoto(False, icon)
 
-        self.window.title(f"{APP_TITLE} – "
-            "Drag/Arrows=move (Shift=fast)  •  "
-            "Scroll/+/-=resize (Shift=fast, Ctrl+Shift=slow)  •  "
-            "Ctrl+Scroll=canvas zoom  •  "
-            "Esc=skip"
-        )
+        self.window.title(APP_TITLE)
 
         # The Frame
         top = ttk.Frame(self.window)
@@ -167,6 +162,12 @@ class CropperApp:
         # top button bar
         self.button_bar = ttk.Frame(top)
         self.button_bar.pack(padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1], anchor=tk.W, fill=tk.X, side=tk.TOP)
+
+        # help button
+        self._help_window = None
+        btn_help = ttk.Button(self.button_bar, text="?", width=2, takefocus=0, command=self.show_help)
+        btn_help.pack(side=tk.RIGHT, padx=LABEL_PADDINGS[0])
+        Hovertip(btn_help, "Show keyboard shortcuts & help (F1)", hover_delay=DEFAULT_TOOLTIP_DELAY)
 
         # Frame holding image canvas and options pane
         canvas_with_options = ttk.Frame(window)
@@ -372,7 +373,7 @@ class CropperApp:
 
         # Keyboard events
         self.window.bind("<Escape>", self.on_skip)
-        self.window.bind_all("<Tab>", self.on_confirm_tab) # Tab intercept (prevent focus change)
+        self.window.bind("<F1>", self.show_help)
 
         # Keyboard events (movement)
         self.window.bind("<Left>",  lambda e: self.on_arrow(e, -1,  0))
@@ -1139,11 +1140,6 @@ class CropperApp:
         self.apply_resize_factor(factor)
 
     # ---------- Keyboard actions ----------
-    def on_confirm_tab(self):
-        self.next_image()
-
-        return "break"  # avoid changing Tab focus
-
     def on_arrow(self, e, dx, dy) -> None:
         focused = self.window.focus_get()
         if isinstance(focused, (tk.Entry, ttk.Entry, tk.Text)):
@@ -1155,6 +1151,84 @@ class CropperApp:
         self.clamp_crop_rectangle_to_canvas()
         self.sync_rect_image_coords_from_display()
         self.draw_crop_marker_grid()
+
+    def show_help(self, _e=None) -> str:
+        """Show a small help window with keyboard shortcuts."""
+        if self._help_window is not None and self._help_window.winfo_exists():
+            self._help_window.lift()
+            self._help_window.focus_set()
+            return "break"
+
+        win = tk.Toplevel(self.window)
+        win.title(f"{APP_TITLE} – Help")
+        win.resizable(False, False)
+        win.transient(self.window)
+        win.grab_set()
+        win.focus_force()
+        self._help_window = win
+
+        def _on_help_close() -> None:
+            self._help_window = None
+            win.destroy()
+
+        win.protocol("WM_DELETE_WINDOW", _on_help_close)
+
+        help_text = (
+            "Keyboard shortcuts & mouse controls\n"
+            "\n"
+            "Navigation\n"
+            "  Page Up / Page Down   Previous / Next image\n"
+            "  Esc                   Skip image\n"
+            "\n"
+            "Crop marker – move\n"
+            "  Arrow keys            Move crop marker\n"
+            "  Shift + Arrow keys    Move crop marker (fast)\n"
+            "  Drag (left mouse)     Drag crop marker\n"
+            "\n"
+            "Crop marker – resize\n"
+            "  + / =                 Enlarge\n"
+            "  -                     Shrink\n"
+            "  Shift + +/-           Resize (fast)\n"
+            "  Ctrl+Shift + +/-      Resize (slow)\n"
+            "  Scroll wheel          Resize\n"
+            "  Ctrl+A                Maximize and center\n"
+            "\n"
+            "Canvas\n"
+            "  Ctrl + Scroll         Canvas zoom in/out\n"
+            "\n"
+            "Actions\n"
+            "  Enter / Ctrl+S        Crop, convert and load next image\n"
+            "  Ctrl+O                Toggle orientation\n"
+            "  Ctrl+F                Toggle fill mode\n"
+            "  Ctrl+D                Toggle target device\n"
+            "  Ctrl+1/2/3            Edge / Smooth / Sharpen\n"
+            "  Ctrl+R                Reload folder\n"
+            "  Ctrl+L                Change folder\n"
+        )
+
+        lbl = tk.Label(
+            win,
+            text=help_text,
+            justify=tk.LEFT,
+            font=("Courier", 10),
+            bg=WINDOW_BACKGROUND_COLOR,
+            fg=FOREGROUND_COLOR,
+            padx=16,
+            pady=12,
+        )
+        lbl.pack()
+
+        btn_close = ttk.Button(win, text="Close", takefocus=0, command=_on_help_close)
+        btn_close.pack(pady=(0, 10))
+
+        win.bind("<Escape>", lambda _e: _on_help_close())
+
+        # Center over the main window
+        win.update_idletasks()
+        wx = self.window.winfo_rootx() + (self.window.winfo_width() - win.winfo_width()) // 2
+        wy = self.window.winfo_rooty() + (self.window.winfo_height() - win.winfo_height()) // 2
+        win.geometry(f"+{wx}+{wy}")
+        return "break"
 
     def on_select_all(self, _e=None) -> None:
         """Maximize crop marker to the largest possible size fitting the image, centered."""
