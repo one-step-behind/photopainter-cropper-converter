@@ -276,9 +276,11 @@ class CropperApp:
 
         self.option_button_def = {
             "orientation": {
-                "widget_type": "button",
+                "widget_type": "combobox",
                 "default_text": "Orientation",
                 "command": self.toggle_orientation,
+                "postcommand": lambda e=None: self.set_orientation("orientation"),
+                "values": available_option["ORIENTATION"],
                 "enter_tip": "Toggle Orientation (Ctrl+O)",
                 "fill": tk.X,
                 "underline": 0,
@@ -1351,9 +1353,11 @@ class CropperApp:
         return x1d, y1d, x2d, y2d
 
     # ---------- Toggles ----------
-    def toggle_orientation(self, _e=None) -> None:
-        # Switch internal state
-        self.image_preferences["orientation"] = available_option["ORIENTATION"][0] if self.image_preferences["orientation"] == available_option["ORIENTATION"][1] else available_option["ORIENTATION"][1]
+    def _apply_orientation(self, orientation: str) -> None:
+        if orientation not in available_option["ORIENTATION"]:
+            return
+
+        self.image_preferences["orientation"] = orientation
 
         # Update target_size and ratio for new orientation
         self.update_targetsize_and_ratio()
@@ -1388,6 +1392,19 @@ class CropperApp:
         self.draw_crop_marker_grid()
 
         #self.canvas.tag_raise("crop_layer")
+
+    def toggle_orientation(self, _e=None) -> None:
+        current = self.image_preferences.get("orientation")
+        next_orientation = (
+            available_option["ORIENTATION"][0]
+            if current == available_option["ORIENTATION"][1]
+            else available_option["ORIENTATION"][1]
+        )
+        self._apply_orientation(next_orientation)
+
+    def set_orientation(self, field) -> None:
+        selected = self.app_button_vars[field].get()
+        self._apply_orientation(selected)
 
     def set_fill_mode(self, field) -> None:
         self.image_preferences["fill_mode"] = self.app_button_vars[field].get()
