@@ -6,6 +6,7 @@ from geopy.geocoders import Nominatim
 from PIL import Image, ExifTags
 from utils.textoverlay_defaults import TEXT_OVERLAY_DEFAULTS, FONT_DIVISOR_MIN, FONT_DIVISOR_MAX
 from utils.keybinds import bind_toggle_keys
+from utils.tooltip import Hovertip
 
 class CanvasTextOverlay:
     def __init__(self, control_frame, canvas_frame, callback=None):
@@ -110,15 +111,9 @@ class CanvasTextOverlay:
         self.location_refresh_btn.pack(fill=tk.X, padx=5)
 
         # Text field
-        self.text_caption_label = ttk.Label(
-            self.control_frame,
-            text="Text:",
-            justify=tk.LEFT,
-            style=self.overlay_label_style,
-        )
-        self.text_caption_label.pack(fill=tk.X, padx=5, pady=(5, 0))
         self.entry = ttk.Entry(self.control_frame, textvariable=self.text_var, width=30)
-        self.entry.pack(fill=tk.X, padx=7)
+        self.entry.pack(fill=tk.X, padx=7, pady=(5, 0))
+        Hovertip(self.entry, "Text on Canvas", hover_delay=250)
 
         # Text size slider. Higher divisors mean smaller text, so the slider
         # runs from high to low to make left=smaller and right=bigger.
@@ -152,7 +147,6 @@ class CanvasTextOverlay:
         self.slider_hint_right.pack(side=tk.RIGHT)
 
         self.overlay_labels = (
-            self.text_caption_label,
             self.slider_label,
             self.slider_hint_left,
             self.slider_hint_right,
