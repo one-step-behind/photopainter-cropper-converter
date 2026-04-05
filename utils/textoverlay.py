@@ -136,6 +136,9 @@ class CanvasTextOverlay:
             command=self._on_slider_change,
         )
         self.slider.pack(fill=tk.X, padx=5, pady=0)
+        self.slider.bind("<MouseWheel>", self._on_slider_scroll)
+        self.slider.bind("<Button-4>", lambda e: self._on_slider_scroll_linux(e, 1))
+        self.slider.bind("<Button-5>", lambda e: self._on_slider_scroll_linux(e, -1))
         self._set_slider_from_divisor(self.font_divisor)
         self._update_slider_label(self.font_divisor)
 
@@ -281,6 +284,26 @@ class CanvasTextOverlay:
         self.font_divisor = self._clamp_font_divisor(value)
         self._update_slider_label(self.font_divisor)
         self._trigger_callback()
+
+    def _on_slider_scroll(self, event):
+        direction = 1 if event.delta > 0 else -1
+        return self._scroll_slider_by_step(direction)
+
+    def _on_slider_scroll_linux(self, _event, direction):
+        return self._scroll_slider_by_step(direction)
+
+    def _scroll_slider_by_step(self, direction):
+        if str(self.slider.cget("state")) == "disabled":
+            return "break"
+
+        current = float(self.slider.get())
+        step = float(self.slider.cget("resolution") or 0.5)
+        new_val = round(current + direction * step, 10)
+        lower = min(float(self.slider.cget("from")), float(self.slider.cget("to")))
+        upper = max(float(self.slider.cget("from")), float(self.slider.cget("to")))
+        new_val = max(lower, min(upper, new_val))
+        self.slider.set(new_val)
+        return "break"
 
     def _pick_text_color(self):
         color = colorchooser.askcolor(initialcolor=self.text_color)[1]
