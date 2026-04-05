@@ -1219,15 +1219,12 @@ class CropperApp:
             "  Ctrl+L                Change folder\n"
         )
 
-        lbl = tk.Label(
+        lbl = ttk.Label(
             win,
             text=help_text,
             justify=tk.LEFT,
             font=("Courier", 10),
-            bg=WINDOW_BACKGROUND_COLOR,
-            fg=FOREGROUND_COLOR,
-            padx=16,
-            pady=12,
+            padding=(16, 12),
         )
         lbl.pack()
 

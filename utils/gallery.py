@@ -86,47 +86,26 @@ class AsyncThumbnailGallery(tk.Frame):
         self.filter_bar = tk.Frame(self, bg=self.default_bg)
         self.filter_bar.pack(fill=tk.X, pady=(0, 2))
 
-        tk.Label(self.filter_bar, text="Show:", bg=self.default_bg, fg="white").pack(side=tk.LEFT, padx=(4, 6))
-        tk.Checkbutton(
+        ttk.Label(self.filter_bar, text="Show:").pack(side=tk.LEFT, padx=(4, 6))
+        ttk.Checkbutton(
             self.filter_bar,
             text="Landscape",
             variable=self.show_landscape_var,
             command=self._on_filter_change,
-            bg=self.default_bg,
-            fg="white",
-            selectcolor=self.image_bg,
-            activebackground=self.default_bg,
-            activeforeground="white",
-            highlightthickness=0,
-            bd=0,
             takefocus=0,
         ).pack(side=tk.LEFT)
-        tk.Checkbutton(
+        ttk.Checkbutton(
             self.filter_bar,
             text="Portrait",
             variable=self.show_portrait_var,
             command=self._on_filter_change,
-            bg=self.default_bg,
-            fg="white",
-            selectcolor=self.image_bg,
-            activebackground=self.default_bg,
-            activeforeground="white",
-            highlightthickness=0,
-            bd=0,
             takefocus=0,
         ).pack(side=tk.LEFT, padx=(4, 0))
-        tk.Checkbutton(
+        ttk.Checkbutton(
             self.filter_bar,
             text="Unprocessed",
             variable=self.show_unprocessed_var,
             command=self._on_filter_change,
-            bg=self.default_bg,
-            fg="white",
-            selectcolor=self.image_bg,
-            activebackground=self.default_bg,
-            activeforeground="white",
-            highlightthickness=0,
-            bd=0,
             takefocus=0,
         ).pack(side=tk.LEFT, padx=(4, 0))
 
