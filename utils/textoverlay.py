@@ -111,21 +111,21 @@ class CanvasTextOverlay:
         self.location_refresh_btn.pack(fill=tk.X, padx=5)
 
         # Text field
-        self.entry = ttk.Entry(self.control_frame, textvariable=self.text_var, width=30)
-        self.entry.pack(fill=tk.X, padx=7, pady=(5, 0))
-        Hovertip(self.entry, "Text on Canvas", hover_delay=250)
+        self.text_on_canvas = ttk.Entry(self.control_frame, textvariable=self.text_var, width=30)
+        self.text_on_canvas.pack(fill=tk.X, padx=7, pady=(5, 0))
+        Hovertip(self.text_on_canvas, "Text on Canvas", hover_delay=250)
 
         # Text size slider. Higher divisors mean smaller text, so the slider
         # runs from high to low to make left=smaller and right=bigger.
-        self.slider_label_var = tk.StringVar()
-        self.slider_label = ttk.Label(
+        self.text_size_slider_label_var = tk.StringVar()
+        self.text_size_slider_label = ttk.Label(
             self.control_frame,
-            textvariable=self.slider_label_var,
+            textvariable=self.text_size_slider_label_var,
             justify=tk.LEFT,
             style=self.overlay_label_style,
         )
-        self.slider_label.pack(fill=tk.X, padx=5, pady=(5, 0))
-        self.slider = tk.Scale(
+        self.text_size_slider_label.pack(fill=tk.X, padx=5, pady=(5, 0))
+        self.text_size_slider = tk.Scale(
             self.control_frame,
             from_=FONT_DIVISOR_MAX,
             to=FONT_DIVISOR_MIN,
@@ -135,24 +135,24 @@ class CanvasTextOverlay:
             takefocus=0,
             command=self._on_slider_change,
         )
-        self.slider.pack(fill=tk.X, padx=5, pady=0)
-        self.slider.bind("<MouseWheel>", self._on_slider_scroll)
-        self.slider.bind("<Button-4>", lambda e: self._on_slider_scroll_linux(e, 1))
-        self.slider.bind("<Button-5>", lambda e: self._on_slider_scroll_linux(e, -1))
+        self.text_size_slider.pack(fill=tk.X, padx=5, pady=0)
+        self.text_size_slider.bind("<MouseWheel>", self._on_slider_scroll)
+        self.text_size_slider.bind("<Button-4>", lambda e: self._on_slider_scroll_linux(e, 1))
+        self.text_size_slider.bind("<Button-5>", lambda e: self._on_slider_scroll_linux(e, -1))
         self._set_slider_from_divisor(self.font_divisor)
         self._update_slider_label(self.font_divisor)
 
-        self.slider_hint_frame = ttk.Frame(self.control_frame)
-        self.slider_hint_frame.pack(fill=tk.X, padx=5, pady=(0, 5))
-        self.slider_hint_left = ttk.Label(self.slider_hint_frame, text="Smaller", style=self.overlay_label_style)
-        self.slider_hint_left.pack(side=tk.LEFT)
-        self.slider_hint_right = ttk.Label(self.slider_hint_frame, text="Bigger", style=self.overlay_label_style)
-        self.slider_hint_right.pack(side=tk.RIGHT)
+        self.text_size_slider_hint_frame = ttk.Frame(self.control_frame)
+        self.text_size_slider_hint_frame.pack(fill=tk.X, padx=5, pady=(0, 5))
+        self.text_size_slider_hint_left = ttk.Label(self.text_size_slider_hint_frame, text="Smaller", style=self.overlay_label_style)
+        self.text_size_slider_hint_left.pack(side=tk.LEFT)
+        self.text_size_slider_hint_right = ttk.Label(self.text_size_slider_hint_frame, text="Bigger", style=self.overlay_label_style)
+        self.text_size_slider_hint_right.pack(side=tk.RIGHT)
 
         self.overlay_labels = (
-            self.slider_label,
-            self.slider_hint_left,
-            self.slider_hint_right,
+            self.text_size_slider_label,
+            self.text_size_slider_hint_left,
+            self.text_size_slider_hint_right,
         )
 
         self.color_button_row = ttk.Frame(self.control_frame)
@@ -165,6 +165,14 @@ class CanvasTextOverlay:
             command=self._pick_text_color
         )
         self.text_color_btn.pack(side=tk.LEFT, padx=0)
+        Hovertip(self.text_color_btn, "Text color (Ctrl+T)", hover_delay=250)
+
+        # Keyboard shortcut: Ctrl+T opens text color picker.
+        bind_toggle_keys(
+            self.control_frame.winfo_toplevel(),
+            {"toggle_key": ("<Control-t>", "<Control-T>")},
+            self._on_text_color_shortcut,
+        )
 
         self.bg_color_btn = ttk.Button(
             self.color_button_row,
@@ -172,6 +180,7 @@ class CanvasTextOverlay:
             command=self._pick_bg_color
         )
         self.bg_color_btn.pack(side=tk.RIGHT, padx=0)
+        Hovertip(self.bg_color_btn, "Background color (Ctrl+B)", hover_delay=250)
 
         ttk.Separator(self.control_frame).pack(fill=tk.X, pady=5)
 
@@ -293,16 +302,16 @@ class CanvasTextOverlay:
         return self._scroll_slider_by_step(direction)
 
     def _scroll_slider_by_step(self, direction):
-        if str(self.slider.cget("state")) == "disabled":
+        if str(self.text_size_slider.cget("state")) == "disabled":
             return "break"
 
-        current = float(self.slider.get())
-        step = float(self.slider.cget("resolution") or 0.5)
+        current = float(self.text_size_slider.get())
+        step = float(self.text_size_slider.cget("resolution") or 0.5)
         new_val = round(current + direction * step, 10)
-        lower = min(float(self.slider.cget("from")), float(self.slider.cget("to")))
-        upper = max(float(self.slider.cget("from")), float(self.slider.cget("to")))
+        lower = min(float(self.text_size_slider.cget("from")), float(self.text_size_slider.cget("to")))
+        upper = max(float(self.text_size_slider.cget("from")), float(self.text_size_slider.cget("to")))
         new_val = max(lower, min(upper, new_val))
-        self.slider.set(new_val)
+        self.text_size_slider.set(new_val)
         return "break"
 
     def _pick_text_color(self):
@@ -311,6 +320,11 @@ class CanvasTextOverlay:
             self.text_color = color
             self.text_label.config(fg=color)
             self._trigger_callback()
+
+    def _on_text_color_shortcut(self, _event=None):
+        if str(self.text_color_btn.cget("state")) != "disabled":
+            self.text_color_btn.invoke()
+        return "break"
 
     def _pick_bg_color(self):
         color = colorchooser.askcolor(initialcolor=self.bg_color)[1]
@@ -327,9 +341,9 @@ class CanvasTextOverlay:
     def _update_controls_state(self):
         state = "normal" if self.show_var.get() else "disabled"
         self._set_overlay_labels_dimmed(state != "normal")
-        self.entry.config(style=self.overlay_entry_style if state == "normal" else self.overlay_entry_disabled_style)
-        self.entry.config(state=state)
-        self.slider.config(state=state)
+        self.text_on_canvas.config(style=self.overlay_entry_style if state == "normal" else self.overlay_entry_disabled_style)
+        self.text_on_canvas.config(state=state)
+        self.text_size_slider.config(state=state)
         self.text_color_btn.config(state=state)
         self.bg_color_btn.config(state=state)
         location_state = state if self.has_exif_data else "disabled"
@@ -344,13 +358,13 @@ class CanvasTextOverlay:
         self._syncing_slider = True
         try:
             clamped = self._clamp_font_divisor(divisor)
-            self.slider.set(clamped)
+            self.text_size_slider.set(clamped)
             self._update_slider_label(clamped)
         finally:
             self._syncing_slider = False
 
     def _update_slider_label(self, divisor):
-        self.slider_label_var.set(f"Text size: {float(divisor):.1f}")
+        self.text_size_slider_label_var.set(f"Text size: {float(divisor):.1f}")
 
     def _apply_location_text(self, force=False):
         if not self.location_text:
