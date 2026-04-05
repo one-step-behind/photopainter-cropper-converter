@@ -89,6 +89,14 @@ class CanvasTextOverlay:
             command=self._on_show_change
         )
         self.checkbox.pack(fill=tk.X, padx=5)
+        Hovertip(self.checkbox, "Show text on canvas (Ctrl+T)", hover_delay=250)
+
+        # Keyboard shortcut: Ctrl+T toggles text on canvas.
+        bind_toggle_keys(
+            self.control_frame.winfo_toplevel(),
+            {"toggle_key": ("<Control-t>", "<Control-T>")},
+            self._on_show_text_shortcut,
+        )
 
         self.control_style = ttk.Style(self.control_frame)
         self._configure_overlay_styles()
@@ -101,6 +109,14 @@ class CanvasTextOverlay:
             style=self.overlay_checkbutton_style,
         )
         self.location_checkbox.pack(fill=tk.X, padx=5)
+        Hovertip(self.location_checkbox, "Location metadata (Ctrl+L)", hover_delay=250)
+
+        # Keyboard shortcut: Ctrl+L toggles location.
+        bind_toggle_keys(
+            self.control_frame.winfo_toplevel(),
+            {"toggle_key": ("<Control-l>", "<Control-L>")},
+            self._on_location_shortcut,
+        )
 
         self.location_refresh_btn = ttk.Button(
             self.control_frame,
@@ -165,12 +181,12 @@ class CanvasTextOverlay:
             command=self._pick_text_color
         )
         self.text_color_btn.pack(side=tk.LEFT, padx=0)
-        Hovertip(self.text_color_btn, "Text color (Ctrl+T)", hover_delay=250)
+        Hovertip(self.text_color_btn, "Text color (Ctrl+Shift+T)", hover_delay=250)
 
-        # Keyboard shortcut: Ctrl+T opens text color picker.
+        # Keyboard shortcut: Ctrl+Shift+T opens text color picker.
         bind_toggle_keys(
             self.control_frame.winfo_toplevel(),
-            {"toggle_key": ("<Control-t>", "<Control-T>")},
+            {"toggle_key": ("<Control-Shift-t>", "<Control-Shift-T>")},
             self._on_text_color_shortcut,
         )
 
@@ -180,14 +196,14 @@ class CanvasTextOverlay:
             command=self._pick_bg_color
         )
         self.bg_color_btn.pack(side=tk.RIGHT, padx=0)
-        Hovertip(self.bg_color_btn, "Background color (Ctrl+B)", hover_delay=250)
+        Hovertip(self.bg_color_btn, "Background color (Ctrl+Shift+B)", hover_delay=250)
 
         ttk.Separator(self.control_frame).pack(fill=tk.X, pady=5)
 
-        # Keyboard shortcut: Ctrl+B opens background color picker.
+        # Keyboard shortcut: Ctrl+Shift+B opens background color picker.
         bind_toggle_keys(
             self.control_frame.winfo_toplevel(),
-            {"toggle_key": ("<Control-b>", "<Control-B>")},
+            {"toggle_key": ("<Control-Shift-b>", "<Control-Shift-B>")},
             self._on_bg_color_shortcut,
         )
 
@@ -336,6 +352,17 @@ class CanvasTextOverlay:
     def _on_bg_color_shortcut(self, _event=None):
         if str(self.bg_color_btn.cget("state")) != "disabled":
             self.bg_color_btn.invoke()
+        return "break"
+
+    def _on_show_text_shortcut(self, _event=None):
+        self.show_var.set(not self.show_var.get())
+        self._on_show_change()
+        return "break"
+
+    def _on_location_shortcut(self, _event=None):
+        if self.has_exif_data:
+            self.location_var.set(not self.location_var.get())
+            self._on_location_change()
         return "break"
 
     def _update_controls_state(self):

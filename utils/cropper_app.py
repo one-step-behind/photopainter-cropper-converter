@@ -257,20 +257,20 @@ class CropperApp:
             "change_folder": {
                 "default_text": "Change folder",
                 "command": lambda e=None: self.load_folder(),
-                "enter_tip": "Change to another folder of images (Ctrl-L)",
+                "enter_tip": "Change to another folder of images (Ctrl+Shift+L)",
                 "expand": True,
                 "fill": tk.X,
                 "underline": 9,
-                "toggle_key": ("<Control-l>", "<Control-L>"),
+                "toggle_key": ("<Control-Shift-l>", "<Control-Shift-L>"),
             },
             "reload_folder": {
                 "default_text": "Reload folder",
                 "command": lambda e=None: self.load_folder(False),
-                "enter_tip": "Reload this folder of images (Ctrl+R)",
+                "enter_tip": "Reload this folder of images (Ctrl+Shift+R)",
                 "expand": True,
                 "fill": tk.X,
                 "underline": 0,
-                "toggle_key": ("<Control-r>", "<Control-R>"),
+                "toggle_key": ("<Control-Shift-r>", "<Control-Shift-R>"),
             },
         }
 
@@ -1217,8 +1217,14 @@ class CropperApp:
             "  Ctrl+F                Toggle fill mode\n"
             "  Ctrl+D                Toggle target device\n"
             "  Ctrl+1/2/3            Edge / Smooth / Sharpen\n"
-            "  Ctrl+R                Reload folder\n"
-            "  Ctrl+L                Change folder\n"
+            "  Ctrl+Shift+L          Change folder\n"
+            "  Ctrl+Shift+R          Reload folder\n"
+            "\n"
+            "Text overlay\n"
+            "  Ctrl+T                Toggle text on canvas\n"
+            "  Ctrl+L                Toggle location metadata\n"
+            "  Ctrl+Shift+T          Pick text color\n"
+            "  Ctrl+Shift+B          Pick background color\n"
         )
 
         lbl = ttk.Label(
