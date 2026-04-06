@@ -1878,8 +1878,21 @@ class CropperApp:
                     self.image_preferences["text_overlay"] = parsed_text_overlay
                 else:
                     self.image_preferences["text_overlay"] = TEXT_OVERLAY_DEFAULTS.copy()
-        self.image_preferences["text_overlay"].setdefault("use_location", False)
-        self.image_preferences["text_overlay"].setdefault("derived_location", None)
+
+        # Merge with defaults so new keys (e.g. use_year) are restored from sidecars
+        # while keeping compatibility with older per-image files.
+        merged_text_overlay = TEXT_OVERLAY_DEFAULTS.copy()
+        merged_text_overlay.update(self.image_preferences["text_overlay"])
+
+        for bool_key in ("show", "use_location", "use_year"):
+            value = merged_text_overlay.get(bool_key)
+            if isinstance(value, str):
+                merged_text_overlay[bool_key] = (value == "True")
+            elif not isinstance(value, bool):
+                merged_text_overlay[bool_key] = bool(TEXT_OVERLAY_DEFAULTS.get(bool_key, False))
+
+        merged_text_overlay.setdefault("derived_location", None)
+        self.image_preferences["text_overlay"] = merged_text_overlay
         assert self.text_overlay is not None
         self.text_overlay.set_all(self.image_preferences["text_overlay"])
         derived_location = self.text_overlay.set_image_context(
@@ -1888,7 +1901,7 @@ class CropperApp:
             force_refresh=False,
         )
         self.image_preferences["text_overlay"]["derived_location"] = derived_location
-        if self.image_preferences["text_overlay"].get("use_location"):
+        if self.image_preferences["text_overlay"].get("use_location") or self.image_preferences["text_overlay"].get("use_year"):
             self.image_preferences["text_overlay"]["text"] = self.text_overlay.text_var.get()
 
         #print("IMAGE Settings", self.image_preferences)
@@ -1897,6 +1910,21 @@ class CropperApp:
     def save_image_preferences(self, x1i: float, y1i: float, x2i: float, y2i: float) -> str | None:
         img_path = self.current_image_path
         path = self.image_state_path(img_path)
+
+        # Ensure latest overlay toggles are persisted per image in the sidecar file.
+        text_overlay_state = dict(self.image_preferences.get("text_overlay", {}))
+        text_overlay_state.setdefault("use_location", False)
+        text_overlay_state.setdefault("use_year", False)
+        text_overlay_state.setdefault("derived_location", None)
+
+        if self.text_overlay is not None:
+            text_overlay_state["show"] = self.text_overlay.show_var.get()
+            text_overlay_state["use_location"] = self.text_overlay.location_var.get()
+            text_overlay_state["use_year"] = self.text_overlay.year_var.get()
+            text_overlay_state["derived_location"] = self.text_overlay.derived_location_name
+            text_overlay_state["text"] = self.text_overlay.text_var.get()
+
+        self.image_preferences["text_overlay"] = text_overlay_state
 
         assert self.original_img is not None
         iw, ih = self.original_img.size

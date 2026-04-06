@@ -35,6 +35,7 @@ class CanvasTextOverlay:
         # State variables
         self.show_var = tk.BooleanVar(value=self.state["show"])
         self.location_var = tk.BooleanVar(value=self.state.get("use_location", False))
+        self.year_var = tk.BooleanVar(value=self.state.get("use_year", False))
         self.text_var = tk.StringVar(value=self.state["text"])
         self.text_color = self.state["text_color"]
         self.bg_color = self.state["bg_color"]
@@ -43,6 +44,7 @@ class CanvasTextOverlay:
         self.derived_location_name = None
         self.current_image_path = None
         self.has_exif_data = False
+        self.has_year_data = False
         self.current_year = None
         self._reverse_geocode_cache = {}
         self._geolocator = Nominatim(user_agent="PhotoPainterCropper/1.0")
@@ -81,15 +83,31 @@ class CanvasTextOverlay:
 
         ttk.Separator(self.control_frame).pack(fill=tk.X, pady=5)
 
+        self.control_style = ttk.Style(self.control_frame)
+        self._configure_overlay_styles()
+
+        self.metadata_toggle_row = ttk.Frame(self.control_frame)
+        self.metadata_toggle_row.pack(fill=tk.X, padx=5)
+
         # Text on Canvas checkbox
         self.checkbox = ttk.Checkbutton(
-            self.control_frame,
+            self.metadata_toggle_row,
             text="Show text on canvas",
             variable=self.show_var,
             command=self._on_show_change
         )
-        self.checkbox.pack(fill=tk.X, padx=5)
+        self.checkbox.pack(side=tk.LEFT)
         Hovertip(self.checkbox, "Show text on canvas (Ctrl+T)", hover_delay=250)
+
+        self.year_checkbox = ttk.Checkbutton(
+            self.metadata_toggle_row,
+            text="Year",
+            variable=self.year_var,
+            command=self._on_year_change,
+            style=self.overlay_checkbutton_style,
+        )
+        self.year_checkbox.pack(side=tk.RIGHT)
+        Hovertip(self.year_checkbox, "Year from date taken", hover_delay=250)
 
         # Keyboard shortcut: Ctrl+T toggles text on canvas.
         bind_toggle_keys(
@@ -97,9 +115,6 @@ class CanvasTextOverlay:
             {"toggle_key": ("<Control-t>", "<Control-T>")},
             self._on_show_text_shortcut,
         )
-
-        self.control_style = ttk.Style(self.control_frame)
-        self._configure_overlay_styles()
 
         self.location_checkbox = ttk.Checkbutton(
             self.control_frame,
@@ -284,17 +299,26 @@ class CanvasTextOverlay:
         state = "normal" if self.show_var.get() else "hidden"
         self.canvas.itemconfigure(self.text_window, state=state)
 
-        if self.show_var.get() and self.location_var.get():
+        if self.show_var.get() and (self.location_var.get() or self.year_var.get()):
             self._refresh_location_for_current_context(force_refresh=False)
 
         self._update_controls_state()
         self._trigger_callback()
 
     def _on_location_change(self):
-        if self.location_var.get() and self.show_var.get():
+        if self.current_image_path:
             self._refresh_location_for_current_context(force_refresh=False)
 
-        if self.location_var.get() and self.location_text:
+        if (self.location_var.get() or self.year_var.get()) and self.location_text:
+            self._apply_location_text(force=True)
+        self._update_controls_state()
+        self._trigger_callback()
+
+    def _on_year_change(self):
+        if self.current_image_path:
+            self._refresh_location_for_current_context(force_refresh=False)
+
+        if (self.location_var.get() or self.year_var.get()) and self.location_text:
             self._apply_location_text(force=True)
         self._update_controls_state()
         self._trigger_callback()
@@ -375,6 +399,8 @@ class CanvasTextOverlay:
         self.bg_color_btn.config(state=state)
         location_state = state if self.has_exif_data else "disabled"
         self.location_checkbox.config(state=location_state)
+        year_state = state if self.has_year_data else "disabled"
+        self.year_checkbox.config(state=year_state)
         refresh_state = state if (self.current_image_path and self.location_var.get()) else "disabled"
         self.location_refresh_btn.config(state=refresh_state)
 
@@ -410,6 +436,7 @@ class CanvasTextOverlay:
         # print("textoverlay set all", payload)
         self.set_show(payload["show"])
         self.set_use_location(payload.get("use_location", False))
+        self.set_use_year(payload.get("use_year", False))
         self.set_text(payload["text"])
         self.set_colors(text_color = payload["text_color"], bg_color=payload["bg_color"])
         if "font_divisor" in payload:
@@ -426,10 +453,19 @@ class CanvasTextOverlay:
 
     def set_use_location(self, use_location: bool):
         self.location_var.set(use_location)
-        if use_location and self.show_var.get():
+        if self.current_image_path:
             self._refresh_location_for_current_context(force_refresh=False)
 
-        if use_location and self.location_text:
+        if (self.location_var.get() or self.year_var.get()) and self.location_text:
+            self._apply_location_text(force=False)
+        self._update_controls_state()
+
+    def set_use_year(self, use_year: bool):
+        self.year_var.set(use_year)
+        if self.current_image_path:
+            self._refresh_location_for_current_context(force_refresh=False)
+
+        if (self.location_var.get() or self.year_var.get()) and self.location_text:
             self._apply_location_text(force=False)
         self._update_controls_state()
 
@@ -466,7 +502,7 @@ class CanvasTextOverlay:
         current_text = self.text_var.get().strip()
         auto_values = {"", TEXT_OVERLAY_DEFAULTS["text"], previous_text.strip(), self._last_applied_location_text.strip()}
 
-        if self.location_var.get() and self.location_text:
+        if (self.location_var.get() or self.year_var.get()) and self.location_text:
             if current_text in auto_values:
                 self._apply_location_text(force=True)
         elif current_text in auto_values:
@@ -479,6 +515,7 @@ class CanvasTextOverlay:
     def reset_for_new_image(self, image_path):
         self.current_image_path = image_path
         self.has_exif_data = False
+        self.has_year_data = False
         self.derived_location_name = None
         self.set_location_metadata(None)
 
@@ -492,6 +529,7 @@ class CanvasTextOverlay:
             do_lookup=do_lookup,
         )
         self.has_exif_data = has_exif_data
+        self.has_year_data = year is not None
         self.current_year = year
         self.derived_location_name = location_name
         self.set_location_metadata(location_text)
@@ -527,9 +565,9 @@ class CanvasTextOverlay:
         try:
             with Image.open(image_path) as image:
                 exif_data = image.getexif()
+                year = self._get_exif_year(exif_data)
                 has_exif_data = self._has_geolocation_exif(exif_data)
                 if has_exif_data:
-                    year = self._get_exif_year(exif_data)
                     if cached_location and not force_refresh:
                         location_name = self._sanitize_cached_location_name(cached_location)
                     elif do_lookup:
@@ -537,7 +575,13 @@ class CanvasTextOverlay:
         except Exception as exc:
             print(f"Unable to derive EXIF overlay text for {image_path}: {exc}")
 
-        overlay_text = " ".join(part for part in (location_name, year) if part)
+        overlay_parts = []
+        if self.location_var.get() and location_name:
+            overlay_parts.append(location_name)
+        if self.year_var.get() and year:
+            overlay_parts.append(year)
+
+        overlay_text = " ".join(overlay_parts)
         return (overlay_text or None, location_name, has_exif_data, year)
 
     def _has_geolocation_exif(self, exif_data):
@@ -785,6 +829,7 @@ class CanvasTextOverlay:
             self.callback({
                 "show": self.show_var.get(),
                 "use_location": self.location_var.get(),
+                "use_year": self.year_var.get(),
                 "derived_location": self.derived_location_name,
                 "text": self.text_var.get(),
                 "text_color": self.text_color,

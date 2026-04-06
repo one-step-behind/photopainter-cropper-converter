@@ -1,5 +1,7 @@
 TEXT_OVERLAY_DEFAULTS: dict = {
     "show": False,
+    "use_location": False,
+    "use_year": False,
     "text": "Sample text",
     "text_color": "#ffffff",
     "bg_color": "#000000",
