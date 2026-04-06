@@ -87,6 +87,24 @@ BRIGHTNESS = 1.0
 CONTRAST = 1.0
 SATURATION = 1.0
 
+ENHANCER_DEFAULTS_BY_DEVICE: dict[str, dict[str, float]] = {
+    "acep": {
+        "brightness": 1.0,
+        "contrast": 1.15,
+        "saturation": 1.4,
+    },
+    "spectra6": {
+        "brightness": 1.2,
+        "contrast": 1.4,
+        "saturation": 1.3,
+    },
+    "4color": {
+        "brightness": BRIGHTNESS,
+        "contrast": CONTRAST,
+        "saturation": SATURATION,
+    },
+}
+
 DEFAULT_CROP_SIZE = 1 # between 0.1 ... 1
 MASK_COLOR = "#000000"          # mask outside crop region
 MASK_STIPPLE = "gray50"
@@ -310,6 +328,7 @@ class CropperApp:
                 "widget_type": "combobox",
                 "default_text": "Device",
                 "command": self.toggle_target_device,
+                "postcommand": lambda e=None: self.set_target_device("target_device"),
                 "values": available_option["TARGET_DEVICE"],
                 "enter_tip": "Toggle Target device (Ctrl+D)",
                 "underline": 0,
@@ -762,8 +781,22 @@ class CropperApp:
                 dyn = DynamicSliderVar(info["text"])
                 self.image_enhancer_slider_vars[name] = dyn
 
-                slider_label = ttk.Label(self.options_frame, textvariable=dyn.var, justify=tk.LEFT)
-                slider_label.pack(fill=tk.X, padx=LABEL_PADDINGS[0], pady=(LABEL_PADDINGS[1], 0))
+                slider_header = ttk.Frame(self.options_frame)
+                slider_header.pack(fill=tk.X, padx=LABEL_PADDINGS[0], pady=(LABEL_PADDINGS[1], 0))
+
+                slider_label = ttk.Label(slider_header, textvariable=dyn.var, justify=tk.LEFT)
+                slider_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+                slider_reset_btn = ttk.Button(
+                    slider_header,
+                    text="Reset",
+                    width=6,
+                    padding=(2, 1),
+                    takefocus=0,
+                    command=lambda n=name: self.reset_enhancer_slider(n),
+                )
+                slider_reset_btn.pack(side=tk.RIGHT)
+                Hovertip(slider_reset_btn, "Reset to default value for selected device", hover_delay=DEFAULT_TOOLTIP_DELAY)
 
                 slider_kwargs = {
                     "name": f"slider_{name}",
@@ -780,7 +813,7 @@ class CropperApp:
                 slider.set(value)
                 slider.pack(fill=tk.X, padx=LABEL_PADDINGS[0], pady=0)
 
-                self.image_enhancer_sliders[name] = [slider_label, slider]
+                self.image_enhancer_sliders[name] = [slider_label, slider, slider_reset_btn]
 
                 # Mouse scroll support
                 resolution = info["resolution"] if "resolution" in info else 0.05
@@ -797,8 +830,60 @@ class CropperApp:
         # AFTER all sliders exist → update their labels correctly
         for name, slider in self.image_enhancer_sliders.items():
             value = self.image_preferences[name]
-            self.image_enhancer_slider_vars[name].update(value)
             self.image_enhancer_sliders[name][1].set(value)
+            self.update_slider_label(name)
+
+    def get_device_enhancer_defaults(self, target_device: str | None = None) -> dict[str, float]:
+        if not target_device:
+            target_device = self.image_preferences.get("target_device")
+        resolved_target_device = target_device if isinstance(target_device, str) else ""
+
+        fallback = {
+            "brightness": BRIGHTNESS,
+            "contrast": CONTRAST,
+            "saturation": SATURATION,
+        }
+
+        return ENHANCER_DEFAULTS_BY_DEVICE.get(resolved_target_device, fallback).copy()
+
+    def update_slider_label(self, slider_name: str) -> None:
+        if slider_name not in self.image_enhancer_slider_vars:
+            return
+
+        current_value = float(self.image_preferences.get(slider_name, 0.0))
+        default_value = float(self.get_device_enhancer_defaults().get(slider_name, current_value))
+        self.image_enhancer_slider_vars[slider_name].update(f"{current_value:.2f} (default {default_value:.2f})")
+
+    def apply_device_enhancer_defaults(self) -> None:
+        defaults_for_device = self.get_device_enhancer_defaults()
+
+        for slider_name, default_value in defaults_for_device.items():
+            self.image_preferences[slider_name] = float(default_value)
+            if slider_name in self.image_enhancer_sliders:
+                self.image_enhancer_sliders[slider_name][1].set(default_value)
+            self.update_slider_label(slider_name)
+
+        self.window.after_idle(self.update_image_in_canvas)
+
+    def are_enhancer_values_at_device_defaults(self, target_device: str | None = None) -> bool:
+        defaults_for_device = self.get_device_enhancer_defaults(target_device)
+        epsilon = 1e-9
+
+        for slider_name in self.enhancer_sliders_def:
+            current_value = float(self.image_preferences.get(slider_name, defaults_for_device.get(slider_name, 1.0)))
+            default_value = float(defaults_for_device.get(slider_name, current_value))
+            if abs(current_value - default_value) > epsilon:
+                return False
+
+        return True
+
+    def reset_enhancer_slider(self, slider_name: str) -> None:
+        if slider_name not in self.image_enhancer_sliders:
+            return
+
+        default_value = float(self.get_device_enhancer_defaults().get(slider_name, 1.0))
+        self.image_enhancer_sliders[slider_name][1].set(default_value)
+        self.update_slider_value_and_label(slider_name, default_value)
 
     def _on_slider_scroll(self, e, name: str, resolution: float) -> str:
         slider = self.image_enhancer_sliders[name][1]
@@ -825,7 +910,7 @@ class CropperApp:
     def update_slider_value_and_label(self, slider_label, value) -> None:
         if slider_label in self.enhancer_sliders_def:
             self.image_preferences[slider_label] = float(value)
-            self.image_enhancer_slider_vars[slider_label].update(value)
+            self.update_slider_label(slider_label)
             self.window.after_idle(self.update_image_in_canvas)
         else:
             print(f"No slider found for '{slider_label}'")
@@ -1440,8 +1525,27 @@ class CropperApp:
             current_idx = 0
         else:
             current_idx += 1
-        self.image_preferences["target_device"] = available_option["TARGET_DEVICE"][current_idx]
+        self._apply_target_device(available_option["TARGET_DEVICE"][current_idx])
+
+    def set_target_device(self, field) -> None:
+        selected = self.app_button_vars[field].get()
+        self._apply_target_device(selected)
+
+    def _apply_target_device(self, target_device: str) -> None:
+        if target_device not in available_option["TARGET_DEVICE"]:
+            return
+
+        previous_target_device = self.image_preferences.get("target_device")
+        should_apply_defaults = self.are_enhancer_values_at_device_defaults(previous_target_device)
+
+        self.image_preferences["target_device"] = target_device
         self.update_button_text("target_device", self.image_preferences["target_device"])
+
+        if should_apply_defaults:
+            self.apply_device_enhancer_defaults()
+        else:
+            for slider_name in self.enhancer_sliders_def:
+                self.update_slider_label(slider_name)
 
     # ---------- Coordinate helpers ----------
     def update_targetsize_and_ratio(self) -> None:
@@ -1749,9 +1853,10 @@ class CropperApp:
             self.image_preferences["orientation"] = self.app_settings["orientation"]
             self.image_preferences["fill_mode"] = self.app_settings["fill_mode"]
             self.image_preferences["target_device"] = self.app_settings["target_device"]
-            self.image_preferences["brightness"] = BRIGHTNESS
-            self.image_preferences["contrast"] = CONTRAST
-            self.image_preferences["saturation"] = SATURATION
+            device_defaults = self.get_device_enhancer_defaults(self.image_preferences["target_device"])
+            self.image_preferences["brightness"] = device_defaults["brightness"]
+            self.image_preferences["contrast"] = device_defaults["contrast"]
+            self.image_preferences["saturation"] = device_defaults["saturation"]
             self.image_preferences["enhancer_edge"] = self.app_settings["enhancer_edge"]
             self.image_preferences["enhancer_smooth"] = self.app_settings["enhancer_smooth"]
             self.image_preferences["enhancer_sharpen"] = self.app_settings["enhancer_sharpen"]
