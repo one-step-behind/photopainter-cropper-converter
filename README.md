@@ -8,7 +8,7 @@ This project is an enhanced (much improved for my own needs) version of an image
 
 ## Key Features
 
-- Supported image types: `.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.tif`, `.tiff`, `.webp`, `.heic`*
+- Supported image types: `.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.tif`, `.tiff`, `.webp`, `.heic`\*, `.avif`\*\*
 - Load image by **EXIF** orientation
 - Fixed **800x480** (landscape) or **480x800** (portrait) crop ratio
   — You can set the output dimensions via `image_target_size` in `settings.ini`
@@ -24,6 +24,7 @@ This project is an enhanced (much improved for my own needs) version of an image
   — useful for original firmware *Mode 2* or custom firmware which uses this file to retrieve image list (mostly named as *Mode 3*)
 
 \* HEIC support needs `pillow-heif` installed alongside `Pillow`. If you're following the **Install & Run** section below you should be all set.
+\*\* AVIF support needs `pillow-avif-plugin` installed alongside `Pillow`. If you're following the **Install & Run** section below you should be all set.
 
 ## How it works
 
@@ -289,7 +290,6 @@ deactivate
 - **UI/App** forked from [@geegeek](https://github.com/geegeek)/[photopainter-cropper](https://github.com/geegeek/photopainter-cropper)
 - inspired by the image processor Gist from [@quark-zju](https://gist.github.com/quark-zju)/[epd-dither-resize-spectra6.py](https://gist.github.com/quark-zju/e488eb206ba66925dc23692170ba49f9) which is a fork of Waveshare's original ConverTo6c_bmp-7.3 converter (Spectra6 6-color version!)
 - Usage of [device color palettes](https://github.com/Utzel-Butzel/epdoptimize/blob/main/src/dither/data/default-palettes.json) from [@Utzel-Butzel](https://github.com/Utzel-Butzel)/[epdoptimize](https://github.com/Utzel-Butzel/epdoptimize/)
-- [HEIC support](https://github.com/myevit/PhotoPainter_image_converter/blob/main/convert.py#L21) taken from [@myevit](https://github.com/myevit)/[PhotoPainter_image_converter](https://github.com/myevit/PhotoPainter_image_converter)
 
 ### Firmware
 

@@ -27,7 +27,7 @@ class CanvasTextOverlay:
         # Get system DPI dynamically from Tkinter
         # winfo_fpixels('1p') returns the point-to-pixel conversion for the current system
         self.system_dpi_scale = self.canvas.winfo_fpixels('1p')
-        print(f"System DPI scale detected: {self.system_dpi_scale:.3f} (Tkinter winfo_fpixels)")
+        # print(f"System DPI scale detected: {self.system_dpi_scale:.3f} (Tkinter winfo_fpixels)")
 
         # State from shared defaults.
         self.state = TEXT_OVERLAY_DEFAULTS.copy()

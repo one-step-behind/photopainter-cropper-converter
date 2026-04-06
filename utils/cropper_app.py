@@ -20,18 +20,28 @@ from utils.keybinds import bind_toggle_keys
 
 # Try to import pillow-heif for HEIC support
 try:
-    import pillow_heif
-
-    pillow_heif.register_heif_opener()
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
     HEIC_SUPPORT = True
 except ImportError:
     HEIC_SUPPORT = False
     print("Warning: pillow-heif not installed. HEIC files will not be processed.")
     print("To enable HEIC support, install with: pip install pillow-heif")
 
+# Try to import pillow-avif for AVIF support
+try:
+    import pillow_avif
+    AVIF_SUPPORT = True
+except ImportError:
+    AVIF_SUPPORT = False
+    print("Warning: pillow-avif-plugin not installed. AVIF files will not be processed.")
+    print("To enable AVIF support, install with: pip install pillow-avif-plugin")
+
 SUPPORTED_IMAGE_FORMATS = ["*.jpg", "*.jpeg", "*.png", "*.bmp", "*.gif", "*.tif", "*.tiff", "*.webp"]
 if HEIC_SUPPORT:
     SUPPORTED_IMAGE_FORMATS.append("*.heic")
+if AVIF_SUPPORT:
+    SUPPORTED_IMAGE_FORMATS.append("*.avif")
 
 # ====== CONFIG ======
 APP_TITLE = "PhotoPainterCropper"
