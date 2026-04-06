@@ -36,17 +36,9 @@ A sample image:
 
 ![screenshot/001_chooseFrameVerticalPicture.jpg](screenshot/001_chooseFrameVerticalPicture.jpg)
 
-...becomes this image as JPG:
+...is dithered and mapped to the device color palette (Waveshare PhotoPainter) in one step, which looks much punchier on your computer screen:
 
-![samples/cropped_landscape/sample.jpg](samples/cropped_landscape/sample.jpg)
-
-...converts to a dithered BMP:
-
-![samples/cropped_landscape/dithered/sample.bmp](samples/cropped_landscape/dithered/sample.bmp)
-
-...and finally maps to a device specific color palette (Waveshare PhotoPainter Pico ACeP 7-color) which looks much punchier on your computer screen:
-
-![samples/cropped_landscape/dithered/pic_acep/sample.bmp](samples/cropped_landscape/dithered/pic_acep/sample.bmp)
+![samples/landscape/acep/pic/sample.bmp](samples/landscape/acep/pic/sample.bmp)
 
 ...but much right when displayed on the PhotoPainter e-Paper device itself:
 
@@ -82,15 +74,11 @@ A sample image:
 
    Optionally: apply **image optimizations** with sliders like *Brightness*, *Contrast*, *Saturation*.
 
-3. Use **Enter**/**Ctrl+S** or click the "Crop and Convert" button at the top to crop and convert the image.
+3. Use **Enter**/**Ctrl+S** or click the "Crop and Convert" button at the top to crop and convert the image. The **converted real-color BMP** images are saved to `<orientation>/<device>/pic` next to your original images.
 
-   - **Cropped JPGs** are saved to `cropped_[landscape|portrait]` next to your originals
-   - **Converted BMP** images are saved to `cropped_[landscape|portrait]/dithered` next to your originals
-   - **Converted Real-color BMP** images are saved to `cropped_[landscape|portrait]/dithered/pic_[acep|spectra6]` next to your originals
+   The output folder can be set via `settings.ini` - see **Settings** section below.
 
-   The output folders can be set via `settings.ini` - see **Settings** section below.
-
-4. **Copy** the converted images in `cropped_[landscape|portrait]/dithered/pic_[acep|spectra6]` to your SD card's `pic` folder and (if "Save image list" option was set) the fileList.txt from there to the root folder of the card.
+4. **Copy** the converted images in `<orientation>/<device>/pic` to your SD card's `pic` folder and (if "Save image list" option was set) the `fileList.txt` from `<orientation>/<device>` to the root folder of the card.
 
 5. **Insert** the SD card into the PhotoPainter and click the NEXT button on the back.
 
@@ -129,7 +117,7 @@ If it's not existing, the `settings.ini` file will be automatically created the 
 Available settings and their defaults:
 
 ```ini
-# PhotoPainter app state
+# PhotoPainterCropper app state
 window_min=1024x768        # minimum size of window
 last_window_size=1024x768  # last window dimensions
 last_window_position=10x10 # last window position
@@ -142,16 +130,12 @@ enhancer_edge=False        # default for Edge enhancer
 enhancer_smooth=False      # default for Smooth enhancer
 enhancer_sharpen=False     # default for Sharpen enhancer
 grid_color=#00ff00         # rectangle border color
-export_folder=cropped      # folder where to store cropped images
-convert_folder=dithered    # folder where to store converted/dithered images
-raw_folder=raw             # folder where to store raw images
-pic_folder_on_device=pic   # first part of the folder for final image
+pic_folder_on_device=pic   # subfolder holding the final images, e.g. landscape/acep/pic/
 state_suffix=_ppcrop.txt   # file extension for sidecar file
-export_raw=False           # should export raw image suitable for direct use?
 save_filelist=True         # save fileList.txt at app exit for both orientations
 exit_after_last_image=True # exit app after last image was processed
 save_canvas_zoom=True      # save canvas zoom at exit
-canvas_zoom=0.83           # canvas zoom value
+canvas_zoom=1.0            # canvas zoom value
 gallery_show_landscape=True    # show landscape images
 gallery_show_portrait=True     # show portrait images
 gallery_show_unprocessed=False # show unprocessed images only

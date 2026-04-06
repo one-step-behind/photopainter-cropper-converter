@@ -137,36 +137,31 @@ class Converter:
     # -----------------------
     def convert(
         self,
-        img_path: str,
+        source_image: Image.Image,
+        source_path: str,
         target_device: str,
-        convert_folder: str,
-        raw_folder: str,
-        export_raw: bool,
+        export_folder: str,
         pic_folder_on_device: str,
-        dither_method=Image.FLOYDSTEINBERG,
+        dither_method: int | Image.Dither = Image.Dither.FLOYDSTEINBERG,
         progress_callback=None,
     ):
         """
         Converts one RGB image into:
-        - quantized preview BMP
         - quantized device BMP
-        - raw image
 
-        Returns (bmp_out, dev_out)
+        Returns device_out path.
 
         progress_callback(step:int, message:str) is optional.
         
         :param self: instance
-        :param in_path: image path
-        :type in_path: str
+        :param source_image: source image object to convert
+        :type source_image: PIL.Image.Image
+        :param source_path: original source path, used for output folder and filename
+        :type source_path: str
         :param target_device: acep | spectra6
         :type target_device: str
-        :param convert_folder: folder name, where to store the converted images
-        :type convert_folder: str
-        :param raw_folder: folder name, where to store the raw images
-        :type raw_folder: str
-        :param export_raw: weather or not to store raw images for direct usage with ESP version
-        :type export_raw: bool
+        :param export_folder: orientation-aware output folder name
+        :type export_folder: str
         :param pic_folder_on_device: folder where the pictures will reside on SD Card (default: "pic")
         :type pic_folder_on_device: str
         :param dither_method: dither method
@@ -204,40 +199,28 @@ class Converter:
         # 1. Loading
         # -----------------------------------------
         report(1, "Loading image…")
-        img = Image.open(img_path).convert("RGB")
+        img = source_image.convert("RGB")
 
         # -------------------
         # Palette quantization
         # -------------------
         report(2, "Quantizing to palette…")
-        quant = img.quantize(dither=dither_method, palette=self._palette_image)
+        dither = dither_method if isinstance(dither_method, Image.Dither) else Image.Dither(dither_method)
+        quant = img.quantize(dither=dither, palette=self._palette_image)
         quant_rgb = quant.convert("RGB")
 
         # -------------------
         # Build output paths and save quantized image
         # -------------------
-        report(3, "Save BMP…")
-        basedir = os.path.dirname(img_path)
-        output_basename_without_ext = os.path.splitext(os.path.basename(img_path))[0]
+        report(3, "Prepare output path…")
+        basedir = os.path.dirname(source_path)
+        output_basename_without_ext = os.path.splitext(os.path.basename(source_path))[0]
  
-        # Prepare folders if not exist
-        convert_dir = os.path.join(basedir, f"{convert_folder}")
-        convert_out_dir = os.path.join(convert_dir, f"{output_basename_without_ext}.bmp")
-        os.makedirs(convert_dir, exist_ok=True)
-
-        # folder where to store real-world RGB to device RGB images
-        device_dir = os.path.join(convert_dir, f"{pic_folder_on_device}_{target_device}")
-        device_out_dir = os.path.join(device_dir, f"{output_basename_without_ext}.bmp")
-        os.makedirs(device_dir, exist_ok=True)
-
-        raw_out_dir: str = ""
-        if export_raw:
-            raw_dir = os.path.join(convert_dir, f"{raw_folder}")
-            raw_out_dir = os.path.join(raw_dir, f"{output_basename_without_ext}.sp6")
-            os.makedirs(raw_dir, exist_ok=True)
-
-        # save preview
-        quant_rgb.save(convert_out_dir)
+        # Prepare folder structure: <source>/<orientation>/<device>/pic/<image>.bmp
+        device_dir = os.path.join(basedir, export_folder, target_device)
+        pic_dir = os.path.join(device_dir, pic_folder_on_device)
+        device_out_dir = os.path.join(pic_dir, f"{output_basename_without_ext}.bmp")
+        os.makedirs(pic_dir, exist_ok=True)
 
         # -------------------
         # Device BMP mapping
@@ -254,27 +237,14 @@ class Converter:
         """
         report(4, "Packing device BMP…")
         px = quant_rgb.load()
+        assert px is not None
         width, height = quant_rgb.size
-
-        raw_bytes = bytearray()
-        odd = False
-        pending = 0
 
         for y in reversed(range(height)):
             for x in reversed(range(width)):
                 rgb = px[x, y]
                 idx = self._rgb_to_index[rgb]
                 px[x, y] = self.target_device_map["device_rgb"][idx]
-                raw = self.target_device_map["device_index_to_raw"][idx]
-
-                if not odd:
-                    if export_raw:
-                        pending = raw
-                    odd = True
-                else:
-                    if export_raw:
-                        raw_bytes.append((pending << 4) | raw)
-                    odd = False
 
         # save device BMP
         # BMP images intended to be used on devices that takes BMP.
@@ -283,22 +253,10 @@ class Converter:
         # the BMP files to the SD card.
         quant_rgb.save(device_out_dir)
 
-        # Produce raw image suitable for ACeP/SPECTRA6 use.
-        # Raw data (1 pixel = 4 bits, 2 pixels = 1 byte) to be used by
-        # low-level device functions. Requires need some coding skills to use they
-        # properly. They are 6x smaller than BMPs so they can reduce ESP32 processing
-        # time and memory usage, and are more reliable to transmit over Wi-Fi.
-        if export_raw:
-            report(5, "Saving RAW bytes…")
-            with open(raw_out_dir, "wb") as f:
-                f.write(raw_bytes)
-
-        print(f"✔ Converted: {img_path}")
-        print(f"   → Preview BMP: {convert_out_dir}")
+        print(f"✔ Converted: {source_path}")
         print(f"   → Device BMP : {device_out_dir}")
-        if export_raw:
-            print(f"   → Raw image data : {raw_out_dir}")
+        print(f"   → Folder    : {device_dir}")
 
-        report(6 if export_raw else 5, f"Done: {device_out_dir}")
+        report(4, f"Done: {device_out_dir}")
 
-        return convert_out_dir, device_out_dir
+        return device_out_dir

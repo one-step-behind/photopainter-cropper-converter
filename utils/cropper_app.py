@@ -59,12 +59,8 @@ defaults:dict = {
     "ENHANCER_EDGE": False,
     "ENHANCER_SMOOTH": False,
     "ENHANCER_SHARPEN": False,
-    "EXPORT_FOLDER": "cropped",
-    "CONVERT_FOLDER": "dithered",
-    "RAW_FOLDER": "raw",
     "PIC_FOLDER_ON_DEVICE": "pic",
     "STATE_SUFFIX": "_ppcrop.txt",
-    "EXPORT_RAW": False,
     "SAVE_FILELIST": True,
     "SAVE_CANVAS_ZOOM": True,
     "CANVAS_ZOOM": 1.0,
@@ -1625,16 +1621,13 @@ class CropperApp:
         assert self.text_overlay is not None
         out_img = self.text_overlay.render_text_overlay_on_image(out_img)
 
-        # 7) save image
-        self.save_output(out_img)
+        # 7) convert and save final device image only
+        self.convert_to_bmp(out_img)
 
         # 8) save image preferences (txt) next to the source
         self.save_image_preferences(x1i, y1i, x2i, y2i)
 
-        # 9) convert to 24 bit BMP
-        self.convert_to_bmp()
-
-        # 10) next image
+        # 9) next image
         self.next_image()
 
     def enhance_image(self, img) -> Image.Image:
@@ -1680,29 +1673,16 @@ class CropperApp:
         else: # white, black
             return Image.new("RGB", self.target_size, self.image_preferences["fill_mode"])
     
-    def save_output(self, out_img) -> None:
-        img_path = self.current_image_path
-        print(f"→ Source: {img_path}")
-        out_path = self.out_path(img_path)
-        out_img.save(out_path, format="JPEG", quality=self.app_settings["image_quality"], optimize=True, progressive=True)
-        print(f"✔ Crop saved: {out_path}")
-
     # ---------- Path helpers ----------
     def export_folder_with_orientation(self, orientation: str | None = None) -> str:
         if not orientation:
             orientation = self.image_preferences["orientation"]
 
-        return self.app_settings["export_folder"] + "_" + orientation
+        return str(orientation)
 
     def image_state_path(self, img_path: str) -> str:
         dirname, base_filename, base_ext = self._split_path(img_path)
         return os.path.join(dirname, f"{base_filename}{self.app_settings['state_suffix']}")
-
-    def out_path(self, img_path: str) -> str:
-        dirname, base_filename, base_ext = self._split_path(img_path)
-        out_dir = os.path.join(dirname, f"{self.export_folder_with_orientation()}") # output folder
-        os.makedirs(out_dir, exist_ok=True) # create folder if not exists
-        return os.path.join(out_dir, f"{base_filename}.jpg") # complete source path & file of cropped image for convert
     
     def _split_path(self, path):
         dirname = os.path.dirname(path) # pure folder name
@@ -1728,12 +1708,8 @@ class CropperApp:
             settings["enhancer_smooth"]=defaults["ENHANCER_SMOOTH"]
             settings["enhancer_sharpen"]=defaults["ENHANCER_SHARPEN"]
             settings["grid_color"]=defaults["GRID_COLOR"]
-            settings["export_folder"]=defaults["EXPORT_FOLDER"]
-            settings["convert_folder"]=defaults["CONVERT_FOLDER"]
-            settings["raw_folder"]=defaults["RAW_FOLDER"]
             settings["pic_folder_on_device"]=defaults["PIC_FOLDER_ON_DEVICE"]
             settings["state_suffix"]=defaults["STATE_SUFFIX"]
-            settings["export_raw"]=defaults["EXPORT_RAW"]
             settings["save_filelist"]=defaults["SAVE_FILELIST"]
             settings["save_canvas_zoom"]=defaults["SAVE_CANVAS_ZOOM"]
             settings["canvas_zoom"]=defaults["CANVAS_ZOOM"]
@@ -2050,17 +2026,18 @@ class CropperApp:
 
         if self.app_settings["save_filelist"]:
             for available_orientation in available_option["ORIENTATION"]:
-                folder = os.path.join(
-                    self.picture_input_folder, 
-                    f"{self.export_folder_with_orientation(available_orientation)}", 
-                    self.app_settings["convert_folder"], 
-                    f"{self.app_settings['pic_folder_on_device']}_{self.app_settings['target_device']}",
+                device_dir = os.path.join(
+                    self.picture_input_folder,
+                    available_orientation,
+                    self.app_settings["target_device"],
                 )
-                filelist_filepath = os.path.join(folder, FILELIST_FILENAME)
+                pic_dir = os.path.join(device_dir, self.app_settings["pic_folder_on_device"])
+                filelist_filepath = os.path.join(device_dir, FILELIST_FILENAME)
 
-                if os.path.exists(folder):
-                    filelist = [f for f in os.listdir(folder) if f.endswith(".bmp")]
-                    lines = "\n".join(f"{self.app_settings['pic_folder_on_device']}/{str(item)}" for item in filelist)
+                if os.path.exists(pic_dir):
+                    filelist = [f for f in os.listdir(pic_dir) if f.endswith(".bmp")]
+                    pic_prefix = self.app_settings["pic_folder_on_device"]
+                    lines = "\n".join(f"{pic_prefix}/{str(item)}" for item in filelist)
                     with open(filelist_filepath, "w", encoding="utf-8", newline="\n") as f:
                         f.write(lines)
 
@@ -2120,9 +2097,9 @@ class CropperApp:
             self.next_image()
 
     # ---------- Call converter ----------
-    def convert_to_bmp(self) -> None:
+    def convert_to_bmp(self, out_img: Image.Image) -> None:
         def progress(step, msg):
-            self.update_status_label(f"[{step}/5] {msg}")
+            self.update_status_label(f"[{step}/4] {msg}")
             self.window.update_idletasks()
 
         self.update_status_label("Starting conversion…")
@@ -2132,13 +2109,12 @@ class CropperApp:
 
         try:
             converter.convert(
-                img_path=self.out_path(self.current_image_path),
+                source_image=out_img,
+                source_path=self.current_image_path,
                 target_device=self.image_preferences["target_device"],
+                export_folder=self.export_folder_with_orientation(),
                 dither_method=DITHER_METHOD,
-                convert_folder=self.app_settings["convert_folder"],
-                raw_folder=self.app_settings["raw_folder"],
                 pic_folder_on_device=self.app_settings["pic_folder_on_device"],
-                export_raw=self.app_settings["export_raw"],
                 progress_callback=progress,
             )
             #self.flash_status(f"Done: {os.path.basename(device_path)}")
