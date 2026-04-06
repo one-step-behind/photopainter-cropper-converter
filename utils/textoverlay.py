@@ -309,8 +309,6 @@ class CanvasTextOverlay:
         if self.current_image_path:
             self._refresh_location_for_current_context(force_refresh=False)
 
-        if (self.location_var.get() or self.year_var.get()) and self.location_text:
-            self._apply_location_text(force=True)
         self._update_controls_state()
         self._trigger_callback()
 
@@ -318,8 +316,6 @@ class CanvasTextOverlay:
         if self.current_image_path:
             self._refresh_location_for_current_context(force_refresh=False)
 
-        if (self.location_var.get() or self.year_var.get()) and self.location_text:
-            self._apply_location_text(force=True)
         self._update_controls_state()
         self._trigger_callback()
 
@@ -596,6 +592,7 @@ class CanvasTextOverlay:
         return cleaned or None
 
     def _get_exif_year(self, exif_data):
+        print(exif_data)
         date_taken = exif_data.get(36867) or exif_data.get(306)
         if not date_taken:
             return None
