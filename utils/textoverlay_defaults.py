@@ -7,7 +7,7 @@ TEXT_OVERLAY_DEFAULTS: dict = {
     "bg_color": "#000000",
     "bottom": 0,
     "right": 0,
-    "padding_x": 12, # left, right
+    "padding_x": 9, # left, right
     "padding_y": 3, # top, bottom
     "font_divisor": 26.0,
     "min_font_size": 8,

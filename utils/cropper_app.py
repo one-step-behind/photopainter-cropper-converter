@@ -9,7 +9,7 @@ import time
 import re
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-from typing import Any, Literal, Optional
+from typing import Any, Callable, Literal, Optional
 from PIL import Image, ImageTk, ImageFilter, ImageEnhance, ImageOps
 from utils.gallery import AsyncThumbnailGallery
 from utils.textoverlay import CanvasTextOverlay
@@ -17,6 +17,7 @@ from utils.textoverlay_defaults import TEXT_OVERLAY_DEFAULTS
 from utils.tooltip import Hovertip
 from utils.converter import Converter
 from utils.keybinds import bind_toggle_keys
+from utils.control_definitions import build_cropper_control_definitions
 
 # Try to import pillow-heif for HEIC support
 try:
@@ -121,36 +122,6 @@ CANVAS_ZOOM_MIN = 0.25              # minimum relative zoom of fit-to-window sca
 LABEL_PADDINGS = (5, 5)
 DEFAULT_TOOLTIP_DELAY = 250
 
-class DynamicButtonVar:
-    def __init__(self, default_text):
-        self.default_text = default_text
-        self.var = tk.StringVar(value=default_text)
-
-    def update(self, extra_text):
-        """Set button text to: Base: extra"""
-        if extra_text is None or extra_text == "":
-            self.var.set(self.default_text)
-        else:
-            self.var.set(f"{self.default_text}: {extra_text.upper()}")
-
-    def get(self): # get value of tk.StringVar()
-        return self.var.get()
-
-class DynamicSliderVar:
-    def __init__(self, default_text):
-        self.default_text = default_text
-        self.var = tk.StringVar(value=default_text)
-
-    def update(self, extra_text):
-        """Set slider text to: Base: extra"""
-        if extra_text is None or extra_text == "":
-            self.var.set(self.default_text)
-        else:
-            self.var.set(f"{self.default_text}: {extra_text}")
-
-    def get(self): # get value of tk.StringVar()
-        return self.var.get()
-
 class CropperApp:
     def __init__(self, window):
         # ---------- Load settings ----------
@@ -208,8 +179,6 @@ class CropperApp:
         # options pane
         self.options_frame = tk.Frame(canvas_with_options, highlightthickness=0)
         self.options_frame.pack(padx=LABEL_PADDINGS[0], fill=tk.Y, side=tk.RIGHT)
-        self.options_bottom_row = ttk.Frame(self.options_frame)
-        self.options_bottom_row.pack(fill=tk.X, side=tk.BOTTOM, pady=(LABEL_PADDINGS[1], 0))
 
         # bottom status bar
         bottom_bar = ttk.Frame(self.window)#, relief=tk.SUNKEN)
@@ -231,162 +200,21 @@ class CropperApp:
         self.set_theme()
 
         # ---------- Button UI ----------
-        # Define buttons with text variable, command, optional params, styling, and optional hover tip
-        self.app_settings_def = {
-            "save_filelist": {
-                "text": "Save image list",
-                "command": lambda e=None: self.update_app_settings_checkbox("save_filelist"),
-                "enter_tip": "Saves file list of existing images on app exit\nto fileList.txt in export folder(s)\n(landscape & portrait) (Ctrl+Shift+S)",
-                "toggle_key": ("<Control-Shift-s>", "<Control-Shift-S>"),
-            },
-            "save_canvas_zoom": {
-                "text": "Remember canvas zoom",
-                "command": lambda e=None: self.update_app_settings_checkbox("save_canvas_zoom"),
-                "enter_tip": "Saves and restores the current canvas zoom\nvalue in settings.ini between app restarts.\n(Ctrl+Shift+Z)",
-                "toggle_key": ("<Control-Shift-z>", "<Control-Shift-Z>"),
-            },
-            "exit_after_last_image": {
-                "text": "Exit after last image",
-                "command": lambda e=None: self.update_app_settings_checkbox("exit_after_last_image"),
-                "enter_tip": "Close the app after last image in folder was\nprocessed, otherwise open the first image. (Ctrl+X)",
-                "toggle_key": ("<Control-Shift-x>", "<Control-Shift-X>"),
-            },
-        }
-
-        self.app_button_definitions = {
-            "prev": {
-                "default_text": "<< Prev",
-                "command": self.prev_image,
-                "enter_tip": "Previous Image (PAGE_UP)",
-                "disabled_if_single_image": True,
-                "toggle_key": "<Prior>",
-            },
-            "next": {
-                "default_text": "Next >>",
-                "command": self.next_image,
-                "enter_tip": "Next Image (PAGE_DOWN)",
-                "disabled_if_single_image": True,
-                "toggle_key": "<Next>",
-            },
-            "save": {
-                "default_text": "Crop and Convert",
-                "command": self.on_confirm,
-                "enter_tip": "Crop and Convert (Enter, Ctrl+S)",
-                "style_config": {"foreground": "green"},
-                "toggle_key": ("<Return>", "<Control-s>", "<Control-S>"),
-            },
-        }
-        
-        self.other_app_button_definitions = {
-            "change_folder": {
-                "default_text": "Change folder",
-                "command": lambda e=None: self.load_folder(),
-                "enter_tip": "Change to another folder of images (Ctrl+Shift+L)",
-                "expand": True,
-                "fill": tk.X,
-                "underline": 9,
-                "toggle_key": ("<Control-Shift-l>", "<Control-Shift-L>"),
-            },
-            "reload_folder": {
-                "default_text": "Reload folder",
-                "command": lambda e=None: self.load_folder(False),
-                "enter_tip": "Reload this folder of images (Ctrl+Shift+R)",
-                "expand": True,
-                "fill": tk.X,
-                "underline": 0,
-                "toggle_key": ("<Control-Shift-r>", "<Control-Shift-R>"),
-            },
-        }
-
-        self.option_button_def = {
-            "orientation": {
-                "widget_type": "combobox",
-                "default_text": "Orientation",
-                "command": self.toggle_orientation,
-                "postcommand": lambda e=None: self.set_orientation("orientation"),
-                "values": available_option["ORIENTATION"],
-                "enter_tip": "Toggle Orientation (Ctrl+O)",
-                "fill": tk.X,
-                "underline": 0,
-                "toggle_key": ("<Control-o>", "<Control-O>"),
-            },
-            "fill_mode": {
-                "widget_type": "combobox", # button, combobox
-                "default_text": "Fill",
-                "command": self.toggle_fill_mode,
-                "postcommand": lambda e=None: self.set_fill_mode("fill_mode"),
-                "values": available_option["FILL_MODE"],
-                "enter_tip": "Toggle Fill mode (Ctrl+F)",
-                "underline": 0,
-                "toggle_key": ("<Control-f>", "<Control-F>"),
-            },
-            "target_device": {
-                "widget_type": "combobox",
-                "default_text": "Device",
-                "command": self.toggle_target_device,
-                "postcommand": lambda e=None: self.set_target_device("target_device"),
-                "values": available_option["TARGET_DEVICE"],
-                "enter_tip": "Toggle Target device (Ctrl+D)",
-                "underline": 0,
-                "toggle_key": ("<Control-d>", "<Control-D>"),
-            },
-        }
-        
-        self.enhancer_sliders_def = {
-            "brightness": {
-                "text": "Brightness",
-                "min": 0.1,
-                "max": 5.0,
-                "resolution": 0.05,
-                "tickinterval": 1.0,
-                "command": lambda value: self.schedule_slider_update("brightness", value),
-                "enter_tip": "Set Brighness",
-            },
-            "contrast": {
-                "text": "Contrast",
-                "min": 0.1,
-                "max": 5.0,
-                "resolution": 0.05,
-                "tickinterval": 1.0,
-                "command": lambda value: self.schedule_slider_update("contrast", value),
-                "enter_tip": "Set Contrast",
-            },
-            "saturation": {
-                "text": "Saturation",
-                "min": 0.0,
-                "max": 5.0,
-                "resolution": 0.05,
-                "tickinterval": 1.0,
-                "command": lambda value: self.schedule_slider_update("saturation", value),
-                "enter_tip": "Set Saturation",
-            },
-        }
-
-        self.enhancer_checkboxes_def = {
-            "enhancer_edge": {
-                "text": "Edge",
-                "command": lambda e=None: self.update_image_enhancer_checkbox("enhancer_edge"),
-                "enter_tip": "Enhance image by Edgeing (Ctrl+1)",
-                "toggle_key": "<Control-Key-1>",
-            },
-            "enhancer_smooth": {
-                "text": "Smooth",
-                "command": lambda e=None: self.update_image_enhancer_checkbox("enhancer_smooth"),
-                "enter_tip": "Enhance image by Smoothing (Ctrl+2)",
-                "toggle_key": "<Control-Key-2>",
-            },
-            "enhancer_sharpen": {
-                "text": "Sharpen",
-                "command": lambda e=None: self.update_image_enhancer_checkbox("enhancer_sharpen"),
-                "enter_tip": "Enhance image by Sharpening (Ctrl+3)",
-                "toggle_key": "<Control-Key-3>",
-            },
-        }
+        # Define controls externally and bind instance callbacks at runtime.
+        (
+            self.app_settings_def,
+            self.app_button_definitions,
+            self.option_button_def,
+            self.enhancer_sliders_def,
+            self.enhancer_checkboxes_def,
+        ) = build_cropper_control_definitions(self, available_option)
 
         # Store the Button, Sliders, Checkbox widgets
-        self.app_button_vars = {}
+        self.app_button_vars: dict[str, tk.StringVar] = {}
+        self.app_button_default_texts: dict[str, str] = {}
         self.app_buttons = {}
-        self.image_enhancer_slider_vars = {}
+        self.image_enhancer_slider_vars: dict[str, tk.StringVar] = {}
+        self.image_enhancer_slider_default_texts: dict[str, str] = {}
         self.image_enhancer_sliders = {}
         self.image_enhancer_checkbox_vars: dict[str, tk.BooleanVar] = {}
         self.image_enhancer_checkboxes = {}
@@ -509,9 +337,6 @@ class CropperApp:
         self.create_buttons(self.button_bar, self.app_button_definitions, tk.LEFT)
         # image options buttons
         self.create_buttons(self.options_frame, self.option_button_def, tk.TOP)
-        # tk.Label(self.options_frame, width=22, height=1).pack() # spacer
-        # other app buttons (side by side) at the bottom of the options pane
-        self.create_buttons(self.options_bottom_row, self.other_app_button_definitions, tk.LEFT)
 
         self.create_text_overlay()
 
@@ -706,13 +531,13 @@ class CropperApp:
                         self.app_buttons[name].state(["!disabled"])
                 continue
             
-            # 1) Create helper var object
-            dyn = DynamicButtonVar(info["default_text"])
-            self.app_button_vars[name] = dyn
+            # 1) Create text variable and remember default text
+            self.app_button_vars[name] = tk.StringVar(value=info["default_text"])
+            self.app_button_default_texts[name] = info["default_text"]
 
             # 2) Collect optional settings for ttk.Button
             btn_kwargs = {
-                "textvariable": dyn.var,
+                "textvariable": self.app_button_vars[name],
                 "takefocus": 0,
             }
             pack_kwargs = {
@@ -765,7 +590,11 @@ class CropperApp:
         :param extra_text: Beschreibung
         """
         if button_name in self.app_button_vars:
-            self.app_button_vars[button_name].update(extra_text)
+            default_text = self.app_button_default_texts.get(button_name, "")
+            if extra_text is None or extra_text == "":
+                self.app_button_vars[button_name].set(default_text)
+            else:
+                self.app_button_vars[button_name].set(f"{default_text}: {extra_text.upper()}")
         else:
             print(f"No button found for '{button_name}'")
 
@@ -774,13 +603,13 @@ class CropperApp:
             for name, info in self.enhancer_sliders_def.items():
                 value = self.image_preferences[name]
 
-                dyn = DynamicSliderVar(info["text"])
-                self.image_enhancer_slider_vars[name] = dyn
+                self.image_enhancer_slider_vars[name] = tk.StringVar(value=info["text"])
+                self.image_enhancer_slider_default_texts[name] = info["text"]
 
                 slider_header = ttk.Frame(self.options_frame)
                 slider_header.pack(fill=tk.X, padx=LABEL_PADDINGS[0], pady=(LABEL_PADDINGS[1], 0))
 
-                slider_label = ttk.Label(slider_header, textvariable=dyn.var, justify=tk.LEFT)
+                slider_label = ttk.Label(slider_header, textvariable=self.image_enhancer_slider_vars[name], justify=tk.LEFT)
                 slider_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
                 slider_reset_btn = ttk.Button(
@@ -846,9 +675,10 @@ class CropperApp:
         if slider_name not in self.image_enhancer_slider_vars:
             return
 
+        default_text = self.image_enhancer_slider_default_texts.get(slider_name, "")
         current_value = float(self.image_preferences.get(slider_name, 0.0))
         default_value = float(self.get_device_enhancer_defaults().get(slider_name, current_value))
-        self.image_enhancer_slider_vars[slider_name].update(f"{current_value:.2f} (default {default_value:.2f})")
+        self.image_enhancer_slider_vars[slider_name].set(f"{default_text}: {current_value:.2f} (default {default_value:.2f})")
 
     def apply_device_enhancer_defaults(self) -> None:
         defaults_for_device = self.get_device_enhancer_defaults()
@@ -913,6 +743,11 @@ class CropperApp:
 
     def create_image_enhancer_checkboxes(self) -> None:
         if not self.image_enhancer_checkbox_vars:
+            checkbox_row = ttk.Frame(self.options_frame)
+            checkbox_row.pack(fill=tk.X, padx=LABEL_PADDINGS[0], pady=(0, LABEL_PADDINGS[1]))
+            for idx in range(len(self.enhancer_checkboxes_def)):
+                checkbox_row.columnconfigure(idx, weight=1)
+
             for name, info in self.enhancer_checkboxes_def.items():
                 value = self.image_preferences[name]
                 
@@ -925,8 +760,11 @@ class CropperApp:
                 }
 
                 self.image_enhancer_checkbox_vars[name] = tk.BooleanVar(value=value)
-                checkbox = ttk.Checkbutton(self.options_frame, command=info["command"], variable=self.image_enhancer_checkbox_vars[name], **checkbox_kwargs)
-                checkbox.pack(padx=LABEL_PADDINGS[0], fill=tk.X)
+                checkbox = ttk.Checkbutton(checkbox_row, command=info["command"], variable=self.image_enhancer_checkbox_vars[name], **checkbox_kwargs)
+
+                col_idx = len(self.image_enhancer_checkboxes)
+                sticky = "w" if col_idx == 0 else ("e" if col_idx == len(self.enhancer_checkboxes_def) - 1 else "")
+                checkbox.grid(row=0, column=col_idx, sticky=sticky)
 
                 self.image_enhancer_checkboxes[name] = checkbox
 
@@ -1449,6 +1287,23 @@ class CropperApp:
 
         return x1d, y1d, x2d, y2d
 
+    def _set_option_from_field(self, field: str, apply_func: Callable[[str], None]) -> None:
+        selected = self.app_button_vars[field].get()
+        apply_func(selected)
+
+    def _toggle_option(self, preference_key: str, options: tuple[str, ...], apply_func: Callable[[str], None]) -> None:
+        current_value = self.image_preferences.get(preference_key)
+        if not options:
+            return
+
+        try:
+            current_idx = options.index(current_value)
+        except ValueError:
+            current_idx = -1
+
+        next_value = options[(current_idx + 1) % len(options)]
+        apply_func(next_value)
+
     # ---------- Toggles ----------
     def _apply_orientation(self, orientation: str) -> None:
         if orientation not in available_option["ORIENTATION"]:
@@ -1491,41 +1346,29 @@ class CropperApp:
         #self.canvas.tag_raise("crop_layer")
 
     def toggle_orientation(self, _e=None) -> None:
-        current = self.image_preferences.get("orientation")
-        next_orientation = (
-            available_option["ORIENTATION"][0]
-            if current == available_option["ORIENTATION"][1]
-            else available_option["ORIENTATION"][1]
-        )
-        self._apply_orientation(next_orientation)
+        self._toggle_option("orientation", available_option["ORIENTATION"], self._apply_orientation)
 
-    def set_orientation(self, field) -> None:
-        selected = self.app_button_vars[field].get()
-        self._apply_orientation(selected)
+    def set_orientation(self, field: str) -> None:
+        self._set_option_from_field(field, self._apply_orientation)
 
-    def set_fill_mode(self, field) -> None:
-        self.image_preferences["fill_mode"] = self.app_button_vars[field].get()
+    def _apply_fill_mode(self, fill_mode: str) -> None:
+        if fill_mode not in available_option["FILL_MODE"]:
+            return
 
-    def toggle_fill_mode(self, _e=None) -> None:
-        current_idx = available_option["FILL_MODE"].index(self.image_preferences["fill_mode"])
-        if current_idx + 1 > len(available_option["FILL_MODE"]) - 1:
-            current_idx = 0
-        else:
-            current_idx += 1
-        self.image_preferences["fill_mode"] = available_option["FILL_MODE"][current_idx]
+        self.image_preferences["fill_mode"] = fill_mode
         self.update_button_text("fill_mode", self.image_preferences["fill_mode"])
 
-    def toggle_target_device(self, _e=None) -> None:
-        current_idx = available_option["TARGET_DEVICE"].index(self.image_preferences["target_device"])
-        if current_idx + 1 > len(available_option["TARGET_DEVICE"]) - 1:
-            current_idx = 0
-        else:
-            current_idx += 1
-        self._apply_target_device(available_option["TARGET_DEVICE"][current_idx])
+    def set_fill_mode(self, field: str) -> None:
+        self._set_option_from_field(field, self._apply_fill_mode)
 
-    def set_target_device(self, field) -> None:
-        selected = self.app_button_vars[field].get()
-        self._apply_target_device(selected)
+    def toggle_fill_mode(self, _e=None) -> None:
+        self._toggle_option("fill_mode", available_option["FILL_MODE"], self._apply_fill_mode)
+
+    def toggle_target_device(self, _e=None) -> None:
+        self._toggle_option("target_device", available_option["TARGET_DEVICE"], self._apply_target_device)
+
+    def set_target_device(self, field: str) -> None:
+        self._set_option_from_field(field, self._apply_target_device)
 
     def _apply_target_device(self, target_device: str) -> None:
         if target_device not in available_option["TARGET_DEVICE"]:

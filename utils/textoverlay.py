@@ -5,6 +5,7 @@ from typing import Any, cast
 from geopy.geocoders import Nominatim
 from PIL import Image, ExifTags
 from utils.textoverlay_defaults import TEXT_OVERLAY_DEFAULTS, FONT_DIVISOR_MIN, FONT_DIVISOR_MAX
+from utils.control_definitions import build_textoverlay_control_definitions
 from utils.keybinds import bind_toggle_keys
 from utils.tooltip import Hovertip
 
@@ -83,6 +84,7 @@ class CanvasTextOverlay:
     # Control creation
     # ----------------------
     def _create_controls(self):
+        self.control_defs = build_textoverlay_control_definitions(self)
 
         ttk.Separator(self.control_frame).pack(fill=tk.X, pady=5)
 
@@ -95,70 +97,89 @@ class CanvasTextOverlay:
         # Text on Canvas checkbox
         self.checkbox = ttk.Checkbutton(
             self.metadata_toggle_row,
-            text="Show text on canvas",
-            variable=self.show_var,
-            command=self._on_show_change
+            text=self.control_defs["show_text"]["text"],
+            variable=self.control_defs["show_text"]["variable"],
+            command=self.control_defs["show_text"]["command"],
         )
         self.checkbox.pack(side=tk.LEFT)
-        Hovertip(self.checkbox, "Show text on canvas (Ctrl+T)", hover_delay=250)
-
-        self.year_checkbox = ttk.Checkbutton(
-            self.metadata_toggle_row,
-            text="Year",
-            variable=self.year_var,
-            command=self._on_year_change,
-            style=self.overlay_checkbutton_style,
-        )
-        self.year_checkbox.pack(side=tk.RIGHT)
-        Hovertip(self.year_checkbox, "Year from date taken", hover_delay=250)
+        Hovertip(self.checkbox, self.control_defs["show_text"]["hover_tip"], hover_delay=250)
 
         # Keyboard shortcut: Ctrl+T toggles text on canvas.
         bind_toggle_keys(
             self.control_frame.winfo_toplevel(),
-            {"toggle_key": ("<Control-t>", "<Control-T>")},
-            self._on_show_text_shortcut,
+            {"toggle_key": self.control_defs["show_text"]["toggle_key"]},
+            self.control_defs["show_text"]["shortcut_callback"],
         )
 
+        self.location_year_row = ttk.Frame(self.control_frame)
+        self.location_year_row.pack(fill=tk.X, padx=5)
+
         self.location_checkbox = ttk.Checkbutton(
-            self.control_frame,
-            text="Location",
-            variable=self.location_var,
-            command=self._on_location_change,
+            self.location_year_row,
+            text=self.control_defs["location"]["text"],
+            variable=self.control_defs["location"]["variable"],
+            command=self.control_defs["location"]["command"],
             style=self.overlay_checkbutton_style,
         )
-        self.location_checkbox.pack(fill=tk.X, padx=5)
-        Hovertip(self.location_checkbox, "Location metadata (Ctrl+L)", hover_delay=250)
+        self.location_checkbox.pack(side=tk.LEFT)
+        Hovertip(self.location_checkbox, self.control_defs["location"]["hover_tip"], hover_delay=250)
+
+        self.location_refresh_btn = ttk.Button(
+            self.location_year_row,
+            text=self.control_defs["refresh_location"]["text"],
+            width=self.control_defs["refresh_location"]["width"],
+            padding=self.control_defs["refresh_location"]["padding"],
+            command=self.control_defs["refresh_location"]["command"],
+            takefocus=0,
+        )
+        self.location_refresh_btn.pack(side=tk.LEFT, padx=(5, 0))
+
+        self.year_checkbox = ttk.Checkbutton(
+            self.location_year_row,
+            text=self.control_defs["year"]["text"],
+            variable=self.control_defs["year"]["variable"],
+            command=self.control_defs["year"]["command"],
+            style=self.overlay_checkbutton_style,
+        )
+        self.year_checkbox.pack(side=tk.RIGHT)
+        Hovertip(self.year_checkbox, self.control_defs["year"]["hover_tip"], hover_delay=250)
 
         # Keyboard shortcut: Ctrl+L toggles location.
         bind_toggle_keys(
             self.control_frame.winfo_toplevel(),
-            {"toggle_key": ("<Control-l>", "<Control-L>")},
-            self._on_location_shortcut,
+            {"toggle_key": self.control_defs["location"]["toggle_key"]},
+            self.control_defs["location"]["shortcut_callback"],
         )
-
-        self.location_refresh_btn = ttk.Button(
-            self.control_frame,
-            text="Refresh location",
-            command=self.refresh_location_metadata,
-            takefocus=0,
-        )
-        self.location_refresh_btn.pack(fill=tk.X, padx=5)
 
         # Text field
         self.text_on_canvas = ttk.Entry(self.control_frame, textvariable=self.text_var, width=30)
         self.text_on_canvas.pack(fill=tk.X, padx=7, pady=(5, 0))
-        Hovertip(self.text_on_canvas, "Text on Canvas", hover_delay=250)
+        Hovertip(self.text_on_canvas, self.control_defs["text_entry"]["hover_tip"], hover_delay=250)
 
         # Text size slider. Higher divisors mean smaller text, so the slider
         # runs from high to low to make left=smaller and right=bigger.
         self.text_size_slider_label_var = tk.StringVar()
+        self.text_size_slider_header = ttk.Frame(self.control_frame)
+        self.text_size_slider_header.pack(fill=tk.X, padx=5, pady=(5, 0))
         self.text_size_slider_label = ttk.Label(
-            self.control_frame,
+            self.text_size_slider_header,
             textvariable=self.text_size_slider_label_var,
             justify=tk.LEFT,
             style=self.overlay_label_style,
         )
-        self.text_size_slider_label.pack(fill=tk.X, padx=5, pady=(5, 0))
+        self.text_size_slider_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        self.text_size_reset_btn = ttk.Button(
+            self.text_size_slider_header,
+            text=self.control_defs["text_size_reset"]["text"],
+            width=self.control_defs["text_size_reset"]["width"],
+            padding=self.control_defs["text_size_reset"]["padding"],
+            takefocus=0,
+            command=self.control_defs["text_size_reset"]["command"],
+        )
+        self.text_size_reset_btn.pack(side=tk.RIGHT)
+        Hovertip(self.text_size_reset_btn, self.control_defs["text_size_reset"]["hover_tip"], hover_delay=250)
+
         self.text_size_slider = tk.Scale(
             self.control_frame,
             from_=FONT_DIVISOR_MAX,
@@ -176,17 +197,8 @@ class CanvasTextOverlay:
         self._set_slider_from_divisor(self.font_divisor)
         self._update_slider_label(self.font_divisor)
 
-        self.text_size_slider_hint_frame = ttk.Frame(self.control_frame)
-        self.text_size_slider_hint_frame.pack(fill=tk.X, padx=5, pady=(0, 5))
-        self.text_size_slider_hint_left = ttk.Label(self.text_size_slider_hint_frame, text="Smaller", style=self.overlay_label_style)
-        self.text_size_slider_hint_left.pack(side=tk.LEFT)
-        self.text_size_slider_hint_right = ttk.Label(self.text_size_slider_hint_frame, text="Bigger", style=self.overlay_label_style)
-        self.text_size_slider_hint_right.pack(side=tk.RIGHT)
-
         self.overlay_labels = (
             self.text_size_slider_label,
-            self.text_size_slider_hint_left,
-            self.text_size_slider_hint_right,
         )
 
         self.color_button_row = ttk.Frame(self.control_frame)
@@ -195,34 +207,34 @@ class CanvasTextOverlay:
         # Text and background color buttons share one row.
         self.text_color_btn = ttk.Button(
             self.color_button_row,
-            text="Text color",
-            command=self._pick_text_color
+            text=self.control_defs["text_color"]["text"],
+            command=self.control_defs["text_color"]["command"],
         )
         self.text_color_btn.pack(side=tk.LEFT, padx=0)
-        Hovertip(self.text_color_btn, "Text color (Ctrl+Shift+T)", hover_delay=250)
+        Hovertip(self.text_color_btn, self.control_defs["text_color"]["hover_tip"], hover_delay=250)
 
         # Keyboard shortcut: Ctrl+Shift+T opens text color picker.
         bind_toggle_keys(
             self.control_frame.winfo_toplevel(),
-            {"toggle_key": ("<Control-Shift-t>", "<Control-Shift-T>")},
-            self._on_text_color_shortcut,
+            {"toggle_key": self.control_defs["text_color"]["toggle_key"]},
+            self.control_defs["text_color"]["shortcut_callback"],
         )
 
         self.bg_color_btn = ttk.Button(
             self.color_button_row,
-            text="Background color",
-            command=self._pick_bg_color
+            text=self.control_defs["bg_color"]["text"],
+            command=self.control_defs["bg_color"]["command"],
         )
         self.bg_color_btn.pack(side=tk.RIGHT, padx=0)
-        Hovertip(self.bg_color_btn, "Background color (Ctrl+Shift+B)", hover_delay=250)
+        Hovertip(self.bg_color_btn, self.control_defs["bg_color"]["hover_tip"], hover_delay=250)
 
         ttk.Separator(self.control_frame).pack(fill=tk.X, pady=5)
 
         # Keyboard shortcut: Ctrl+Shift+B opens background color picker.
         bind_toggle_keys(
             self.control_frame.winfo_toplevel(),
-            {"toggle_key": ("<Control-Shift-b>", "<Control-Shift-B>")},
-            self._on_bg_color_shortcut,
+            {"toggle_key": self.control_defs["bg_color"]["toggle_key"]},
+            self.control_defs["bg_color"]["shortcut_callback"],
         )
 
         # Initial state
@@ -401,6 +413,7 @@ class CanvasTextOverlay:
         self._set_overlay_labels_dimmed(state != "normal")
         self.text_on_canvas.config(style=self.overlay_entry_style if state == "normal" else self.overlay_entry_disabled_style)
         self.text_on_canvas.config(state=state)
+        self.text_size_reset_btn.config(state=state)
         self.text_size_slider.config(state=state)
         self.text_color_btn.config(state=state)
         self.bg_color_btn.config(state=state)
@@ -424,7 +437,13 @@ class CanvasTextOverlay:
             self._syncing_slider = False
 
     def _update_slider_label(self, divisor):
-        self.text_size_slider_label_var.set(f"Text size: {float(divisor):.1f}")
+        self.text_size_slider_label_var.set(f"{self.control_defs['text_size']['label_prefix']}: {float(divisor):.1f}")
+
+    def _reset_font_divisor(self):
+        default_divisor = float(TEXT_OVERLAY_DEFAULTS["font_divisor"])
+        self.font_divisor = self._clamp_font_divisor(default_divisor)
+        self._set_slider_from_divisor(self.font_divisor)
+        self._trigger_callback()
 
     def _set_text_value(self, text, *, update_manual=False):
         self._updating_text_programmatically = True
