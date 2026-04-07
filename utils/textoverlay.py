@@ -39,8 +39,11 @@ class CanvasTextOverlay:
         self.text_var = tk.StringVar(value=self.state["text"])
         self.text_color = self.state["text_color"]
         self.bg_color = self.state["bg_color"]
-        self.location_text = ""
-        self._last_applied_location_text = ""
+        self.manual_text = self.state.get("manual_text", "")
+        self._updating_text_programmatically = False
+        self._suspend_text_reconcile = False
+        self.auto_overlay_text = ""
+        self._last_applied_auto_overlay_text = ""
         self.derived_location_name = None
         self.current_image_path = None
         self.has_exif_data = False
@@ -307,20 +310,28 @@ class CanvasTextOverlay:
 
     def _on_location_change(self):
         if self.current_image_path:
-            self._refresh_location_for_current_context(force_refresh=False)
+            self._refresh_location_for_current_context(force_refresh=False, reconcile_with_current_text=False)
 
+        self._rebuild_displayed_text()
         self._update_controls_state()
         self._trigger_callback()
 
     def _on_year_change(self):
         if self.current_image_path:
-            self._refresh_location_for_current_context(force_refresh=False)
+            self._refresh_location_for_current_context(force_refresh=False, reconcile_with_current_text=False)
 
+        self._rebuild_displayed_text()
         self._update_controls_state()
         self._trigger_callback()
 
     def _on_text_change(self, *args):
-        self.text_label.config(text=self.text_var.get())
+        text = self.text_var.get()
+        self.text_label.config(text=text)
+
+        if not self._updating_text_programmatically:
+            self.manual_text = self._extract_manual_text(text)
+            self._reconcile_auto_flags_with_text(text)
+
         self._trigger_callback()
 
     def _on_slider_change(self, value):
@@ -415,15 +426,104 @@ class CanvasTextOverlay:
     def _update_slider_label(self, divisor):
         self.text_size_slider_label_var.set(f"Text size: {float(divisor):.1f}")
 
-    def _apply_location_text(self, force=False):
-        if not self.location_text:
+    def _set_text_value(self, text, *, update_manual=False):
+        self._updating_text_programmatically = True
+        try:
+            self.text_var.set(text)
+        finally:
+            self._updating_text_programmatically = False
+
+        if update_manual:
+            self.manual_text = text
+
+    def _build_auto_overlay_text(self):
+        overlay_parts = []
+        if self.location_var.get() and self.derived_location_name:
+            overlay_parts.append(self.derived_location_name)
+        if self.year_var.get() and self.current_year:
+            overlay_parts.append(self.current_year)
+        return " ".join(overlay_parts)
+
+    def _rebuild_displayed_text(self):
+        """Reconstruct displayed text from manual text + current auto metadata based on checkbox state."""
+        normalized_manual_text = self._extract_manual_text(self.manual_text)
+        self.manual_text = normalized_manual_text
+
+        auto_parts = []
+        if self.location_var.get() and self.derived_location_name:
+            auto_parts.append(self.derived_location_name)
+        if self.year_var.get() and self.current_year:
+            auto_parts.append(self.current_year)
+
+        auto_text = " ".join(auto_parts) if auto_parts else ""
+        combined = (
+            (normalized_manual_text.strip() + " " + auto_text).strip()
+            if auto_text
+            else normalized_manual_text
+        )
+        self._set_text_value(combined, update_manual=False)
+        self.auto_overlay_text = auto_text
+
+    def _contains_year(self, text, year):
+        if not text or not year:
+            return False
+        return re.search(rf"(?<!\\d){re.escape(str(year))}(?!\\d)", str(text)) is not None
+
+    def _extract_manual_text(self, text):
+        """Extract truly manual text by removing known auto components (Location, Year)."""
+        if not text:
+            return ""
+
+        result = text.strip()
+
+        # Remove current Location if it's in the text
+        if self.derived_location_name:
+            location_lower = self.derived_location_name.casefold()
+            result_lower = result.casefold()
+            if location_lower in result_lower:
+                idx = result_lower.index(location_lower)
+                before = result[:idx].strip()
+                after = result[idx + len(self.derived_location_name):].strip()
+                result = (before + " " + after).strip() if before and after else (before or after)
+
+        # Remove current Year if it's in the text
+        if self.current_year:
+            year_pattern = rf"(?<!\\d){re.escape(str(self.current_year))}(?!\\d)"
+            result = re.sub(year_pattern, "", result).strip()
+            result = re.sub(r"\\s+", " ", result).strip()
+
+        return result
+
+    def _reconcile_auto_flags_with_text(self, text):
+        """Auto-uncheck Location/Year only if manually edited text no longer contains current auto values."""
+        changed = False
+        normalized = (text or "").strip()
+
+        if self.location_var.get() and self.derived_location_name:
+            if self.derived_location_name.casefold() not in normalized.casefold():
+                self.location_var.set(False)
+                changed = True
+
+        if self.year_var.get() and self.current_year:
+            if not self._contains_year(normalized, self.current_year):
+                self.year_var.set(False)
+                changed = True
+
+        if changed:
+            self.auto_overlay_text = self._build_auto_overlay_text()
+            self._update_controls_state()
+
+        return changed
+
+    def _apply_auto_overlay_text(self, force=False):
+        if not self.auto_overlay_text:
             return
 
         current_text = self.text_var.get().strip()
-        auto_values = {"", TEXT_OVERLAY_DEFAULTS["text"], self._last_applied_location_text.strip()}
+        auto_values = {"", TEXT_OVERLAY_DEFAULTS["text"], self._last_applied_auto_overlay_text.strip()}
         if force or current_text in auto_values:
-            self._last_applied_location_text = self.location_text
-            self.text_var.set(self.location_text)
+            self._last_applied_auto_overlay_text = self.auto_overlay_text
+            self._set_text_value(self.auto_overlay_text, update_manual=False)
 
     # ----------------------
     # Public API
@@ -433,7 +533,8 @@ class CanvasTextOverlay:
         self.set_show(payload["show"])
         self.set_use_location(payload.get("use_location", False))
         self.set_use_year(payload.get("use_year", False))
-        self.set_text(payload["text"])
+        self.manual_text = payload.get("manual_text", payload.get("text", ""))
+        self._set_text_value(payload.get("text", ""), update_manual=False)
         self.set_colors(text_color = payload["text_color"], bg_color=payload["bg_color"])
         if "font_divisor" in payload:
             self.set_font_divisor(payload["font_divisor"])
@@ -441,7 +542,7 @@ class CanvasTextOverlay:
             self.set_image_dpi_scale(payload["image_dpi_scale"])
 
     def set_text(self, text):
-        self.text_var.set(text)
+        self._set_text_value(text, update_manual=True)
 
     def set_show(self, show: bool):
         self.show_var.set(show)
@@ -450,19 +551,13 @@ class CanvasTextOverlay:
     def set_use_location(self, use_location: bool):
         self.location_var.set(use_location)
         if self.current_image_path:
-            self._refresh_location_for_current_context(force_refresh=False)
-
-        if (self.location_var.get() or self.year_var.get()) and self.location_text:
-            self._apply_location_text(force=False)
+            self._refresh_location_for_current_context(force_refresh=False, reconcile_with_current_text=False)
         self._update_controls_state()
 
     def set_use_year(self, use_year: bool):
         self.year_var.set(use_year)
         if self.current_image_path:
-            self._refresh_location_for_current_context(force_refresh=False)
-
-        if (self.location_var.get() or self.year_var.get()) and self.location_text:
-            self._apply_location_text(force=False)
+            self._refresh_location_for_current_context(force_refresh=False, reconcile_with_current_text=False)
         self._update_controls_state()
 
     def set_colors(self, text_color=None, bg_color=None):
@@ -492,19 +587,25 @@ class CanvasTextOverlay:
         self.font_preview_height = float(max(1.0, preview_px))
         self.update_font()
 
-    def set_location_metadata(self, location_text):
-        previous_text = self.location_text
-        self.location_text = location_text or ""
+    def _sync_auto_overlay_text(self, reconcile_with_current_text=True):
+        previous_text = self.auto_overlay_text
+        self.auto_overlay_text = self._build_auto_overlay_text()
         current_text = self.text_var.get().strip()
-        auto_values = {"", TEXT_OVERLAY_DEFAULTS["text"], previous_text.strip(), self._last_applied_location_text.strip()}
+        auto_values = {"", TEXT_OVERLAY_DEFAULTS["text"], previous_text.strip(), self._last_applied_auto_overlay_text.strip()}
 
-        if (self.location_var.get() or self.year_var.get()) and self.location_text:
+        if (self.location_var.get() or self.year_var.get()) and self.auto_overlay_text:
             if current_text in auto_values:
-                self._apply_location_text(force=True)
+                self._apply_auto_overlay_text(force=True)
+            elif reconcile_with_current_text and not self._suspend_text_reconcile:
+                self._reconcile_auto_flags_with_text(current_text)
+                self.auto_overlay_text = self._build_auto_overlay_text()
         elif current_text in auto_values:
             # Reset auto-populated text when switching images with no metadata.
-            self._last_applied_location_text = ""
-            self.text_var.set("")
+            self._last_applied_auto_overlay_text = ""
+            self._set_text_value("", update_manual=False)
+        elif reconcile_with_current_text and not self._suspend_text_reconcile:
+            self._reconcile_auto_flags_with_text(current_text)
+            self.auto_overlay_text = self._build_auto_overlay_text()
 
         self._update_controls_state()
 
@@ -513,12 +614,12 @@ class CanvasTextOverlay:
         self.has_exif_data = False
         self.has_year_data = False
         self.derived_location_name = None
-        self.set_location_metadata(None)
+        self._sync_auto_overlay_text(reconcile_with_current_text=False)
 
-    def set_image_context(self, image_path, cached_location=None, force_refresh=False):
+    def set_image_context(self, image_path, cached_location=None, force_refresh=False, reconcile_with_current_text=True):
         self.current_image_path = image_path
         do_lookup = bool(self.show_var.get() and self.location_var.get())
-        location_text, location_name, has_exif_data, year = self._derive_overlay_text(
+        location_name, has_exif_data, year = self._derive_overlay_text(
             image_path,
             cached_location=cached_location,
             force_refresh=force_refresh,
@@ -528,7 +629,7 @@ class CanvasTextOverlay:
         self.has_year_data = year is not None
         self.current_year = year
         self.derived_location_name = location_name
-        self.set_location_metadata(location_text)
+        self._sync_auto_overlay_text(reconcile_with_current_text=reconcile_with_current_text)
         return self.derived_location_name
 
     def refresh_location_metadata(self):
@@ -539,11 +640,11 @@ class CanvasTextOverlay:
             return
 
         self.set_image_context(self.current_image_path, cached_location=None, force_refresh=True)
-        if self.location_var.get() and self.location_text:
-            self._apply_location_text(force=True)
+        if self.location_var.get() and self.auto_overlay_text:
+            self._apply_auto_overlay_text(force=True)
         self._trigger_callback()
 
-    def _refresh_location_for_current_context(self, force_refresh=False):
+    def _refresh_location_for_current_context(self, force_refresh=False, reconcile_with_current_text=True):
         if not self.current_image_path:
             return
 
@@ -551,6 +652,7 @@ class CanvasTextOverlay:
             self.current_image_path,
             cached_location=self.derived_location_name,
             force_refresh=force_refresh,
+            reconcile_with_current_text=reconcile_with_current_text,
         )
 
     def _derive_overlay_text(self, image_path, cached_location=None, force_refresh=False, do_lookup=False):
@@ -571,14 +673,7 @@ class CanvasTextOverlay:
         except Exception as exc:
             print(f"Unable to derive EXIF overlay text for {image_path}: {exc}")
 
-        overlay_parts = []
-        if self.location_var.get() and location_name:
-            overlay_parts.append(location_name)
-        if self.year_var.get() and year:
-            overlay_parts.append(year)
-
-        overlay_text = " ".join(overlay_parts)
-        return (overlay_text or None, location_name, has_exif_data, year)
+        return (location_name, has_exif_data, year)
 
     def _has_geolocation_exif(self, exif_data):
         return self._get_gps_coordinates(exif_data) is not None
@@ -592,7 +687,6 @@ class CanvasTextOverlay:
         return cleaned or None
 
     def _get_exif_year(self, exif_data):
-        print(exif_data)
         date_taken = exif_data.get(36867) or exif_data.get(306)
         if not date_taken:
             return None
@@ -828,6 +922,7 @@ class CanvasTextOverlay:
                 "use_location": self.location_var.get(),
                 "use_year": self.year_var.get(),
                 "derived_location": self.derived_location_name,
+                "manual_text": self.manual_text,
                 "text": self.text_var.get(),
                 "text_color": self.text_color,
                 "bg_color": self.bg_color,
