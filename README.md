@@ -179,6 +179,7 @@ photopainter-cropper
 Alternative start method (without package command):
 
 ```bash
+pip install -r requirements.txt
 python main.py
 ```
 
@@ -207,6 +208,7 @@ photopainter-cropper
 Alternative start method (without package command):
 
 ```powershell
+python -m pip install -r requirements.txt
 python main.py
 ```
 
@@ -249,6 +251,7 @@ photopainter-cropper
 Alternative start method (without package command):
 
 ```bash
+pip install -r requirements.txt
 python3 main.py
 ```
 
@@ -257,6 +260,9 @@ python3 main.py
 ```bash
 python -m pip install -e ".[build]"
 pyinstaller --onefile --windowed -i='.\_source\icon.ico' --add-data "_source/icon.ico;_source" --add-data "_source/icon.png;_source" --add-data "_source/round_check_mark_16.png;_source" --name "PhotoPainterCropper" ".\main.py"
+
+# later you can run compilation with just:
+pyinstaller PhotoPainterCropper.spec
 ```
 
 ### Leave virtual environment
