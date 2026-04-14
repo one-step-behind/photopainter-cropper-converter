@@ -14,7 +14,9 @@ authors = [
 ]
 dependencies = [
   "Pillow>=10.0.0",
-  "pillow-heif>=1.0.0"
+  "pillow-heif>=1.0.0",
+  "pillow-avif-plugin>=1.5.5",
+  "geopy>=2.4.1"
 ]
 
 [project.optional-dependencies]

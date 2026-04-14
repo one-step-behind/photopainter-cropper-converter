@@ -1,5 +1,5 @@
 Pillow>=10.0.0
 pillow-heif>=1.0.0
 pillow-avif-plugin>=1.5.5
-pyinstaller>=6.17.0
 geopy>=2.4.1
+pyinstaller>=6.17.0
