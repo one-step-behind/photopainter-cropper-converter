@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "photopainter-cropper-converter"
-version = "0.1.0"
+version = "1.0.0"
 description = "Interactive image cropper and converter for Waveshare PhotoPainter"
 readme = "README.md"
 requires-python = ">=3.10"

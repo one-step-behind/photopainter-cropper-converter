@@ -46,6 +46,7 @@ if AVIF_SUPPORT:
 
 # ====== CONFIG ======
 APP_TITLE = "PhotoPainterCropper"
+APP_VERSION = "1.0.0"
 DITHER_METHOD: int = 3 # NONE(0) or FLOYDSTEINBERG(3)
 
 defaults:dict = {
@@ -151,7 +152,7 @@ class CropperApp:
             icon = tk.PhotoImage(file=resource_path)
             self.window.iconphoto(False, icon)
 
-        self.window.title(APP_TITLE)
+        self.window.title(f"{APP_TITLE} v{APP_VERSION}")
 
         # The Frame
         top = ttk.Frame(self.window)
@@ -1104,7 +1105,7 @@ class CropperApp:
             return "break"
 
         win = tk.Toplevel(self.window)
-        win.title(f"{APP_TITLE} – Help")
+        win.title(f"{APP_TITLE} v{APP_VERSION} – Help")
         win.resizable(False, False)
         win.transient(self.window)
         win.grab_set()
