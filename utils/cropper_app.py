@@ -382,6 +382,13 @@ class CropperApp:
         self.window.update() # after creating the buttons above
         self.width, self.height = self.window.winfo_width(), self.window.winfo_height()
 
+        if self.gallery is not None:
+            if self.gallery.filtered_count() == 0:
+                self._clear_image_preview()
+                return
+            if self.gallery.selected_index is not None:
+                self.img_idx = self.gallery.selected_index
+
         self.load_image()
 
     def load_image(self) -> None:
@@ -2091,10 +2098,28 @@ class CropperApp:
                     with open(filelist_filepath, "w", encoding="utf-8", newline="\n") as f:
                         f.write(lines)
 
-                    print(f"✔ {FILELIST_FILENAME} saved in: {filelist_filepath}")
+                    print(f"✔ {FILELIST_FILENAME} for {available_orientation} saved in: {filelist_filepath}")
 
     # ---------- File list progress ----------
-    def set_image_index(self, index: int) -> None:
+    def _clear_image_preview(self, status_message: str = "No image matches current filter.") -> None:
+        self.original_img = None
+        self.display_img = None
+        self.tk_img = None
+        self.image_id = None
+        self.current_image_path = ""
+        self.original_img_file_size = 0
+        self.rect_img_raw = None
+        self.canvas.delete("image_layer")
+        self.canvas.delete("crop_layer")
+        self.canvas.delete("text_layer")
+        self.status_count.config(text="[0/0]", width=4)
+        self.update_status_label(status_message)
+
+    def set_image_index(self, index: Optional[int]) -> None:
+        if index is None:
+            self._clear_image_preview()
+            return
+
         if index >= 0 and index < len(self.image_paths):
             self.img_idx = index
             self.load_image()
@@ -2102,6 +2127,10 @@ class CropperApp:
             print(f"This index does not exists: {index}")
 
     def next_image(self, _e=None) -> None:
+        if self.gallery is not None and self.gallery.filtered_count() == 0:
+            self._clear_image_preview()
+            return
+
         navigable = self.gallery.filtered_count() if self.gallery is not None else len(self.image_paths)
         if navigable > 1:
             if self.gallery is not None:
@@ -2123,6 +2152,10 @@ class CropperApp:
             self.load_image()
 
     def prev_image(self, _e=None) -> None:
+        if self.gallery is not None and self.gallery.filtered_count() == 0:
+            self._clear_image_preview()
+            return
+
         navigable = self.gallery.filtered_count() if self.gallery is not None else len(self.image_paths)
         if navigable > 1:
             if self.gallery is not None:

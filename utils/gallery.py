@@ -30,7 +30,7 @@ class AsyncThumbnailGallery(tk.Frame):
         bg: str = "#222222",
         image_bg: str = "#333333",
         selected_bg: str = "#add8e6",
-        on_select: Optional[Callable[[int], None]] = None,
+        on_select: Optional[Callable[[Optional[int]], None]] = None,
         on_layout_change: Optional[Callable[[], None]] = None,
         show_landscape: bool = True,
         show_portrait: bool = True,
@@ -319,6 +319,7 @@ class AsyncThumbnailGallery(tk.Frame):
             self._sidecar_exists.append(os.path.exists(sidecar))
 
     def _rebuild_filtered_indices(self, anchor_source_index: Optional[int], notify: bool = False) -> None:
+        previous_selected = self.selected_index
         show_landscape = bool(self.show_landscape_var.get())
         show_portrait = bool(self.show_portrait_var.get())
         show_unprocessed = bool(self.show_unprocessed_var.get())
@@ -345,7 +346,7 @@ class AsyncThumbnailGallery(tk.Frame):
         next_selected = self._choose_nearest_filtered(anchor_source_index)
         self.selected_index = next_selected
 
-        if notify and next_selected is not None and self.on_select is not None:
+        if notify and previous_selected != next_selected and self.on_select is not None:
             self.on_select(next_selected)
 
     def _create_filter_controls(self) -> None:
