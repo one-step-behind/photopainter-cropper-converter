@@ -312,6 +312,10 @@ class CanvasTextOverlay:
         # Ensure text_window is on top
         self.canvas.tag_raise("text_layer")
 
+    def hide(self):
+        """Hide the canvas text label without changing show_var state."""
+        self.canvas.itemconfigure(self.text_window, state="hidden")
+
     # ----------------------
     # Event handlers
     # ----------------------

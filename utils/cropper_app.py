@@ -2111,7 +2111,8 @@ class CropperApp:
         self.rect_img_raw = None
         self.canvas.delete("image_layer")
         self.canvas.delete("crop_layer")
-        self.canvas.delete("text_layer")
+        if self.text_overlay is not None:
+            self.text_overlay.hide()
         self.status_count.config(text="[0/0]", width=4)
         self.update_status_label(status_message)
 
