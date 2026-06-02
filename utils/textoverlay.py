@@ -711,7 +711,8 @@ class CanvasTextOverlay:
         return cleaned or None
 
     def _get_exif_year(self, exif_data):
-        date_taken = exif_data.get(36867) or exif_data.get(306)
+        date_taken = exif_data.get(36867) or exif_data.get(36868) or exif_data.get(306)
+            
         if not date_taken:
             return None
 
