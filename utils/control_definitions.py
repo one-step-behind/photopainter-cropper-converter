@@ -130,6 +130,33 @@ def build_cropper_control_definitions(app: Any, available_option: dict[str, tupl
             "command": lambda value: app.schedule_slider_update("saturation", value),
             "enter_tip": "Set Saturation",
         },
+        "shadows": {
+            "text": "Shadows",
+            "min": -1.0,
+            "max": 1.0,
+            "resolution": 0.01,
+            "tickinterval": 0.5,
+            "command": lambda value: app.schedule_slider_update("shadows", value),
+            "enter_tip": "Adjust Shadows",
+        },
+        "midtones": {
+            "text": "Midtones",
+            "min": -1.0,
+            "max": 1.0,
+            "resolution": 0.01,
+            "tickinterval": 0.5,
+            "command": lambda value: app.schedule_slider_update("midtones", value),
+            "enter_tip": "Adjust Midtones",
+        },
+        "highlights": {
+            "text": "Highlights",
+            "min": -1.0,
+            "max": 1.0,
+            "resolution": 0.01,
+            "tickinterval": 0.5,
+            "command": lambda value: app.schedule_slider_update("highlights", value),
+            "enter_tip": "Adjust Highlights",
+        },
     }
 
     enhancer_checkboxes_def = {

@@ -71,6 +71,9 @@ defaults:dict = {
     "GALLERY_SHOW_LANDSCAPE": True,
     "GALLERY_SHOW_PORTRAIT": True,
     "GALLERY_SHOW_UNPROCESSED": False,
+    "SHADOWS": 0.0,
+    "MIDTONES": 0.0,
+    "HIGHLIGHTS": 0.0,
 }
 
 available_option:dict = {
@@ -84,22 +87,34 @@ FILELIST_FILENAME: str = "fileList.txt"
 BRIGHTNESS = 1.0
 CONTRAST = 1.0
 SATURATION = 1.0
+SHADOWS = 0.0
+MIDTONES = 0.0
+HIGHLIGHTS = 0.0
 
 ENHANCER_DEFAULTS_BY_DEVICE: dict[str, dict[str, float]] = {
     "acep": {
         "brightness": 1.0,
         "contrast": 1.15,
         "saturation": 1.4,
+        "shadows": SHADOWS,
+        "midtones": MIDTONES,
+        "highlights": HIGHLIGHTS,
     },
     "spectra6": {
         "brightness": 1.2,
         "contrast": 1.4,
         "saturation": 1.3,
+        "shadows": SHADOWS,
+        "midtones": MIDTONES,
+        "highlights": HIGHLIGHTS,
     },
     "4color": {
         "brightness": BRIGHTNESS,
         "contrast": CONTRAST,
         "saturation": SATURATION,
+        "shadows": SHADOWS,
+        "midtones": MIDTONES,
+        "highlights": HIGHLIGHTS,
     },
 }
 
@@ -668,6 +683,9 @@ class CropperApp:
             "brightness": BRIGHTNESS,
             "contrast": CONTRAST,
             "saturation": SATURATION,
+            "shadows": SHADOWS,
+            "midtones": MIDTONES,
+            "highlights": HIGHLIGHTS,
         }
 
         return ENHANCER_DEFAULTS_BY_DEVICE.get(resolved_target_device, fallback).copy()
@@ -1492,7 +1510,10 @@ class CropperApp:
         if (
             float(self.image_preferences["brightness"]) == float(BRIGHTNESS) and
             float(self.image_preferences["contrast"]) == float(CONTRAST) and
-            float(self.image_preferences["saturation"]) == float(SATURATION)
+            float(self.image_preferences["saturation"]) == float(SATURATION) and
+            float(self.image_preferences.get("shadows", SHADOWS)) == float(SHADOWS) and
+            float(self.image_preferences.get("midtones", MIDTONES)) == float(MIDTONES) and
+            float(self.image_preferences.get("highlights", HIGHLIGHTS)) == float(HIGHLIGHTS)
         ):
             return enhanced_image
 
@@ -1508,7 +1529,49 @@ class CropperApp:
         enhancer = ImageEnhance.Color(enhanced_image)
         enhanced_image = enhancer.enhance(float(self.image_preferences["saturation"]))
 
+        enhanced_image = self.apply_tonal_range_adjustments(enhanced_image)
+
         return enhanced_image
+
+    def apply_tonal_range_adjustments(self, img: Image.Image) -> Image.Image:
+        shadows = float(self.image_preferences.get("shadows", SHADOWS))
+        midtones = float(self.image_preferences.get("midtones", MIDTONES))
+        highlights = float(self.image_preferences.get("highlights", HIGHLIGHTS))
+
+        if abs(shadows) < 1e-9 and abs(midtones) < 1e-9 and abs(highlights) < 1e-9:
+            return img
+
+        lum = img.convert("L")
+        shadow_lut = [int(round(255.0 * ((1.0 - (i / 255.0)) ** 1.7))) for i in range(256)]
+        highlight_lut = [int(round(255.0 * ((i / 255.0) ** 1.7))) for i in range(256)]
+        midtone_lut = []
+        for i in range(256):
+            x = i / 255.0
+            mid = max(0.0, 1.0 - 2.0 * abs(x - 0.5))
+            midtone_lut.append(int(round(255.0 * (mid ** 1.4))))
+
+        adjusted = img
+        white = Image.new("RGB", img.size, "white")
+        black = Image.new("RGB", img.size, "black")
+
+        for amount, lut in (
+            (shadows, shadow_lut),
+            (midtones, midtone_lut),
+            (highlights, highlight_lut),
+        ):
+            if abs(amount) < 1e-9:
+                continue
+
+            amount_scale = min(1.0, abs(amount))
+            region_mask = lum.point(lut)
+            blend_mask = region_mask.point(lambda p, s=amount_scale: int(round(p * s)))
+
+            if amount > 0:
+                adjusted = Image.composite(white, adjusted, blend_mask)
+            else:
+                adjusted = Image.composite(black, adjusted, blend_mask)
+
+        return adjusted
 
     def background_only(self, region_scaled_or_none):
         if self.image_preferences["fill_mode"] == "blur":
@@ -1677,6 +1740,9 @@ class CropperApp:
             self.image_preferences["brightness"] = device_defaults["brightness"]
             self.image_preferences["contrast"] = device_defaults["contrast"]
             self.image_preferences["saturation"] = device_defaults["saturation"]
+            self.image_preferences["shadows"] = device_defaults["shadows"]
+            self.image_preferences["midtones"] = device_defaults["midtones"]
+            self.image_preferences["highlights"] = device_defaults["highlights"]
             self.image_preferences["enhancer_edge"] = self.app_settings["enhancer_edge"]
             self.image_preferences["enhancer_smooth"] = self.app_settings["enhancer_smooth"]
             self.image_preferences["enhancer_sharpen"] = self.app_settings["enhancer_sharpen"]
@@ -1692,8 +1758,21 @@ class CropperApp:
 
         # get safe values and update slider values
         for name, info in self.enhancer_sliders_def.items():
-            if not name in self.image_preferences or (name in self.image_preferences and not (0 <= float(self.image_preferences[name]) <= 2)):
+            min_value = float(info.get("min", 0.0))
+            max_value = float(info.get("max", 5.0))
+            raw_value = self.image_preferences.get(name)
+
+            try:
+                parsed_value = float(raw_value)
+            except (TypeError, ValueError):
                 self.image_preferences[name] = defaults[name.upper()]
+                continue
+
+            if not (min_value <= parsed_value <= max_value):
+                self.image_preferences[name] = defaults[name.upper()]
+                continue
+
+            self.image_preferences[name] = parsed_value
 
         # get safe values and update checkbox values
         for name, info in self.enhancer_checkboxes_def.items():
@@ -1800,6 +1879,9 @@ class CropperApp:
             f"brightness={self.image_preferences['brightness']}",
             f"contrast={self.image_preferences['contrast']}",
             f"saturation={self.image_preferences['saturation']}",
+            f"shadows={self.image_preferences['shadows']}",
+            f"midtones={self.image_preferences['midtones']}",
+            f"highlights={self.image_preferences['highlights']}",
             f"enhancer_edge={self.image_preferences['enhancer_edge']}",
             f"enhancer_smooth={self.image_preferences['enhancer_smooth']}",
             f"enhancer_sharpen={self.image_preferences['enhancer_sharpen']}",
