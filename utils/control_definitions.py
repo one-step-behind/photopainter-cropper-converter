@@ -18,16 +18,10 @@ def build_cropper_control_definitions(app: Any, available_option: dict[str, tupl
             "toggle_key": ("<Control-Shift-s>", "<Control-Shift-S>"),
         },
         "save_canvas_zoom": {
-            "text": "Remember canvas zoom",
+            "text": "Save canvas zoom",
             "command": lambda e=None: app.update_app_settings_checkbox("save_canvas_zoom"),
             "enter_tip": "Saves and restores the current canvas zoom\nvalue in settings.ini between app restarts.\n(Ctrl+Shift+Z)",
             "toggle_key": ("<Control-Shift-z>", "<Control-Shift-Z>"),
-        },
-        "exit_after_last_image": {
-            "text": "Exit after last image",
-            "command": lambda e=None: app.update_app_settings_checkbox("exit_after_last_image"),
-            "enter_tip": "Close the app after last image in folder was\nprocessed, otherwise open the first image. (Ctrl+X)",
-            "toggle_key": ("<Control-Shift-x>", "<Control-Shift-X>"),
         },
     }
 

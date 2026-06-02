@@ -18,6 +18,26 @@ from utils.tooltip import Hovertip
 from utils.converter import Converter
 from utils.keybinds import bind_toggle_keys
 from utils.control_definitions import build_cropper_control_definitions
+from utils.ui_constants import (
+    ARROW_STEP,
+    ARROW_STEP_FAST,
+    BORDER_COLOR,
+    CANVAS_BACKGROUND_COLOR,
+    CANVAS_ZOOM_MIN,
+    CANVAS_ZOOM_STEP,
+    DEFAULT_CROP_SIZE,
+    DEFAULT_TOOLTIP_DELAY,
+    FOREGROUND_COLOR,
+    HIGHLIGHT_COLOR,
+    LABEL_PADDINGS,
+    MASK_COLOR,
+    MASK_STIPPLE,
+    SCALE_FACTOR,
+    SCALE_FACTOR_FAST,
+    SCALE_FACTOR_SLOW,
+    SLIDER_WIDTH,
+    WINDOW_BACKGROUND_COLOR,
+)
 
 # Try to import pillow-heif for HEIC support
 try:
@@ -67,7 +87,6 @@ defaults:dict = {
     "SAVE_CANVAS_ZOOM": True,
     "CANVAS_ZOOM": 1.0,
     "GRID_COLOR":"#00ff00",
-    "EXIT_AFTER_LAST_IMAGE": True,
     "GALLERY_SHOW_LANDSCAPE": True,
     "GALLERY_SHOW_PORTRAIT": True,
     "GALLERY_SHOW_UNPROCESSED": False,
@@ -117,26 +136,6 @@ ENHANCER_DEFAULTS_BY_DEVICE: dict[str, dict[str, float]] = {
         "highlights": HIGHLIGHTS,
     },
 }
-
-DEFAULT_CROP_SIZE = 1 # between 0.1 ... 1
-MASK_COLOR = "#000000"          # mask outside crop region
-MASK_STIPPLE = "gray50"
-CANVAS_BACKGROUND_COLOR = "#000000"
-WINDOW_BACKGROUND_COLOR = "#222222"
-BORDER_COLOR = "#333333"
-HIGHLIGHT_COLOR = "#339933"
-FOREGROUND_COLOR = "white"
-
-ARROW_STEP = 1                      # px for step with arrows
-ARROW_STEP_FAST = 10                # px with Shift pressed
-SCALE_FACTOR = 1.01                 # zoom step with normal +/-
-SCALE_FACTOR_FAST = 1.10            # zoom step with Shift
-SCALE_FACTOR_SLOW = 1.002           # zoom step with Ctrl+Shift
-CANVAS_ZOOM_STEP = 1.10             # Ctrl+wheel zoom step for canvas image
-CANVAS_ZOOM_MIN = 0.25              # minimum relative zoom of fit-to-window scale
-
-LABEL_PADDINGS = (5, 5)
-DEFAULT_TOOLTIP_DELAY = 250
 
 class CropperApp:
     def __init__(self, window):
@@ -641,21 +640,23 @@ class CropperApp:
                 self.image_enhancer_slider_vars[name] = tk.StringVar(value=info["text"])
                 self.image_enhancer_slider_default_texts[name] = info["text"]
 
-                slider_header = ttk.Frame(self.options_frame)
-                slider_header.pack(fill=tk.X, padx=LABEL_PADDINGS[0], pady=(LABEL_PADDINGS[1], 0))
+                slider_row = ttk.Frame(self.options_frame)
+                slider_row.pack(fill=tk.X, padx=LABEL_PADDINGS[0], pady=(LABEL_PADDINGS[1], 0))
+                slider_row.columnconfigure(1, weight=1)
+                slider_row.columnconfigure(2, minsize=SLIDER_WIDTH)
 
-                slider_label = ttk.Label(slider_header, textvariable=self.image_enhancer_slider_vars[name], justify=tk.LEFT)
-                slider_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+                slider_label = ttk.Label(slider_row, textvariable=self.image_enhancer_slider_vars[name], justify=tk.LEFT)
+                slider_label.grid(row=0, column=0, sticky="w", padx=(0, LABEL_PADDINGS[0]))
 
                 slider_reset_btn = ttk.Button(
-                    slider_header,
+                    slider_row,
                     text="Reset",
                     width=6,
                     padding=(2, 1),
                     takefocus=0,
                     command=lambda n=name: self.reset_enhancer_slider(n),
                 )
-                slider_reset_btn.pack(side=tk.RIGHT)
+                slider_reset_btn.grid(row=0, column=3, sticky="e", padx=(LABEL_PADDINGS[0], 0))
                 Hovertip(slider_reset_btn, "Reset to default value for selected device", hover_delay=DEFAULT_TOOLTIP_DELAY)
 
                 slider_kwargs = {
@@ -663,15 +664,16 @@ class CropperApp:
                     "from_": info["min"],
                     "to": info["max"],
                     "resolution": info["resolution"] if "resolution" in info else 0.05,
-                    "tickinterval": info["tickinterval"] if "tickinterval" in info else 0.1,
+                    "tickinterval": 0,
                     "orient": tk.HORIZONTAL,
                     "showvalue": False,
+                    "length": SLIDER_WIDTH,
                     "takefocus": 0,
                 }
 
-                slider = tk.Scale(self.options_frame, command=info["command"], **slider_kwargs)
+                slider = tk.Scale(slider_row, command=info["command"], **slider_kwargs)
                 slider.set(value)
-                slider.pack(fill=tk.X, padx=LABEL_PADDINGS[0], pady=0)
+                slider.grid(row=0, column=2, sticky="e")
 
                 self.image_enhancer_sliders[name] = [slider_label, slider, slider_reset_btn]
 
@@ -715,8 +717,7 @@ class CropperApp:
 
         default_text = self.image_enhancer_slider_default_texts.get(slider_name, "")
         current_value = float(self.image_preferences.get(slider_name, 0.0))
-        default_value = float(self.get_device_enhancer_defaults().get(slider_name, current_value))
-        self.image_enhancer_slider_vars[slider_name].set(f"{default_text}: {current_value:.2f} (default {default_value:.2f})")
+        self.image_enhancer_slider_vars[slider_name].set(f"{default_text}: {current_value:.2f}")
 
     def apply_device_enhancer_defaults(self) -> None:
         defaults_for_device = self.get_device_enhancer_defaults()
@@ -855,7 +856,12 @@ class CropperApp:
         if not self.app_settings_checkbox_vars:
             ttk.Separator(self.options_frame).pack(fill=tk.X, pady=5)
 
-            for name, info in self.app_settings_def.items():
+            app_settings_frame = ttk.Frame(self.options_frame)
+            app_settings_frame.pack(fill=tk.X, padx=LABEL_PADDINGS[0], pady=(0, LABEL_PADDINGS[1]))
+            app_settings_frame.columnconfigure(0, weight=1)
+            app_settings_frame.columnconfigure(1, weight=1)
+
+            for idx, (name, info) in enumerate(self.app_settings_def.items()):
                 value = self.app_settings[name]
 
                 checkbox_kwargs = {
@@ -867,8 +873,10 @@ class CropperApp:
                 }
 
                 self.app_settings_checkbox_vars[name] = tk.BooleanVar(value=value)
-                checkbox = ttk.Checkbutton(self.options_frame, command=info["command"], variable=self.app_settings_checkbox_vars[name], **checkbox_kwargs)
-                checkbox.pack(padx = LABEL_PADDINGS[0], fill=tk.X)
+                checkbox = ttk.Checkbutton(app_settings_frame, command=info["command"], variable=self.app_settings_checkbox_vars[name], **checkbox_kwargs)
+                row = idx // 2
+                col = idx % 2
+                checkbox.grid(row=row, column=col, sticky="w", padx=(0, LABEL_PADDINGS[0]), pady=(0, LABEL_PADDINGS[1]))
 
                 self.app_settings_checkboxes[name] = checkbox
 
@@ -1700,7 +1708,6 @@ class CropperApp:
             settings["save_filelist"]=defaults["SAVE_FILELIST"]
             settings["save_canvas_zoom"]=defaults["SAVE_CANVAS_ZOOM"]
             settings["canvas_zoom"]=defaults["CANVAS_ZOOM"]
-            settings["exit_after_last_image"]=defaults["EXIT_AFTER_LAST_IMAGE"]
             settings["gallery_show_landscape"]=defaults["GALLERY_SHOW_LANDSCAPE"]
             settings["gallery_show_portrait"]=defaults["GALLERY_SHOW_PORTRAIT"]
             settings["gallery_show_unprocessed"]=defaults["GALLERY_SHOW_UNPROCESSED"]
@@ -1767,6 +1774,9 @@ class CropperApp:
             settings["gallery_show_portrait"] = defaults["GALLERY_SHOW_PORTRAIT"]
         if not isinstance(settings.get("gallery_show_unprocessed"), bool):
             settings["gallery_show_unprocessed"] = defaults["GALLERY_SHOW_UNPROCESSED"]
+
+        # Remove deprecated setting; navigation now always wraps to the first image.
+        settings.pop("exit_after_last_image", None)
         
         #print("Loaded APP Settings from file:", settings)
         return settings
@@ -2098,20 +2108,17 @@ class CropperApp:
                 next_idx = self.img_idx + 1 if self.img_idx + 1 < len(self.image_paths) else None
 
             if next_idx is None:
-                if self.app_settings["exit_after_last_image"]:
-                    on_closing("showinfo", "Done", "All images have been processed. App closes now.")
-                    return
-                else:
-                    next_idx = self.gallery._filtered_indices[0] if self.gallery is not None and self.gallery._filtered_indices else 0
+                next_idx = self.gallery._filtered_indices[0] if self.gallery is not None and self.gallery._filtered_indices else 0
 
             self.img_idx = next_idx
             if self.gallery is not None:
                 self.gallery.select_index(self.img_idx)
             self.load_image()
-        elif navigable == 1 and self.app_settings["exit_after_last_image"]:
-            on_closing("showinfo", "Done", "All images have been processed. App closes now.")
         else:
-            on_closing("askokcancel", "This was the only image in this folder.", "This was the only image in this folder.\nWould you like to close the app now?")
+            self.img_idx = self.gallery._filtered_indices[0] if self.gallery is not None and self.gallery._filtered_indices else 0
+            if self.gallery is not None:
+                self.gallery.select_index(self.img_idx)
+            self.load_image()
 
     def prev_image(self, _e=None) -> None:
         navigable = self.gallery.filtered_count() if self.gallery is not None else len(self.image_paths)

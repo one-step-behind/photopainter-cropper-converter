@@ -8,6 +8,7 @@ from utils.textoverlay_defaults import TEXT_OVERLAY_DEFAULTS, FONT_DIVISOR_MIN, 
 from utils.control_definitions import build_textoverlay_control_definitions
 from utils.keybinds import bind_toggle_keys
 from utils.tooltip import Hovertip
+from utils.ui_constants import SLIDER_WIDTH
 
 class CanvasTextOverlay:
     def __init__(self, control_frame, canvas_frame, callback=None):
@@ -159,38 +160,42 @@ class CanvasTextOverlay:
         # Text size slider. Higher divisors mean smaller text, so the slider
         # runs from high to low to make left=smaller and right=bigger.
         self.text_size_slider_label_var = tk.StringVar()
-        self.text_size_slider_header = ttk.Frame(self.control_frame)
-        self.text_size_slider_header.pack(fill=tk.X, padx=5, pady=(5, 0))
+        self.text_size_slider_row = ttk.Frame(self.control_frame)
+        self.text_size_slider_row.pack(fill=tk.X, padx=5, pady=(5, 0))
+        self.text_size_slider_row.columnconfigure(1, weight=1)
+        self.text_size_slider_row.columnconfigure(2, minsize=SLIDER_WIDTH)
         self.text_size_slider_label = ttk.Label(
-            self.text_size_slider_header,
+            self.text_size_slider_row,
             textvariable=self.text_size_slider_label_var,
             justify=tk.LEFT,
             style=self.overlay_label_style,
         )
-        self.text_size_slider_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.text_size_slider_label.grid(row=0, column=0, sticky="w", padx=(0, 5))
+
+        self.text_size_slider = tk.Scale(
+            self.text_size_slider_row,
+            from_=FONT_DIVISOR_MAX,
+            to=FONT_DIVISOR_MIN,
+            resolution=0.5,
+            orient=tk.HORIZONTAL,
+            showvalue=False,
+            length=SLIDER_WIDTH,
+            takefocus=0,
+            command=self._on_slider_change,
+        )
+        self.text_size_slider.grid(row=0, column=2, sticky="e")
 
         self.text_size_reset_btn = ttk.Button(
-            self.text_size_slider_header,
+            self.text_size_slider_row,
             text=self.control_defs["text_size_reset"]["text"],
             width=self.control_defs["text_size_reset"]["width"],
             padding=self.control_defs["text_size_reset"]["padding"],
             takefocus=0,
             command=self.control_defs["text_size_reset"]["command"],
         )
-        self.text_size_reset_btn.pack(side=tk.RIGHT)
+        self.text_size_reset_btn.grid(row=0, column=3, sticky="e", padx=(5, 0))
         Hovertip(self.text_size_reset_btn, self.control_defs["text_size_reset"]["hover_tip"], hover_delay=250)
 
-        self.text_size_slider = tk.Scale(
-            self.control_frame,
-            from_=FONT_DIVISOR_MAX,
-            to=FONT_DIVISOR_MIN,
-            resolution=0.5,
-            orient=tk.HORIZONTAL,
-            showvalue=False,
-            takefocus=0,
-            command=self._on_slider_change,
-        )
-        self.text_size_slider.pack(fill=tk.X, padx=5, pady=0)
         self.text_size_slider.bind("<MouseWheel>", self._on_slider_scroll)
         self.text_size_slider.bind("<Button-4>", lambda e: self._on_slider_scroll_linux(e, 1))
         self.text_size_slider.bind("<Button-5>", lambda e: self._on_slider_scroll_linux(e, -1))

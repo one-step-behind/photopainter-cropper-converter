@@ -8,9 +8,7 @@ from typing import Callable, Optional, List
 
 from PIL import Image, ImageOps, ImageTk
 from utils.control_definitions import build_gallery_filter_control_definitions
-
-THUMB_SIZE = 80
-PADDING = 12
+from utils.ui_constants import GALLERY_PADDING, GALLERY_THUMB_SIZE
 
 _EXIF_ORIENTATION_TAG = 0x0112
 _EXIF_SWAP_ORIENTATIONS = frozenset({5, 6, 7, 8})
@@ -22,7 +20,7 @@ class AsyncThumbnailGallery(tk.Frame):
         parent,
         image_paths: List[str],
         *,
-        thumb_size: int = THUMB_SIZE,
+        thumb_size: int = GALLERY_THUMB_SIZE,
         bg: str = "#222222",
         image_bg: str = "#333333",
         selected_bg: str = "#add8e6",
@@ -295,7 +293,7 @@ class AsyncThumbnailGallery(tk.Frame):
     # ============================================================
 
     def _compute_canvas_height(self) -> int:
-        return self._row_height + PADDING
+        return self._row_height + GALLERY_PADDING
 
     def _prepare_image_flags(self) -> None:
         self._sidecar_exists = []
