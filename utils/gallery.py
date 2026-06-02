@@ -73,6 +73,8 @@ class AsyncThumbnailGallery(tk.Frame):
         self.show_landscape_var = tk.BooleanVar(value=show_landscape)
         self.show_portrait_var = tk.BooleanVar(value=show_portrait)
         self.show_unprocessed_var = tk.BooleanVar(value=show_unprocessed)
+        self.search_text_var = tk.StringVar(value="")
+        self._search_placeholder = "Search by name"
 
         try:
             if not hasattr(sys, "frozen"):
@@ -108,6 +110,17 @@ class AsyncThumbnailGallery(tk.Frame):
             command=self._on_filter_change,
             takefocus=0,
         ).pack(side=tk.LEFT, padx=(4, 0))
+
+        self.search_entry = ttk.Entry(
+            self.filter_bar,
+            textvariable=self.search_text_var,
+            width=20,
+        )
+        self.search_entry.pack(side=tk.LEFT, padx=(8, 0))
+        self._set_search_placeholder()
+        self.search_entry.bind("<FocusIn>", self._on_search_focus_in)
+        self.search_entry.bind("<FocusOut>", self._on_search_focus_out)
+        self.search_entry.bind("<KeyRelease>", self._on_text_search_change)
 
         self.canvas = tk.Canvas(
             self,
@@ -323,6 +336,7 @@ class AsyncThumbnailGallery(tk.Frame):
         show_landscape = bool(self.show_landscape_var.get())
         show_portrait = bool(self.show_portrait_var.get())
         show_unprocessed = bool(self.show_unprocessed_var.get())
+        search_text = self._current_search_text()
 
         self._filtered_indices = []
         for index, is_landscape in enumerate(self._is_landscape):
@@ -330,6 +344,10 @@ class AsyncThumbnailGallery(tk.Frame):
             # When "Unprocessed" filter is active, skip images that already have a sidecar.
             if show_unprocessed and has_sidecar:
                 continue
+            if search_text:
+                image_name = os.path.basename(self.image_paths[index]).casefold()
+                if search_text not in image_name:
+                    continue
             # Unknown orientation stays visible until its thumbnail is loaded.
             if is_landscape is None:
                 self._filtered_indices.append(index)
@@ -368,6 +386,34 @@ class AsyncThumbnailGallery(tk.Frame):
         self._show_unprocessed = bool(self.show_unprocessed_var.get())
         if self.on_filter_change:
             self.on_filter_change(self._show_landscape, self._show_portrait, self._show_unprocessed)
+        anchor = self.selected_index
+        self._rebuild_filtered_indices(anchor_source_index=anchor, notify=True)
+        self._scroll_offset_px = 0
+        self._clear_visible_items()
+        self._update_scrollbar()
+        self._render_visible_thumbnails()
+        self._start_fill_thread_if_needed()
+
+    def _set_search_placeholder(self) -> None:
+        if not self.search_text_var.get():
+            self.search_text_var.set(self._search_placeholder)
+
+    def _on_search_focus_in(self, _event) -> None:
+        if self.search_text_var.get() == self._search_placeholder:
+            self.search_text_var.set("")
+
+    def _on_search_focus_out(self, _event) -> None:
+        if not self.search_text_var.get().strip():
+            self.search_text_var.set("")
+            self._set_search_placeholder()
+
+    def _current_search_text(self) -> str:
+        text = self.search_text_var.get().strip()
+        if text == self._search_placeholder:
+            return ""
+        return text.casefold()
+
+    def _on_text_search_change(self, _event=None) -> None:
         anchor = self.selected_index
         self._rebuild_filtered_indices(anchor_source_index=anchor, notify=True)
         self._scroll_offset_px = 0
