@@ -1,5 +1,5 @@
 # PhotoPainter image preferences
-timestamp=1774861548
+timestamp=1780412097
 image_name=sample.jpg
 image_w=1000
 image_h=1000
@@ -20,7 +20,10 @@ target_device=acep
 brightness=1.05
 contrast=1.5
 saturation=1.05
+shadows=0.0
+midtones=0.0
+highlights=0.0
 enhancer_edge=False
 enhancer_smooth=False
 enhancer_sharpen=False
-text_overlay={'show': True, 'use_location': False, 'derived_location': None, 'text': 'Awesome stones in muddy water', 'text_color': '#ffffff', 'bg_color': '#000000', 'bottom': 690, 'right': 1056, 'font_divisor': 26.0, 'image_dpi_scale': 1.0}
+text_overlay={'show': True, 'use_location': False, 'use_year': False, 'derived_location': None, 'manual_text': 'Awesome stones in muddy water', 'text': 'Awesome stones in muddy water', 'text_color': '#ffffff', 'bg_color': '#000000', 'bottom': 0, 'right': 0, 'font_divisor': 26.0, 'image_dpi_scale': 1.0}

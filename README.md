@@ -119,23 +119,22 @@ Available settings and their defaults:
 
 ```ini
 # PhotoPainterCropper app state
-window_min=1024x768        # minimum size of window
-last_window_size=1024x768  # last window dimensions
-last_window_position=10x10 # last window position
-image_target_size=800x480  # exact JPG output image dimensions
-image_quality=90           # quality of the JPG output
-orientation=landscape      # landscape, portrait
-fill_mode=blur             # blur, white
-target_device=acep         # acep, spectra6
-enhancer_edge=False        # default for Edge enhancer
-enhancer_smooth=False      # default for Smooth enhancer
-enhancer_sharpen=False     # default for Sharpen enhancer
-grid_color=#00ff00         # rectangle border color
-pic_folder_on_device=pic   # subfolder holding the final images, e.g. landscape/acep/pic/
-state_suffix=_ppcrop.txt   # file extension for sidecar file
-save_filelist=True         # save fileList.txt at app exit for both orientations
-save_canvas_zoom=True      # save canvas zoom at exit
-canvas_zoom=1.0            # canvas zoom value
+window_min=1024x768            # minimum size of window
+last_window_size=1024x768      # last window dimensions
+last_window_position=10x10     # last window position
+image_target_size=800x480      # target output image dimensions
+orientation=landscape          # landscape, portrait
+fill_mode=blur                 # blur, white, black
+target_device=acep             # acep, spectra6
+enhancer_edge=False            # default for Edge enhancer
+enhancer_smooth=False          # default for Smooth enhancer
+enhancer_sharpen=False         # default for Sharpen enhancer
+grid_color=#00ff00             # rectangle border color
+pic_folder_on_device=pic       # subfolder holding the final images, e.g. landscape/acep/pic/
+state_suffix=_ppcrop.txt       # file extension for sidecar file
+save_filelist=True             # save fileList.txt at app exit for both orientations
+save_canvas_zoom=True          # save canvas zoom at exit
+canvas_zoom=1.0                # canvas zoom value
 gallery_show_landscape=True    # show landscape images
 gallery_show_portrait=True     # show portrait images
 gallery_show_unprocessed=False # show unprocessed images only

@@ -74,7 +74,6 @@ defaults:dict = {
     "LAST_WINDOW_SIZE": (1024, 768),
     "LAST_WINDOW_POSITION": (0, 0),
     "IMAGE_TARGET_SIZE": (800, 480),
-    "IMAGE_QUALITY": 90,
     "ORIENTATION": "landscape",
     "FILL_MODE": "blur",
     "TARGET_DEVICE": "acep",
@@ -1704,7 +1703,6 @@ class CropperApp:
             settings["last_window_size"]=defaults["LAST_WINDOW_SIZE"]
             settings["last_window_position"]=defaults["LAST_WINDOW_POSITION"]
             settings["image_target_size"]=defaults["IMAGE_TARGET_SIZE"]
-            settings["image_quality"]=defaults["IMAGE_QUALITY"]
             settings["orientation"]=defaults["ORIENTATION"]
             settings["fill_mode"]=defaults["FILL_MODE"]
             settings["target_device"]=defaults["TARGET_DEVICE"]
