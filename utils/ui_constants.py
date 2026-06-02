@@ -12,11 +12,12 @@ BORDER_COLOR = "#333333"
 HIGHLIGHT_COLOR = "#339933"
 FOREGROUND_COLOR = "white"
 
-ARROW_STEP = 1                    # px for step with arrows
+ARROW_STEP = 2                    # px for step with arrows
 ARROW_STEP_FAST = 10              # px with Shift pressed
-SCALE_FACTOR = 1.01               # zoom step with normal +/-
+ARROW_STEP_SLOW = 0.5             # px with Ctrl+Shift pressed
+SCALE_FACTOR = 1.02               # zoom step with normal +/-
 SCALE_FACTOR_FAST = 1.10          # zoom step with Shift
-SCALE_FACTOR_SLOW = 1.002         # zoom step with Ctrl+Shift
+SCALE_FACTOR_SLOW = 1.005         # zoom step with Ctrl+Shift (more precise)
 CANVAS_ZOOM_STEP = 1.10           # Ctrl+wheel zoom step for canvas image
 CANVAS_ZOOM_MIN = 0.25            # minimum relative zoom of fit-to-window scale
 

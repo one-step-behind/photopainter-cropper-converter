@@ -21,6 +21,7 @@ from utils.control_definitions import build_cropper_control_definitions
 from utils.ui_constants import (
     ARROW_STEP,
     ARROW_STEP_FAST,
+    ARROW_STEP_SLOW,
     BORDER_COLOR,
     CANVAS_BACKGROUND_COLOR,
     CANVAS_ZOOM_MIN,
@@ -259,10 +260,11 @@ class CropperApp:
         self.window.bind("<Down>",  lambda e: self.on_arrow(e,  0,  1))
 
         # Keyboard events (resize)
-        for ks in ("<plus>", "<KP_Add>", "<equal>"):  # '+' It's often Shift+'='; include '=' for convenience
+        for ks in ("<plus>", "<KP_Add>"):
             self.window.bind(ks, self.on_plus)
         for ks in ("<minus>", "<KP_Subtract>"):
             self.window.bind(ks, self.on_minus)
+
         self.window.bind("<Control-a>", self.on_select_all)
 
         # Various
@@ -1187,8 +1189,10 @@ class CropperApp:
         # Ctrl+Shift = precision mode (slow)
         if shift_pressed and ctrl_pressed:
             speed = SCALE_FACTOR_SLOW
+        # Shift = fast mode
         elif shift_pressed:
             speed = SCALE_FACTOR_FAST
+        # No modifier = normal mode
         else:
             speed = SCALE_FACTOR
 
@@ -1205,7 +1209,16 @@ class CropperApp:
             # Keep cursor navigation inside text widgets.
             return
 
-        step = ARROW_STEP_FAST if (e.state & 0x0001) else ARROW_STEP # Shift accelerates
+        shift_pressed = bool(e.state & 0x0001)
+        ctrl_pressed = bool(e.state & 0x0004)
+
+        if (shift_pressed and ctrl_pressed):
+            step = ARROW_STEP_SLOW
+        elif shift_pressed:
+            step = ARROW_STEP_FAST
+        else:             
+            step = ARROW_STEP
+
         self.rect_center = (self.rect_center[0] + dx*step, self.rect_center[1] + dy*step)
         self.clamp_crop_rectangle_to_canvas()
         self.sync_rect_image_coords_from_display()
@@ -1236,40 +1249,42 @@ class CropperApp:
             "Keyboard shortcuts & mouse controls\n"
             "\n"
             "Navigation\n"
-            "  Page Up / Page Down   Previous / Next image\n"
-            "  Esc                   Skip image\n"
+            "  Page Up / Page Down        Previous / Next image\n"
+            "  Esc                        Skip image\n"
             "\n"
             "Crop marker – move\n"
-            "  Arrow keys            Move crop marker\n"
-            "  Shift + Arrow keys    Move crop marker (fast)\n"
-            "  Drag (left mouse)     Drag crop marker\n"
+            "  Arrow keys                 Move crop marker\n"
+            "  Shift + Arrow keys         Move crop marker (fast)\n"
+            "  Ctrl+Shift + Arrow keys    Move crop marker (slow - more precise)\n"
+            "  Drag (left mouse)          Drag crop marker\n"
             "\n"
             "Crop marker – resize\n"
-            "  + / =                 Enlarge\n"
-            "  -                     Shrink\n"
-            "  Shift + +/-           Resize (fast)\n"
-            "  Ctrl+Shift + +/-      Resize (slow)\n"
-            "  Scroll wheel          Resize\n"
-            "  Ctrl+A                Maximize and center\n"
+            "  +/-                        Resize\n"
+            "  Shift + +/-                Resize (fast)\n"
+            "  Ctrl+Shift + +/-           Resize (slow - more precise)\n"
+            "  Scroll wheel               Resize\n"
+            "  Shift + Scroll wheel       Resize (fast)\n"
+            "  Ctrl+Shift + Scroll wheel  Resize (slow - more precise)\n"
+            "  Ctrl+A                     Maximize and center\n"
             "\n"
             "Canvas\n"
-            "  Ctrl + Scroll         Canvas zoom in/out\n"
+            "  Ctrl + Scroll              Canvas zoom in/out\n"
             "\n"
             "Actions\n"
-            "  Enter / Ctrl+S        Crop, convert and load next image\n"
-            "  Ctrl+O                Toggle orientation\n"
-            "  Ctrl+F                Toggle fill mode\n"
-            "  Ctrl+D                Toggle target device\n"
-            "  Ctrl+1/2/3            Edge / Smooth / Sharpen\n"
-            "  Hold Ctrl+Shift+O     Preview without enhancements\n"
-            "  Ctrl+Shift+L          Change folder\n"
-            "  Ctrl+Shift+R          Reload folder\n"
+            "  Enter / Ctrl+S             Crop, convert and load next image\n"
+            "  Ctrl+O                     Toggle orientation\n"
+            "  Ctrl+F                     Toggle fill mode\n"
+            "  Ctrl+D                     Toggle target device\n"
+            "  Ctrl+1/2/3                 Edge / Smooth / Sharpen\n"
+            "  Hold Ctrl+Shift+O          Preview without enhancements\n"
+            "  Ctrl+Shift+L               Change folder\n"
+            "  Ctrl+Shift+R               Reload folder\n"
             "\n"
             "Text overlay\n"
-            "  Ctrl+T                Toggle text on canvas\n"
-            "  Ctrl+L                Toggle location metadata\n"
-            "  Ctrl+Shift+T          Pick text color\n"
-            "  Ctrl+Shift+B          Pick background color\n"
+            "  Ctrl+T                     Toggle text on canvas\n"
+            "  Ctrl+L                     Toggle location metadata\n"
+            "  Ctrl+Shift+T               Pick text color\n"
+            "  Ctrl+Shift+B               Pick background color\n"
         )
 
         lbl = ttk.Label(
@@ -1307,13 +1322,33 @@ class CropperApp:
         self.sync_rect_image_coords_from_display()
         self.draw_crop_marker_grid()
 
-    def on_plus(self, e) -> None:
+    def _focus_is_text_input(self) -> bool:
+        focused = self.window.focus_get()
+        if focused is None:
+            return False
+
+        try:
+            widget_class = focused.winfo_class()
+        except tk.TclError:
+            return False
+
+        return widget_class in {"Entry", "TEntry", "Text", "Spinbox", "TSpinbox", "Combobox", "TCombobox"}
+
+    def on_plus(self, e) -> str | None:
+        if self._focus_is_text_input():
+            return "break"
+
         factor = self.resize_factor_from_state(e.state, 1)
         self.apply_resize_factor(factor)
+        return "break"
 
-    def on_minus(self, e) -> None:
+    def on_minus(self, e) -> str | None:
+        if self._focus_is_text_input():
+            return "break"
+
         factor = self.resize_factor_from_state(e.state, -1)
         self.apply_resize_factor(factor)
+        return "break"
 
     def apply_resize_factor(self, factor) -> None:
         cw, ch = self.canvas_size()
