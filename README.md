@@ -63,6 +63,7 @@ A sample image:
      - `Ctrl`+`1` = Edge enhancement
      - `Ctrl`+`2` = Smooth image
      - `Ctrl`+`3` = Sharpen image
+     - `Ctrl`+`Shift`+`O` = Preview without enhancements
      - `ESC` = skip current image
      - `PAGE_UP` = previous image without processing current image
      - `PAGE_DOWN` = next image without processing current image

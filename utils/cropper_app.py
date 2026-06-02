@@ -148,6 +148,7 @@ class CropperApp:
         # ---------- UI ----------
         self._resize_pending = False
         self._slider_update_pending = None
+        self._enhancements_temporarily_disabled = False
         self.window = window
         
         x_lws, y_lws = self.app_settings['last_window_size']        
@@ -223,6 +224,7 @@ class CropperApp:
             self.option_button_def,
             self.enhancer_sliders_def,
             self.enhancer_checkboxes_def,
+            self.enhancer_preview_button_def,
         ) = build_cropper_control_definitions(self, available_option)
 
         # Store the Button, Sliders, Checkbox widgets
@@ -234,6 +236,8 @@ class CropperApp:
         self.image_enhancer_sliders = {}
         self.image_enhancer_checkbox_vars: dict[str, tk.BooleanVar] = {}
         self.image_enhancer_checkboxes = {}
+        self.preview_raw_button: Optional[ttk.Button] = None
+        self._preview_hold_key_bound = False
         self.app_settings_checkbox_vars = {}
         self.app_settings_checkboxes = {}
 
@@ -586,6 +590,21 @@ class CropperApp:
                 btn = ttk.Button(target, command=info["command"], name=f"btn_{name}", **btn_kwargs)
                 btn.pack(**pack_kwargs)
 
+                if "press_command" in info and "release_command" in info:
+                    btn.bind(
+                        "<ButtonPress-1>",
+                        lambda e, w=btn, on_press=info["press_command"]: self._on_hold_button_press(e, w, on_press),
+                    )
+                    btn.bind(
+                        "<ButtonRelease-1>",
+                        lambda e, w=btn, on_release=info["release_command"]: self._on_hold_button_release(e, w, on_release),
+                    )
+                else:
+                    if "press_command" in info:
+                        btn.bind("<ButtonPress-1>", info["press_command"])
+                    if "release_command" in info:
+                        btn.bind("<ButtonRelease-1>", info["release_command"])
+
             if "disabled_if_single_image" in info and info["disabled_if_single_image"] and len(self.image_paths) == 1:
                 btn.state(["disabled"])
 
@@ -793,6 +812,31 @@ class CropperApp:
 
                 bind_toggle_keys(self.window, info)
 
+            self.preview_raw_button = ttk.Button(
+                self.options_frame,
+                text=self.enhancer_preview_button_def["text"],
+                takefocus=0,
+                command=self.enhancer_preview_button_def["command"],
+            )
+            self.preview_raw_button.pack(fill=tk.X, padx=LABEL_PADDINGS[0], pady=(0, LABEL_PADDINGS[1]))
+            self.preview_raw_button.bind(
+                "<ButtonPress-1>",
+                lambda e, w=self.preview_raw_button: self._on_hold_button_press(e, w, self.enhancer_preview_button_def["press_command"]),
+            )
+            self.preview_raw_button.bind(
+                "<ButtonRelease-1>",
+                lambda e, w=self.preview_raw_button: self._on_hold_button_release(e, w, self.enhancer_preview_button_def["release_command"]),
+            )
+            Hovertip(self.preview_raw_button, self.enhancer_preview_button_def["enter_tip"], hover_delay=DEFAULT_TOOLTIP_DELAY)
+
+            hold_toggle_key = self.enhancer_preview_button_def.get("hold_toggle_key", {})
+            press_key = hold_toggle_key.get("press")
+            release_key = hold_toggle_key.get("release")
+            if not self._preview_hold_key_bound and isinstance(press_key, str) and isinstance(release_key, str):
+                self.window.bind(press_key, self.disable_enhancements_temporarily)
+                self.window.bind(release_key, self.restore_enhancements_after_temporary_disable)
+                self._preview_hold_key_bound = True
+
         # AFTER all checkboxes exist → update their values
         for name, checkbox in self.image_enhancer_checkboxes.items():
             value = self.image_preferences[name]
@@ -901,6 +945,37 @@ class CropperApp:
             #print("UPDATE ITEMCONFIG")
 
         self._slider_update_pending = None
+
+    def _on_hold_button_press(self, event, widget, callback) -> str:
+        widget.grab_set()
+        callback(event)
+        return "break"
+
+    def _on_hold_button_release(self, event, widget, callback) -> str:
+        try:
+            callback(event)
+        finally:
+            try:
+                widget.grab_release()
+            except tk.TclError:
+                pass
+        return "break"
+
+    def disable_enhancements_temporarily(self, _e=None) -> str:
+        if self._enhancements_temporarily_disabled:
+            return "break"
+
+        self._enhancements_temporarily_disabled = True
+        self.window.after_idle(self.update_image_in_canvas)
+        return "break"
+
+    def restore_enhancements_after_temporary_disable(self, _e=None) -> str:
+        if not self._enhancements_temporarily_disabled:
+            return "break"
+
+        self._enhancements_temporarily_disabled = False
+        self.window.after_idle(self.update_image_in_canvas)
+        return "break"
 
     def init_crop_rectangle(self) -> None:
         """
@@ -1165,6 +1240,7 @@ class CropperApp:
             "  Ctrl+F                Toggle fill mode\n"
             "  Ctrl+D                Toggle target device\n"
             "  Ctrl+1/2/3            Edge / Smooth / Sharpen\n"
+            "  Hold Ctrl+Shift+O     Preview without enhancements\n"
             "  Ctrl+Shift+L          Change folder\n"
             "  Ctrl+Shift+R          Reload folder\n"
             "\n"
@@ -1477,7 +1553,7 @@ class CropperApp:
                 out_img.paste(sub, (dst_x1, dst_y1))
 
         # 5) enhance image by given values
-        out_img = self.enhance_image(out_img)
+        out_img = self.enhance_image(out_img, use_temporary_override=False)
 
         # 6) render text on image if enabled
         assert self.text_overlay is not None
@@ -1492,7 +1568,10 @@ class CropperApp:
         # 9) next image
         self.next_image()
 
-    def enhance_image(self, img) -> Image.Image:
+    def enhance_image(self, img, use_temporary_override: bool = True) -> Image.Image:
+        if use_temporary_override and self._enhancements_temporarily_disabled:
+            return img
+
         enhanced_image = img
 
         # Add edge enhancement
@@ -1564,7 +1643,8 @@ class CropperApp:
 
             amount_scale = min(1.0, abs(amount))
             region_mask = lum.point(lut)
-            blend_mask = region_mask.point(lambda p, s=amount_scale: int(round(p * s)))
+            scaled_mask_lut = [int(round(i * amount_scale)) for i in range(256)]
+            blend_mask = region_mask.point(scaled_mask_lut)
 
             if amount > 0:
                 adjusted = Image.composite(white, adjusted, blend_mask)
@@ -1761,6 +1841,10 @@ class CropperApp:
             min_value = float(info.get("min", 0.0))
             max_value = float(info.get("max", 5.0))
             raw_value = self.image_preferences.get(name)
+
+            if raw_value is None:
+                self.image_preferences[name] = defaults[name.upper()]
+                continue
 
             try:
                 parsed_value = float(raw_value)

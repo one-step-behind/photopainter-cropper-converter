@@ -8,6 +8,7 @@ def build_cropper_control_definitions(app: Any, available_option: dict[str, tupl
     dict[str, dict[str, Any]],
     dict[str, dict[str, Any]],
     dict[str, dict[str, Any]],
+    dict[str, Any],
 ]:
     app_settings_def = {
         "save_filelist": {
@@ -180,12 +181,25 @@ def build_cropper_control_definitions(app: Any, available_option: dict[str, tupl
         },
     }
 
+    enhancer_preview_button_def = {
+        "text": "Hold: No Enhancements",
+        "command": lambda e=None: None,
+        "press_command": app.disable_enhancements_temporarily,
+        "release_command": app.restore_enhancements_after_temporary_disable,
+        "enter_tip": "Hold to preview image without any enhancement (Ctrl+Shift+O)",
+        "hold_toggle_key": {
+            "press": "<Control-Shift-KeyPress-O>",
+            "release": "<Control-Shift-KeyRelease-O>",
+        },
+    }
+
     return (
         app_settings_def,
         app_button_definitions,
         option_button_def,
         enhancer_sliders_def,
         enhancer_checkboxes_def,
+        enhancer_preview_button_def,
     )
 
 
