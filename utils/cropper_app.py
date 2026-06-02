@@ -38,7 +38,7 @@ except ImportError:
     print("Warning: pillow-avif-plugin not installed. AVIF files will not be processed.")
     print("To enable AVIF support, install with: pip install pillow-avif-plugin")
 
-SUPPORTED_IMAGE_FORMATS = ["*.jpg", "*.jpeg", "*.png", "*.bmp", "*.gif", "*.tif", "*.tiff", "*.webp"]
+SUPPORTED_IMAGE_FORMATS = ["*.jpg", "*.jpeg", "*.png", "*.bmp", "*.gif", "*.tif", "*.tiff", "*.webp", "*.jfif"]
 if HEIC_SUPPORT:
     SUPPORTED_IMAGE_FORMATS.append("*.heic")
 if AVIF_SUPPORT:
