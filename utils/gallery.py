@@ -7,6 +7,7 @@ from tkinter import ttk
 from typing import Callable, Optional, List
 
 from PIL import Image, ImageOps, ImageTk
+from utils.control_definitions import build_gallery_filter_control_definitions
 
 THUMB_SIZE = 80
 PADDING = 12
@@ -74,7 +75,11 @@ class AsyncThumbnailGallery(tk.Frame):
         self.show_portrait_var = tk.BooleanVar(value=show_portrait)
         self.show_unprocessed_var = tk.BooleanVar(value=show_unprocessed)
         self.search_text_var = tk.StringVar(value="")
-        self._search_placeholder = "Search by name"
+        self.gallery_filter_definitions = build_gallery_filter_control_definitions(self)
+        search_def = self.gallery_filter_definitions["search"]
+        self._search_placeholder = str(search_def.get("placeholder", "Search by name"))
+        self.filter_controls: dict[str, tk.Widget] = {}
+        self.search_entry: Optional[ttk.Entry] = None
 
         try:
             if not hasattr(sys, "frozen"):
@@ -87,40 +92,7 @@ class AsyncThumbnailGallery(tk.Frame):
 
         self.filter_bar = tk.Frame(self, bg=self.default_bg)
         self.filter_bar.pack(fill=tk.X, pady=(0, 2))
-
-        ttk.Label(self.filter_bar, text="Show:").pack(side=tk.LEFT, padx=(4, 6))
-        ttk.Checkbutton(
-            self.filter_bar,
-            text="Landscape",
-            variable=self.show_landscape_var,
-            command=self._on_filter_change,
-            takefocus=0,
-        ).pack(side=tk.LEFT)
-        ttk.Checkbutton(
-            self.filter_bar,
-            text="Portrait",
-            variable=self.show_portrait_var,
-            command=self._on_filter_change,
-            takefocus=0,
-        ).pack(side=tk.LEFT, padx=(4, 0))
-        ttk.Checkbutton(
-            self.filter_bar,
-            text="Unprocessed",
-            variable=self.show_unprocessed_var,
-            command=self._on_filter_change,
-            takefocus=0,
-        ).pack(side=tk.LEFT, padx=(4, 0))
-
-        self.search_entry = ttk.Entry(
-            self.filter_bar,
-            textvariable=self.search_text_var,
-            width=20,
-        )
-        self.search_entry.pack(side=tk.LEFT, padx=(8, 0))
-        self._set_search_placeholder()
-        self.search_entry.bind("<FocusIn>", self._on_search_focus_in)
-        self.search_entry.bind("<FocusOut>", self._on_search_focus_out)
-        self.search_entry.bind("<KeyRelease>", self._on_text_search_change)
+        self._create_filter_controls()
 
         self.canvas = tk.Canvas(
             self,
@@ -361,6 +333,43 @@ class AsyncThumbnailGallery(tk.Frame):
 
         if notify and next_selected is not None and self.on_select is not None:
             self.on_select(next_selected)
+
+    def _create_filter_controls(self) -> None:
+        for name, info in self.gallery_filter_definitions.items():
+            widget_type = info.get("widget_type")
+            if widget_type == "label":
+                widget = ttk.Label(self.filter_bar, text=info.get("text", ""))
+            elif widget_type == "checkbutton":
+                check_kwargs = {
+                    "text": info.get("text", ""),
+                    "takefocus": info.get("takefocus", 0),
+                }
+                if "variable" in info:
+                    check_kwargs["variable"] = info["variable"]
+                if "command" in info:
+                    check_kwargs["command"] = info["command"]
+                widget = ttk.Checkbutton(self.filter_bar, **check_kwargs)
+            elif widget_type == "entry":
+                width = int(info.get("width", 20))
+                if "textvariable" in info:
+                    widget = ttk.Entry(
+                        self.filter_bar,
+                        textvariable=info["textvariable"],
+                        width=width,
+                    )
+                else:
+                    widget = ttk.Entry(self.filter_bar, width=width)
+                if name == "search":
+                    self.search_entry = widget
+                    self._search_placeholder = str(info.get("placeholder", self._search_placeholder))
+                    self._set_search_placeholder()
+            else:
+                continue
+
+            widget.pack(**info.get("pack", {"side": tk.LEFT}))
+            for event_name, handler in info.get("bindings", {}).items():
+                widget.bind(event_name, handler)
+            self.filter_controls[name] = widget
 
     def _choose_nearest_filtered(self, anchor_source_index: Optional[int]) -> Optional[int]:
         if not self._filtered_indices:

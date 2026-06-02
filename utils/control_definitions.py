@@ -220,3 +220,49 @@ def build_textoverlay_control_definitions(overlay: Any) -> dict[str, dict[str, A
             "shortcut_callback": overlay._on_bg_color_shortcut,
         },
     }
+
+
+def build_gallery_filter_control_definitions(gallery: Any) -> dict[str, dict[str, Any]]:
+    return {
+        "show_label": {
+            "widget_type": "label",
+            "text": "Show:",
+            "pack": {"side": tk.LEFT, "padx": (4, 6)},
+        },
+        "landscape": {
+            "widget_type": "checkbutton",
+            "text": "Landscape",
+            "variable": gallery.show_landscape_var,
+            "command": gallery._on_filter_change,
+            "takefocus": 0,
+            "pack": {"side": tk.LEFT, "padx": (0, 0)},
+        },
+        "portrait": {
+            "widget_type": "checkbutton",
+            "text": "Portrait",
+            "variable": gallery.show_portrait_var,
+            "command": gallery._on_filter_change,
+            "takefocus": 0,
+            "pack": {"side": tk.LEFT, "padx": (4, 0)},
+        },
+        "unprocessed": {
+            "widget_type": "checkbutton",
+            "text": "Unprocessed",
+            "variable": gallery.show_unprocessed_var,
+            "command": gallery._on_filter_change,
+            "takefocus": 0,
+            "pack": {"side": tk.LEFT, "padx": (4, 0)},
+        },
+        "search": {
+            "widget_type": "entry",
+            "placeholder": "Search by name",
+            "textvariable": gallery.search_text_var,
+            "width": 20,
+            "pack": {"side": tk.LEFT, "padx": (8, 0)},
+            "bindings": {
+                "<FocusIn>": gallery._on_search_focus_in,
+                "<FocusOut>": gallery._on_search_focus_out,
+                "<KeyRelease>": gallery._on_text_search_change,
+            },
+        },
+    }
