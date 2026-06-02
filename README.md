@@ -134,7 +134,6 @@ grid_color=#00ff00         # rectangle border color
 pic_folder_on_device=pic   # subfolder holding the final images, e.g. landscape/acep/pic/
 state_suffix=_ppcrop.txt   # file extension for sidecar file
 save_filelist=True         # save fileList.txt at app exit for both orientations
-exit_after_last_image=True # exit app after last image was processed
 save_canvas_zoom=True      # save canvas zoom at exit
 canvas_zoom=1.0            # canvas zoom value
 gallery_show_landscape=True    # show landscape images
