@@ -86,6 +86,7 @@ defaults:dict = {
     "SAVE_CANVAS_ZOOM": True,
     "CANVAS_ZOOM": 1.0,
     "GRID_COLOR":"#00ff00",
+    "GRID_DARK_COLOR":"#006600",
     "GALLERY_SHOW_LANDSCAPE": True,
     "GALLERY_SHOW_PORTRAIT": True,
     "GALLERY_SHOW_UNPROCESSED": False,
@@ -1075,13 +1076,17 @@ class CropperApp:
         # grid (thirds) with straight lines
         v1 = snap(x1 + (x2 - x1) / 3.0)
         v2 = snap(x1 + 2 * (x2 - x1) / 3.0)
+        v3 = snap(x1 + (x2 - x1) / 2.0)
         h1 = snap(y1 + (y2 - y1) / 3.0)
         h2 = snap(y1 + 2 * (y2 - y1) / 3.0)
+        h3 = snap(y1 + (y2 - y1) / 2.0)
         dash_pat = (3, 3)
         self.canvas.create_line(v1, y1, v1, y2, fill=self.app_settings["grid_color"], dash=dash_pat, width=1, capstyle="butt", joinstyle="miter", tags=("crop_layer",))
         self.canvas.create_line(v2, y1, v2, y2, fill=self.app_settings["grid_color"], dash=dash_pat, width=1, capstyle="butt", joinstyle="miter", tags=("crop_layer",))
+        self.canvas.create_line(v3, y1, v3, y2, fill=self.app_settings["grid_dark_color"], dash=dash_pat, width=1, capstyle="butt", joinstyle="miter", tags=("crop_layer",))
         self.canvas.create_line(x1, h1, x2, h1, fill=self.app_settings["grid_color"], dash=dash_pat, width=1, capstyle="butt", joinstyle="miter", tags=("crop_layer",))
         self.canvas.create_line(x1, h2, x2, h2, fill=self.app_settings["grid_color"], dash=dash_pat, width=1, capstyle="butt", joinstyle="miter", tags=("crop_layer",))
+        self.canvas.create_line(x1, h3, x2, h3, fill=self.app_settings["grid_dark_color"], dash=dash_pat, width=1, capstyle="butt", joinstyle="miter", tags=("crop_layer",))
 
         # update text overlay when crop marker grid changes
         self.update_text_overlay()
@@ -1710,6 +1715,7 @@ class CropperApp:
             settings["enhancer_smooth"]=defaults["ENHANCER_SMOOTH"]
             settings["enhancer_sharpen"]=defaults["ENHANCER_SHARPEN"]
             settings["grid_color"]=defaults["GRID_COLOR"]
+            settings["grid_dark_color"]=defaults["GRID_DARK_COLOR"]
             settings["pic_folder_on_device"]=defaults["PIC_FOLDER_ON_DEVICE"]
             settings["state_suffix"]=defaults["STATE_SUFFIX"]
             settings["save_filelist"]=defaults["SAVE_FILELIST"]
