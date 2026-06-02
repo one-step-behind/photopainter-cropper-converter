@@ -372,6 +372,8 @@ class CropperApp:
                 show_portrait=self.app_settings.get("gallery_show_portrait", True),
                 show_unprocessed=self.app_settings.get("gallery_show_unprocessed", False),
                 on_filter_change=lambda ls, pt, up: self.app_settings.update({"gallery_show_landscape": ls, "gallery_show_portrait": pt, "gallery_show_unprocessed": up}),
+                on_change_folder=self.load_folder,
+                on_reload_folder=lambda: self.load_folder(False),
             )
             self.gallery.pack(fill=tk.X, padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1])
         else:

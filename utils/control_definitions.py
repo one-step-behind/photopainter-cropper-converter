@@ -47,20 +47,6 @@ def build_cropper_control_definitions(app: Any, available_option: dict[str, tupl
             "style_config": {"foreground": "green"},
             "toggle_key": ("<Return>", "<Control-s>", "<Control-S>"),
         },
-        "change_folder": {
-            "default_text": "Change folder",
-            "command": lambda e=None: app.load_folder(),
-            "enter_tip": "Change to another folder of images (Ctrl+Shift+L)",
-            "underline": 9,
-            "toggle_key": ("<Control-Shift-l>", "<Control-Shift-L>"),
-        },
-        "reload_folder": {
-            "default_text": "Reload folder",
-            "command": lambda e=None: app.load_folder(False),
-            "enter_tip": "Reload this folder of images (Ctrl+Shift+R)",
-            "underline": 0,
-            "toggle_key": ("<Control-Shift-r>", "<Control-Shift-R>"),
-        },
     }
 
     option_button_def = {
@@ -299,5 +285,24 @@ def build_gallery_filter_control_definitions(gallery: Any) -> dict[str, dict[str
                 "<FocusOut>": gallery._on_search_focus_out,
                 "<KeyRelease>": gallery._on_text_search_change,
             },
+        },
+    }
+
+
+def build_gallery_folder_control_definitions(gallery: Any) -> dict[str, dict[str, Any]]:
+    return {
+        "change_folder": {
+            "text": "Change folder",
+            "command": lambda e=None: gallery._handle_change_folder(),
+            "enter_tip": "Change to another folder of images (Ctrl+Shift+L)",
+            "underline": 9,
+            "toggle_key": ("<Control-Shift-l>", "<Control-Shift-L>"),
+        },
+        "reload_folder": {
+            "text": "Reload folder",
+            "command": lambda e=None: gallery._handle_reload_folder(),
+            "enter_tip": "Reload this folder of images (Ctrl+Shift+R)",
+            "underline": 0,
+            "toggle_key": ("<Control-Shift-r>", "<Control-Shift-R>"),
         },
     }

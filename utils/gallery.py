@@ -7,7 +7,13 @@ from tkinter import ttk
 from typing import Callable, Optional, List
 
 from PIL import Image, ImageOps, ImageTk
-from utils.control_definitions import build_gallery_filter_control_definitions
+from utils.control_definitions import (
+    build_gallery_filter_control_definitions,
+    build_gallery_folder_control_definitions,
+)
+from utils.keybinds import bind_toggle_keys
+from utils.tooltip import Hovertip
+from utils.ui_constants import DEFAULT_TOOLTIP_DELAY
 from utils.ui_constants import GALLERY_PADDING, GALLERY_THUMB_SIZE
 
 _EXIF_ORIENTATION_TAG = 0x0112
@@ -30,6 +36,8 @@ class AsyncThumbnailGallery(tk.Frame):
         show_portrait: bool = True,
         show_unprocessed: bool = False,
         on_filter_change: Optional[Callable[[bool, bool, bool], None]] = None,
+        on_change_folder: Optional[Callable[[], None]] = None,
+        on_reload_folder: Optional[Callable[[], None]] = None,
     ):
         """
         Single-row, horizontally scrollable, async-loading thumbnail gallery.
@@ -45,6 +53,8 @@ class AsyncThumbnailGallery(tk.Frame):
         self.selected_bg = selected_bg
         self.on_select = on_select
         self.on_layout_change = on_layout_change
+        self.on_change_folder = on_change_folder
+        self.on_reload_folder = on_reload_folder
 
         self._load_generation = 0
         self._thumb_queue: queue.Queue = queue.Queue()
@@ -77,6 +87,7 @@ class AsyncThumbnailGallery(tk.Frame):
         search_def = self.gallery_filter_definitions["search"]
         self._search_placeholder = str(search_def.get("placeholder", "Search by name"))
         self.filter_controls: dict[str, tk.Widget] = {}
+        self.folder_controls: dict[str, tk.Widget] = {}
         self.search_entry: Optional[ttk.Entry] = None
 
         try:
@@ -90,7 +101,12 @@ class AsyncThumbnailGallery(tk.Frame):
 
         self.filter_bar = tk.Frame(self, bg=self.default_bg)
         self.filter_bar.pack(fill=tk.X, pady=(0, 2))
+        self.filter_left = tk.Frame(self.filter_bar, bg=self.default_bg)
+        self.filter_left.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.filter_right = tk.Frame(self.filter_bar, bg=self.default_bg)
+        self.filter_right.pack(side=tk.RIGHT)
         self._create_filter_controls()
+        self._create_folder_controls()
 
         self.canvas = tk.Canvas(
             self,
@@ -336,7 +352,7 @@ class AsyncThumbnailGallery(tk.Frame):
         for name, info in self.gallery_filter_definitions.items():
             widget_type = info.get("widget_type")
             if widget_type == "label":
-                widget = ttk.Label(self.filter_bar, text=info.get("text", ""))
+                widget = ttk.Label(self.filter_left, text=info.get("text", ""))
             elif widget_type == "checkbutton":
                 check_kwargs = {
                     "text": info.get("text", ""),
@@ -346,17 +362,17 @@ class AsyncThumbnailGallery(tk.Frame):
                     check_kwargs["variable"] = info["variable"]
                 if "command" in info:
                     check_kwargs["command"] = info["command"]
-                widget = ttk.Checkbutton(self.filter_bar, **check_kwargs)
+                widget = ttk.Checkbutton(self.filter_left, **check_kwargs)
             elif widget_type == "entry":
                 width = int(info.get("width", 20))
                 if "textvariable" in info:
                     widget = ttk.Entry(
-                        self.filter_bar,
+                        self.filter_left,
                         textvariable=info["textvariable"],
                         width=width,
                     )
                 else:
-                    widget = ttk.Entry(self.filter_bar, width=width)
+                    widget = ttk.Entry(self.filter_left, width=width)
                 if name == "search":
                     self.search_entry = widget
                     self._search_placeholder = str(info.get("placeholder", self._search_placeholder))
@@ -368,6 +384,32 @@ class AsyncThumbnailGallery(tk.Frame):
             for event_name, handler in info.get("bindings", {}).items():
                 widget.bind(event_name, handler)
             self.filter_controls[name] = widget
+
+    def _create_folder_controls(self) -> None:
+        folder_button_defs = build_gallery_folder_control_definitions(self)
+
+        for name, info in folder_button_defs.items():
+            button_kwargs = {
+                "text": info["text"],
+                "takefocus": 0,
+                "command": info["command"],
+            }
+            if "underline" in info:
+                button_kwargs["underline"] = info["underline"]
+
+            button = ttk.Button(self.filter_right, **button_kwargs)
+            button.pack(side=tk.LEFT, padx=(0, 6 if name == "change_folder" else 0))
+            Hovertip(button, info["enter_tip"], hover_delay=DEFAULT_TOOLTIP_DELAY)
+            bind_toggle_keys(self.winfo_toplevel(), info, command=info["command"])
+            self.folder_controls[name] = button
+
+    def _handle_change_folder(self) -> None:
+        if self.on_change_folder:
+            self.on_change_folder()
+
+    def _handle_reload_folder(self) -> None:
+        if self.on_reload_folder:
+            self.on_reload_folder()
 
     def _choose_nearest_filtered(self, anchor_source_index: Optional[int]) -> Optional[int]:
         if not self._filtered_indices:
