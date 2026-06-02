@@ -1787,6 +1787,8 @@ class CropperApp:
             settings["gallery_show_portrait"] = defaults["GALLERY_SHOW_PORTRAIT"]
         if not isinstance(settings.get("gallery_show_unprocessed"), bool):
             settings["gallery_show_unprocessed"] = defaults["GALLERY_SHOW_UNPROCESSED"]
+        if not isinstance(settings.get("grid_dark_color"), str):
+            settings["grid_dark_color"] = defaults["GRID_DARK_COLOR"]
 
         # Remove deprecated setting; navigation now always wraps to the first image.
         settings.pop("exit_after_last_image", None)
