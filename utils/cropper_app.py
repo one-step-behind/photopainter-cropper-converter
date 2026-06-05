@@ -27,10 +27,17 @@ from utils.ui_constants import (
     CANVAS_ZOOM_MIN,
     CANVAS_ZOOM_STEP,
     DEFAULT_CROP_SIZE,
-    DEFAULT_TOOLTIP_DELAY,
+    GALLERY_SHOW_LANDSCAPE,
+    GALLERY_SHOW_PORTRAIT,
+    GALLERY_SHOW_UNPROCESSED,
+    GRID_COLOR,
+    GRID_DARK_COLOR,
+    LABEL_PADDINGS_X_SMALL,
+    LABEL_PADDINGS_Y,
+    TOOLTIP_DELAY,
     FOREGROUND_COLOR,
     HIGHLIGHT_COLOR,
-    LABEL_PADDINGS,
+    LABEL_PADDINGS_X,
     MASK_COLOR,
     MASK_STIPPLE,
     SCALE_FACTOR,
@@ -67,7 +74,7 @@ if AVIF_SUPPORT:
 
 # ====== CONFIG ======
 APP_TITLE = "PhotoPainterCropper"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.5"
 DITHER_METHOD: int = 3 # NONE(0) or FLOYDSTEINBERG(3)
 
 defaults:dict = {
@@ -86,11 +93,9 @@ defaults:dict = {
     "SAVE_FILELIST": True,
     "SAVE_CANVAS_ZOOM": True,
     "CANVAS_ZOOM": 1.0,
-    "GRID_COLOR":"#00ff00",
-    "GRID_DARK_COLOR":"#006600",
-    "GALLERY_SHOW_LANDSCAPE": True,
-    "GALLERY_SHOW_PORTRAIT": True,
-    "GALLERY_SHOW_UNPROCESSED": False,
+    "BRIGHTNESS": 1.0,
+    "CONTRAST": 1.0,
+    "SATURATION": 1.0,
     "SHADOWS": 0.0,
     "MIDTONES": 0.0,
     "HIGHLIGHTS": 0.0,
@@ -104,37 +109,30 @@ available_option:dict = {
 
 FILELIST_FILENAME: str = "fileList.txt"
 
-BRIGHTNESS = 1.0
-CONTRAST = 1.0
-SATURATION = 1.0
-SHADOWS = 0.0
-MIDTONES = 0.0
-HIGHLIGHTS = 0.0
-
 ENHANCER_DEFAULTS_BY_DEVICE: dict[str, dict[str, float]] = {
     "acep": {
         "brightness": 1.0,
         "contrast": 1.15,
         "saturation": 1.4,
-        "shadows": SHADOWS,
-        "midtones": MIDTONES,
-        "highlights": HIGHLIGHTS,
+        "shadows": defaults["SHADOWS"],
+        "midtones": defaults["MIDTONES"],
+        "highlights": defaults["HIGHLIGHTS"],
     },
     "spectra6": {
         "brightness": 1.2,
         "contrast": 1.4,
         "saturation": 1.3,
-        "shadows": SHADOWS,
-        "midtones": MIDTONES,
-        "highlights": HIGHLIGHTS,
+        "shadows": defaults["SHADOWS"],
+        "midtones": defaults["MIDTONES"],
+        "highlights": defaults["HIGHLIGHTS"],
     },
     "4color": {
-        "brightness": BRIGHTNESS,
-        "contrast": CONTRAST,
-        "saturation": SATURATION,
-        "shadows": SHADOWS,
-        "midtones": MIDTONES,
-        "highlights": HIGHLIGHTS,
+        "brightness": defaults["BRIGHTNESS"],
+        "contrast": defaults["CONTRAST"],
+        "saturation": defaults["SATURATION"],
+        "shadows": defaults["SHADOWS"],
+        "midtones": defaults["MIDTONES"],
+        "highlights": defaults["HIGHLIGHTS"],
     },
 }
 
@@ -176,13 +174,13 @@ class CropperApp:
 
         # top button bar
         self.button_bar = ttk.Frame(top)
-        self.button_bar.pack(padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1], anchor=tk.W, fill=tk.X, side=tk.TOP)
+        self.button_bar.pack(padx=LABEL_PADDINGS_X, pady=LABEL_PADDINGS_Y, anchor=tk.W, fill=tk.X, side=tk.TOP)
 
         # help button
         self._help_window = None
         btn_help = ttk.Button(self.button_bar, text="?", width=2, takefocus=0, command=self.show_help)
-        btn_help.pack(side=tk.RIGHT, padx=LABEL_PADDINGS[0])
-        Hovertip(btn_help, "Show keyboard shortcuts & help (F1)", hover_delay=DEFAULT_TOOLTIP_DELAY)
+        btn_help.pack(side=tk.RIGHT, padx=LABEL_PADDINGS_X)
+        Hovertip(btn_help, "Show keyboard shortcuts & help (F1)", hover_delay=TOOLTIP_DELAY)
 
         # Frame holding image canvas and options pane
         canvas_with_options = ttk.Frame(window)
@@ -195,7 +193,7 @@ class CropperApp:
 
         # options pane
         self.options_frame = tk.Frame(canvas_with_options, highlightthickness=0)
-        self.options_frame.pack(padx=LABEL_PADDINGS[0], fill=tk.Y, side=tk.RIGHT)
+        self.options_frame.pack(padx=LABEL_PADDINGS_X, fill=tk.Y, side=tk.RIGHT)
 
         # bottom status bar
         bottom_bar = ttk.Frame(self.window)#, relief=tk.SUNKEN)
@@ -203,11 +201,11 @@ class CropperApp:
 
         # image counter
         self.status_count = ttk.Label(bottom_bar, text="[0/0]", anchor=tk.W)
-        self.status_count.pack(padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1], anchor=tk.W, side=tk.LEFT)
+        self.status_count.pack(padx=LABEL_PADDINGS_X, pady=LABEL_PADDINGS_Y, anchor=tk.W, side=tk.LEFT)
 
         # current image path
         self.status_label = ttk.Label(bottom_bar, text="Select folder with images…", anchor=tk.W)
-        self.status_label.pack(padx=0, pady=LABEL_PADDINGS[1], anchor=tk.W, fill=tk.X, side=tk.LEFT)
+        self.status_label.pack(padx=0, pady=LABEL_PADDINGS_Y, anchor=tk.W, fill=tk.X, side=tk.LEFT)
 
         # async thumbnail gallery
         self.gallery: Optional[AsyncThumbnailGallery] = None
@@ -219,12 +217,12 @@ class CropperApp:
         # ---------- Button UI ----------
         # Define controls externally and bind instance callbacks at runtime.
         (
-            self.app_settings_def,
+            self.app_settings_definitions,
             self.app_button_definitions,
-            self.option_button_def,
-            self.enhancer_sliders_def,
-            self.enhancer_checkboxes_def,
-            self.enhancer_preview_button_def,
+            self.image_option_button_definitions,
+            self.image_enhancer_sliders_definitions,
+            self.image_enhancer_checkboxes_definitions,
+            self.image_enhancer_preview_button_definitions,
         ) = build_cropper_control_definitions(self, available_option)
 
         # Store the Button, Sliders, Checkbox widgets
@@ -357,7 +355,7 @@ class CropperApp:
         # app buttons
         self.create_buttons(self.button_bar, self.app_button_definitions, tk.LEFT)
         # image options buttons
-        self.create_buttons(self.options_frame, self.option_button_def, tk.TOP)
+        self.create_buttons(self.options_frame, self.image_option_button_definitions, tk.TOP)
 
         self.create_text_overlay()
 
@@ -366,8 +364,6 @@ class CropperApp:
             self.gallery = AsyncThumbnailGallery(
                 window,
                 self.image_paths,
-                selected_bg=HIGHLIGHT_COLOR,
-                image_bg=BORDER_COLOR,
                 on_select=lambda index: self.set_image_index(index),
                 on_layout_change=self.on_gallery_layout_change,
                 show_landscape=self.app_settings.get("gallery_show_landscape", True),
@@ -377,7 +373,7 @@ class CropperApp:
                 on_change_folder=self.load_folder,
                 on_reload_folder=lambda: self.load_folder(False),
             )
-            self.gallery.pack(fill=tk.X, padx=LABEL_PADDINGS[0], pady=LABEL_PADDINGS[1])
+            self.gallery.pack(fill=tk.X, padx=0, pady=0)
         else:
             self.gallery.set_images(self.image_paths)
 
@@ -489,7 +485,7 @@ class CropperApp:
             lightcolor=BORDER_COLOR,
             darkcolor=BORDER_COLOR,
             arrowcolor=BORDER_COLOR,
-            padding=LABEL_PADDINGS[0],
+            padding=LABEL_PADDINGS_X[0],
             borderwidth=1,
         )
         self.style.map(
@@ -507,7 +503,7 @@ class CropperApp:
 
         self.style.configure('TButton',
             bordercolor=WINDOW_BACKGROUND_COLOR,
-            background=WINDOW_BACKGROUND_COLOR, 
+            background=BORDER_COLOR, 
             foreground=FOREGROUND_COLOR,
             lightcolor=BORDER_COLOR,
             darkcolor=BORDER_COLOR,
@@ -540,6 +536,7 @@ class CropperApp:
             background=[("active", HIGHLIGHT_COLOR)],
             troughcolor=[("active", HIGHLIGHT_COLOR)],
         )
+        self.style.configure('Gallery.Filter.TEntry', padding=(2,0, 2,0))
 
     def create_buttons(self, target, button_definition, side: Literal["left", "right", "top", "bottom"]=tk.LEFT) -> None:
         """
@@ -555,7 +552,7 @@ class CropperApp:
         for name, info in button_definition.items():
             if name in self.app_button_vars:
                 if "disabled_if_single_image" in info:
-                    if info["disabled_if_single_image"] and len(self.image_paths) == 1:
+                    if info["disabled_if_single_image"] and len(self.image_paths) <= 1:
                         self.app_buttons[name].state(["disabled"])
                     else:
                         self.app_buttons[name].state(["!disabled"])
@@ -573,7 +570,7 @@ class CropperApp:
             pack_kwargs = {
                 "side": side,
                 "fill": info.get("fill", tk.X),
-                "padx": LABEL_PADDINGS[0],
+                "padx": LABEL_PADDINGS_X,
                 "expand": info.get("expand", False),
             }
 
@@ -615,14 +612,14 @@ class CropperApp:
                     if "release_command" in info:
                         btn.bind("<ButtonRelease-1>", info["release_command"])
 
-            if "disabled_if_single_image" in info and info["disabled_if_single_image"] and len(self.image_paths) == 1:
+            if "disabled_if_single_image" in info and info["disabled_if_single_image"] and len(self.image_paths) <= 1:
                 btn.state(["disabled"])
 
             self.app_buttons[name] = btn
 
             # 4) Bind hover tooltip events if enter_tip exists
             if "enter_tip" in info:
-                Hovertip(btn, info["enter_tip"], hover_delay=DEFAULT_TOOLTIP_DELAY)
+                Hovertip(btn, info["enter_tip"], hover_delay=TOOLTIP_DELAY)
 
             bind_toggle_keys(self.window, info)
 
@@ -645,30 +642,30 @@ class CropperApp:
 
     def create_image_enhancer_sliders(self) -> None:
         if not self.image_enhancer_slider_vars:
-            for name, info in self.enhancer_sliders_def.items():
+            for name, info in self.image_enhancer_sliders_definitions.items():
                 value = self.image_preferences[name]
 
                 self.image_enhancer_slider_vars[name] = tk.StringVar(value=info["text"])
                 self.image_enhancer_slider_default_texts[name] = info["text"]
 
                 slider_row = ttk.Frame(self.options_frame)
-                slider_row.pack(fill=tk.X, padx=LABEL_PADDINGS[0], pady=(LABEL_PADDINGS[1], 0))
+                slider_row.pack(fill=tk.X, padx=LABEL_PADDINGS_X, pady=(LABEL_PADDINGS_Y[0], 0))
                 slider_row.columnconfigure(1, weight=1)
                 slider_row.columnconfigure(2, minsize=SLIDER_WIDTH)
 
                 slider_label = ttk.Label(slider_row, textvariable=self.image_enhancer_slider_vars[name], justify=tk.LEFT)
-                slider_label.grid(row=0, column=0, sticky="w", padx=(0, LABEL_PADDINGS[0]))
+                slider_label.grid(row=0, column=0, sticky="w", padx=(0, LABEL_PADDINGS_X[0]))
 
                 slider_reset_btn = ttk.Button(
                     slider_row,
                     text="Reset",
                     width=6,
-                    padding=(2, 1),
+                    padding=LABEL_PADDINGS_X_SMALL,
                     takefocus=0,
                     command=lambda n=name: self.reset_enhancer_slider(n),
                 )
-                slider_reset_btn.grid(row=0, column=3, sticky="e", padx=(LABEL_PADDINGS[0], 0))
-                Hovertip(slider_reset_btn, "Reset to default value for selected device", hover_delay=DEFAULT_TOOLTIP_DELAY)
+                slider_reset_btn.grid(row=0, column=3, sticky="e", padx=(LABEL_PADDINGS_X[0], 0))
+                Hovertip(slider_reset_btn, "Reset to default value for selected device", hover_delay=TOOLTIP_DELAY)
 
                 slider_kwargs = {
                     "name": f"slider_{name}",
@@ -696,7 +693,7 @@ class CropperApp:
 
                 # Bind hover tooltip events if enter_tip exists
                 if "enter_tip" in info:
-                    Hovertip(slider, info["enter_tip"], hover_delay=DEFAULT_TOOLTIP_DELAY)
+                    Hovertip(slider, info["enter_tip"], hover_delay=TOOLTIP_DELAY)
 
                 bind_toggle_keys(self.window, info)
 
@@ -712,12 +709,12 @@ class CropperApp:
         resolved_target_device = target_device if isinstance(target_device, str) else ""
 
         fallback = {
-            "brightness": BRIGHTNESS,
-            "contrast": CONTRAST,
-            "saturation": SATURATION,
-            "shadows": SHADOWS,
-            "midtones": MIDTONES,
-            "highlights": HIGHLIGHTS,
+            "brightness": defaults["BRIGHTNESS"],
+            "contrast": defaults["CONTRAST"],
+            "saturation": defaults["SATURATION"],
+            "shadows": defaults["SHADOWS"],
+            "midtones": defaults["MIDTONES"],
+            "highlights": defaults["HIGHLIGHTS"],
         }
 
         return ENHANCER_DEFAULTS_BY_DEVICE.get(resolved_target_device, fallback).copy()
@@ -745,7 +742,7 @@ class CropperApp:
         defaults_for_device = self.get_device_enhancer_defaults(target_device)
         epsilon = 1e-9
 
-        for slider_name in self.enhancer_sliders_def:
+        for slider_name in self.image_enhancer_sliders_definitions:
             current_value = float(self.image_preferences.get(slider_name, defaults_for_device.get(slider_name, 1.0)))
             default_value = float(defaults_for_device.get(slider_name, current_value))
             if abs(current_value - default_value) > epsilon:
@@ -784,7 +781,7 @@ class CropperApp:
         self._slider_update_pending = self.window.after(20, lambda: self.update_slider_value_and_label(slider_label, value))
 
     def update_slider_value_and_label(self, slider_label, value) -> None:
-        if slider_label in self.enhancer_sliders_def:
+        if slider_label in self.image_enhancer_sliders_definitions:
             self.image_preferences[slider_label] = float(value)
             self.update_slider_label(slider_label)
             self.window.after_idle(self.update_image_in_canvas)
@@ -794,11 +791,11 @@ class CropperApp:
     def create_image_enhancer_checkboxes(self) -> None:
         if not self.image_enhancer_checkbox_vars:
             checkbox_row = ttk.Frame(self.options_frame)
-            checkbox_row.pack(fill=tk.X, padx=LABEL_PADDINGS[0], pady=(0, LABEL_PADDINGS[1]))
-            for idx in range(len(self.enhancer_checkboxes_def)):
+            checkbox_row.pack(fill=tk.X, padx=LABEL_PADDINGS_X, pady=(0, LABEL_PADDINGS_Y[1]))
+            for idx in range(len(self.image_enhancer_checkboxes_definitions)):
                 checkbox_row.columnconfigure(idx, weight=1)
 
-            for name, info in self.enhancer_checkboxes_def.items():
+            for name, info in self.image_enhancer_checkboxes_definitions.items():
                 value = self.image_preferences[name]
                 
                 checkbox_kwargs = {
@@ -813,35 +810,35 @@ class CropperApp:
                 checkbox = ttk.Checkbutton(checkbox_row, command=info["command"], variable=self.image_enhancer_checkbox_vars[name], **checkbox_kwargs)
 
                 col_idx = len(self.image_enhancer_checkboxes)
-                sticky = "w" if col_idx == 0 else ("e" if col_idx == len(self.enhancer_checkboxes_def) - 1 else "")
+                sticky = "w" if col_idx == 0 else ("e" if col_idx == len(self.image_enhancer_checkboxes_definitions) - 1 else "")
                 checkbox.grid(row=0, column=col_idx, sticky=sticky)
 
                 self.image_enhancer_checkboxes[name] = checkbox
 
                 # Bind hover tooltip events if enter_tip exists
                 if "enter_tip" in info:
-                    Hovertip(checkbox, info["enter_tip"], hover_delay=DEFAULT_TOOLTIP_DELAY)
+                    Hovertip(checkbox, info["enter_tip"], hover_delay=TOOLTIP_DELAY)
 
                 bind_toggle_keys(self.window, info)
 
             self.preview_raw_button = ttk.Button(
                 self.options_frame,
-                text=self.enhancer_preview_button_def["text"],
+                text=self.image_enhancer_preview_button_definitions["text"],
                 takefocus=0,
-                command=self.enhancer_preview_button_def["command"],
+                command=self.image_enhancer_preview_button_definitions["command"],
             )
-            self.preview_raw_button.pack(fill=tk.X, padx=LABEL_PADDINGS[0], pady=(0, LABEL_PADDINGS[1]))
+            self.preview_raw_button.pack(fill=tk.X, padx=LABEL_PADDINGS_X, pady=(0, LABEL_PADDINGS_Y[1]))
             self.preview_raw_button.bind(
                 "<ButtonPress-1>",
-                lambda e, w=self.preview_raw_button: self._on_hold_button_press(e, w, self.enhancer_preview_button_def["press_command"]),
+                lambda e, w=self.preview_raw_button: self._on_hold_button_press(e, w, self.image_enhancer_preview_button_definitions["press_command"]),
             )
             self.preview_raw_button.bind(
                 "<ButtonRelease-1>",
-                lambda e, w=self.preview_raw_button: self._on_hold_button_release(e, w, self.enhancer_preview_button_def["release_command"]),
+                lambda e, w=self.preview_raw_button: self._on_hold_button_release(e, w, self.image_enhancer_preview_button_definitions["release_command"]),
             )
-            Hovertip(self.preview_raw_button, self.enhancer_preview_button_def["enter_tip"], hover_delay=DEFAULT_TOOLTIP_DELAY)
+            Hovertip(self.preview_raw_button, self.image_enhancer_preview_button_definitions["enter_tip"], hover_delay=TOOLTIP_DELAY)
 
-            hold_toggle_key = self.enhancer_preview_button_def.get("hold_toggle_key", {})
+            hold_toggle_key = self.image_enhancer_preview_button_definitions.get("hold_toggle_key", {})
             press_key = hold_toggle_key.get("press")
             release_key = hold_toggle_key.get("release")
             if not self._preview_hold_key_bound and isinstance(press_key, str) and isinstance(release_key, str):
@@ -865,14 +862,14 @@ class CropperApp:
 
     def create_app_settings_checkboxes(self) -> None:
         if not self.app_settings_checkbox_vars:
-            ttk.Separator(self.options_frame).pack(fill=tk.X, pady=5)
+            ttk.Separator(self.options_frame).pack(fill=tk.X, pady=LABEL_PADDINGS_X)
 
             app_settings_frame = ttk.Frame(self.options_frame)
-            app_settings_frame.pack(fill=tk.X, padx=LABEL_PADDINGS[0], pady=(0, LABEL_PADDINGS[1]))
+            app_settings_frame.pack(fill=tk.X, padx=LABEL_PADDINGS_X, pady=(0, LABEL_PADDINGS_Y[1]))
             app_settings_frame.columnconfigure(0, weight=1)
             app_settings_frame.columnconfigure(1, weight=1)
 
-            for idx, (name, info) in enumerate(self.app_settings_def.items()):
+            for idx, (name, info) in enumerate(self.app_settings_definitions.items()):
                 value = self.app_settings[name]
 
                 checkbox_kwargs = {
@@ -887,13 +884,13 @@ class CropperApp:
                 checkbox = ttk.Checkbutton(app_settings_frame, command=info["command"], variable=self.app_settings_checkbox_vars[name], **checkbox_kwargs)
                 row = idx // 2
                 col = idx % 2
-                checkbox.grid(row=row, column=col, sticky="w", padx=(0, LABEL_PADDINGS[0]), pady=(0, LABEL_PADDINGS[1]))
+                checkbox.grid(row=row, column=col, sticky="w", padx=(0, LABEL_PADDINGS_X[1]), pady=(0, LABEL_PADDINGS_Y[1]))
 
                 self.app_settings_checkboxes[name] = checkbox
 
                 # Bind hover tooltip events if enter_tip exists
                 if "enter_tip" in info:
-                    Hovertip(checkbox, info["enter_tip"], hover_delay=DEFAULT_TOOLTIP_DELAY)
+                    Hovertip(checkbox, info["enter_tip"], hover_delay=TOOLTIP_DELAY)
 
                 bind_toggle_keys(self.window, info)
 
@@ -1297,7 +1294,7 @@ class CropperApp:
         lbl.pack()
 
         btn_close = ttk.Button(win, text="Close", takefocus=0, command=_on_help_close)
-        btn_close.pack(pady=(0, 10))
+        btn_close.pack(pady=(0, 12))
 
         win.bind("<Escape>", lambda _e: _on_help_close())
 
@@ -1534,7 +1531,7 @@ class CropperApp:
         if should_apply_defaults:
             self.apply_device_enhancer_defaults()
         else:
-            for slider_name in self.enhancer_sliders_def:
+            for slider_name in self.image_enhancer_sliders_definitions:
                 self.update_slider_label(slider_name)
 
     # ---------- Coordinate helpers ----------
@@ -1643,12 +1640,12 @@ class CropperApp:
             enhanced_image = enhanced_image.filter(ImageFilter.SHARPEN)
 
         if (
-            float(self.image_preferences["brightness"]) == float(BRIGHTNESS) and
-            float(self.image_preferences["contrast"]) == float(CONTRAST) and
-            float(self.image_preferences["saturation"]) == float(SATURATION) and
-            float(self.image_preferences.get("shadows", SHADOWS)) == float(SHADOWS) and
-            float(self.image_preferences.get("midtones", MIDTONES)) == float(MIDTONES) and
-            float(self.image_preferences.get("highlights", HIGHLIGHTS)) == float(HIGHLIGHTS)
+            float(self.image_preferences["brightness"]) == float(defaults["BRIGHTNESS"]) and
+            float(self.image_preferences["contrast"]) == float(defaults["CONTRAST"]) and
+            float(self.image_preferences["saturation"]) == float(defaults["SATURATION"]) and
+            float(self.image_preferences.get("shadows", defaults["SHADOWS"])) == float(defaults["SHADOWS"]) and
+            float(self.image_preferences.get("midtones", defaults["MIDTONES"])) == float(defaults["MIDTONES"]) and
+            float(self.image_preferences.get("highlights", defaults["HIGHLIGHTS"])) == float(defaults["HIGHLIGHTS"])
         ):
             return enhanced_image
 
@@ -1669,9 +1666,9 @@ class CropperApp:
         return enhanced_image
 
     def apply_tonal_range_adjustments(self, img: Image.Image) -> Image.Image:
-        shadows = float(self.image_preferences.get("shadows", SHADOWS))
-        midtones = float(self.image_preferences.get("midtones", MIDTONES))
-        highlights = float(self.image_preferences.get("highlights", HIGHLIGHTS))
+        shadows = float(self.image_preferences.get("shadows", defaults["SHADOWS"]))
+        midtones = float(self.image_preferences.get("midtones", defaults["MIDTONES"]))
+        highlights = float(self.image_preferences.get("highlights", defaults["HIGHLIGHTS"]))
 
         if abs(shadows) < 1e-9 and abs(midtones) < 1e-9 and abs(highlights) < 1e-9:
             return img
@@ -1749,16 +1746,16 @@ class CropperApp:
             settings["enhancer_edge"]=defaults["ENHANCER_EDGE"]
             settings["enhancer_smooth"]=defaults["ENHANCER_SMOOTH"]
             settings["enhancer_sharpen"]=defaults["ENHANCER_SHARPEN"]
-            settings["grid_color"]=defaults["GRID_COLOR"]
-            settings["grid_dark_color"]=defaults["GRID_DARK_COLOR"]
+            settings["grid_color"]=GRID_COLOR
+            settings["grid_dark_color"]=GRID_DARK_COLOR
             settings["pic_folder_on_device"]=defaults["PIC_FOLDER_ON_DEVICE"]
             settings["state_suffix"]=defaults["STATE_SUFFIX"]
             settings["save_filelist"]=defaults["SAVE_FILELIST"]
             settings["save_canvas_zoom"]=defaults["SAVE_CANVAS_ZOOM"]
             settings["canvas_zoom"]=defaults["CANVAS_ZOOM"]
-            settings["gallery_show_landscape"]=defaults["GALLERY_SHOW_LANDSCAPE"]
-            settings["gallery_show_portrait"]=defaults["GALLERY_SHOW_PORTRAIT"]
-            settings["gallery_show_unprocessed"]=defaults["GALLERY_SHOW_UNPROCESSED"]
+            settings["gallery_show_landscape"]=GALLERY_SHOW_LANDSCAPE
+            settings["gallery_show_portrait"]=GALLERY_SHOW_PORTRAIT
+            settings["gallery_show_unprocessed"]=GALLERY_SHOW_UNPROCESSED
 
             #print("APP Settings from DEFAULTS", settings)
             return settings
@@ -1890,14 +1887,14 @@ class CropperApp:
             #print("SET DEFAULT IMAGE PREFS", self.image_preferences, "FROM", self.app_settings)
 
         # update button labels
-        for name, info in self.option_button_def.items():
+        for name, info in self.image_option_button_definitions.items():
             if not name in self.image_preferences or (name in self.image_preferences and self.image_preferences[name] not in available_option[name.upper()]):
                 print("NAME", name, "NOT IN", available_option[name.upper()])
                 self.image_preferences[name] = defaults[name.upper()]
             self.update_button_text(name, self.image_preferences[name])
 
         # get safe values and update slider values
-        for name, info in self.enhancer_sliders_def.items():
+        for name, info in self.image_enhancer_sliders_definitions.items():
             min_value = float(info.get("min", 0.0))
             max_value = float(info.get("max", 5.0))
             raw_value = self.image_preferences.get(name)
@@ -1919,7 +1916,7 @@ class CropperApp:
             self.image_preferences[name] = parsed_value
 
         # get safe values and update checkbox values
-        for name, info in self.enhancer_checkboxes_def.items():
+        for name, info in self.image_enhancer_checkboxes_definitions.items():
             if not name in self.image_preferences:
                 self.image_preferences[name] = self.app_settings[name] if name in self.app_settings else defaults[name.upper()] # app default or project default
 

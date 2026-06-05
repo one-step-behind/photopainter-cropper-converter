@@ -1,6 +1,7 @@
 import tkinter as tk
 from typing import Any
 
+from utils.ui_constants import LABEL_PADDINGS_X, HIGHLIGHT_COLOR, FOREGROUND_COLOR
 
 def build_cropper_control_definitions(app: Any, available_option: dict[str, tuple[str, ...]]) -> tuple[
     dict[str, dict[str, Any]],
@@ -10,7 +11,7 @@ def build_cropper_control_definitions(app: Any, available_option: dict[str, tupl
     dict[str, dict[str, Any]],
     dict[str, Any],
 ]:
-    app_settings_def = {
+    app_settings_definitions = {
         "save_filelist": {
             "text": "Save image list",
             "command": lambda e=None: app.update_app_settings_checkbox("save_filelist"),
@@ -44,12 +45,12 @@ def build_cropper_control_definitions(app: Any, available_option: dict[str, tupl
             "default_text": "Crop and Convert",
             "command": app.on_confirm,
             "enter_tip": "Crop and Convert (Enter, Ctrl+S)",
-            "style_config": {"foreground": "green"},
+            "style_config": {"background": HIGHLIGHT_COLOR, "foreground": FOREGROUND_COLOR},
             "toggle_key": ("<Return>", "<Control-s>", "<Control-S>"),
         },
     }
 
-    option_button_def = {
+    image_option_button_definitions = {
         "orientation": {
             "widget_type": "combobox",
             "default_text": "Orientation",
@@ -83,7 +84,7 @@ def build_cropper_control_definitions(app: Any, available_option: dict[str, tupl
         },
     }
 
-    enhancer_sliders_def = {
+    image_enhancer_sliders_definitions = {
         "brightness": {
             "text": "Brightness",
             "min": 0.1,
@@ -140,7 +141,7 @@ def build_cropper_control_definitions(app: Any, available_option: dict[str, tupl
         },
     }
 
-    enhancer_checkboxes_def = {
+    image_enhancer_checkboxes_definitions = {
         "enhancer_edge": {
             "text": "Edge",
             "command": lambda e=None: app.update_image_enhancer_checkbox("enhancer_edge"),
@@ -161,7 +162,7 @@ def build_cropper_control_definitions(app: Any, available_option: dict[str, tupl
         },
     }
 
-    enhancer_preview_button_def = {
+    image_enhancer_preview_button_definitions = {
         "text": "Hold: No Enhancements",
         "command": lambda e=None: None,
         "press_command": app.disable_enhancements_temporarily,
@@ -174,12 +175,12 @@ def build_cropper_control_definitions(app: Any, available_option: dict[str, tupl
     }
 
     return (
-        app_settings_def,
+        app_settings_definitions,
         app_button_definitions,
-        option_button_def,
-        enhancer_sliders_def,
-        enhancer_checkboxes_def,
-        enhancer_preview_button_def,
+        image_option_button_definitions,
+        image_enhancer_sliders_definitions,
+        image_enhancer_checkboxes_definitions,
+        image_enhancer_preview_button_definitions,
     )
 
 
@@ -247,8 +248,8 @@ def build_gallery_filter_control_definitions(gallery: Any) -> dict[str, dict[str
     return {
         "show_label": {
             "widget_type": "label",
-            "text": "Show:",
-            "pack": {"side": tk.LEFT, "padx": (4, 6)},
+            "text": "Filters:",
+            "pack": {"side": tk.LEFT, "padx": LABEL_PADDINGS_X},
         },
         "landscape": {
             "widget_type": "checkbutton",
@@ -256,7 +257,7 @@ def build_gallery_filter_control_definitions(gallery: Any) -> dict[str, dict[str
             "variable": gallery.show_landscape_var,
             "command": gallery._on_filter_change,
             "takefocus": 0,
-            "pack": {"side": tk.LEFT, "padx": (0, 0)},
+            "pack": {"side": tk.LEFT, "padx": LABEL_PADDINGS_X},
         },
         "portrait": {
             "widget_type": "checkbutton",
@@ -264,7 +265,7 @@ def build_gallery_filter_control_definitions(gallery: Any) -> dict[str, dict[str
             "variable": gallery.show_portrait_var,
             "command": gallery._on_filter_change,
             "takefocus": 0,
-            "pack": {"side": tk.LEFT, "padx": (4, 0)},
+            "pack": {"side": tk.LEFT, "padx": LABEL_PADDINGS_X},
         },
         "unprocessed": {
             "widget_type": "checkbutton",
@@ -272,14 +273,14 @@ def build_gallery_filter_control_definitions(gallery: Any) -> dict[str, dict[str
             "variable": gallery.show_unprocessed_var,
             "command": gallery._on_filter_change,
             "takefocus": 0,
-            "pack": {"side": tk.LEFT, "padx": (4, 0)},
+            "pack": {"side": tk.LEFT, "padx": LABEL_PADDINGS_X},
         },
         "search": {
             "widget_type": "entry",
             "placeholder": "Search by name",
             "textvariable": gallery.search_text_var,
             "width": 20,
-            "pack": {"side": tk.LEFT, "padx": (8, 0)},
+            "pack": {"side": tk.LEFT, "padx": LABEL_PADDINGS_X},
             "bindings": {
                 "<FocusIn>": gallery._on_search_focus_in,
                 "<FocusOut>": gallery._on_search_focus_out,

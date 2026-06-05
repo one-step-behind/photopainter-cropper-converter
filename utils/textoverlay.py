@@ -8,7 +8,7 @@ from utils.textoverlay_defaults import TEXT_OVERLAY_DEFAULTS, FONT_DIVISOR_MIN, 
 from utils.control_definitions import build_textoverlay_control_definitions
 from utils.keybinds import bind_toggle_keys
 from utils.tooltip import Hovertip
-from utils.ui_constants import SLIDER_WIDTH
+from utils.ui_constants import TOOLTIP_DELAY, SLIDER_WIDTH, LABEL_PADDINGS_X, FOREGROUND_COLOR, DISABLED_COLOR
 
 class CanvasTextOverlay:
     def __init__(self, control_frame, canvas_frame, callback=None):
@@ -87,13 +87,13 @@ class CanvasTextOverlay:
     def _create_controls(self):
         self.control_defs = build_textoverlay_control_definitions(self)
 
-        ttk.Separator(self.control_frame).pack(fill=tk.X, pady=5)
+        ttk.Separator(self.control_frame).pack(fill=tk.X, pady=LABEL_PADDINGS_X)
 
         self.control_style = ttk.Style(self.control_frame)
         self._configure_overlay_styles()
 
         self.metadata_toggle_row = ttk.Frame(self.control_frame)
-        self.metadata_toggle_row.pack(fill=tk.X, padx=5)
+        self.metadata_toggle_row.pack(fill=tk.X, padx=LABEL_PADDINGS_X)
 
         # Text on Canvas checkbox
         self.checkbox = ttk.Checkbutton(
@@ -103,7 +103,7 @@ class CanvasTextOverlay:
             command=self.control_defs["show_text"]["command"],
         )
         self.checkbox.pack(side=tk.LEFT)
-        Hovertip(self.checkbox, self.control_defs["show_text"]["hover_tip"], hover_delay=250)
+        Hovertip(self.checkbox, self.control_defs["show_text"]["hover_tip"], hover_delay=TOOLTIP_DELAY)
 
         # Keyboard shortcut: Ctrl+T toggles text on canvas.
         bind_toggle_keys(
@@ -113,7 +113,7 @@ class CanvasTextOverlay:
         )
 
         self.location_year_row = ttk.Frame(self.control_frame)
-        self.location_year_row.pack(fill=tk.X, padx=5)
+        self.location_year_row.pack(fill=tk.X, padx=LABEL_PADDINGS_X)
 
         self.location_checkbox = ttk.Checkbutton(
             self.location_year_row,
@@ -123,7 +123,7 @@ class CanvasTextOverlay:
             style=self.overlay_checkbutton_style,
         )
         self.location_checkbox.pack(side=tk.LEFT)
-        Hovertip(self.location_checkbox, self.control_defs["location"]["hover_tip"], hover_delay=250)
+        Hovertip(self.location_checkbox, self.control_defs["location"]["hover_tip"], hover_delay=TOOLTIP_DELAY)
 
         self.location_refresh_btn = ttk.Button(
             self.location_year_row,
@@ -133,7 +133,7 @@ class CanvasTextOverlay:
             command=self.control_defs["refresh_location"]["command"],
             takefocus=0,
         )
-        self.location_refresh_btn.pack(side=tk.LEFT, padx=(5, 0))
+        self.location_refresh_btn.pack(side=tk.LEFT, padx=(LABEL_PADDINGS_X[0], 0))
 
         self.year_checkbox = ttk.Checkbutton(
             self.location_year_row,
@@ -143,7 +143,7 @@ class CanvasTextOverlay:
             style=self.overlay_checkbutton_style,
         )
         self.year_checkbox.pack(side=tk.RIGHT)
-        Hovertip(self.year_checkbox, self.control_defs["year"]["hover_tip"], hover_delay=250)
+        Hovertip(self.year_checkbox, self.control_defs["year"]["hover_tip"], hover_delay=TOOLTIP_DELAY)
 
         # Keyboard shortcut: Ctrl+L toggles location.
         bind_toggle_keys(
@@ -154,14 +154,14 @@ class CanvasTextOverlay:
 
         # Text field
         self.text_on_canvas = ttk.Entry(self.control_frame, textvariable=self.text_var, width=30)
-        self.text_on_canvas.pack(fill=tk.X, padx=7, pady=(5, 0))
-        Hovertip(self.text_on_canvas, self.control_defs["text_entry"]["hover_tip"], hover_delay=250)
+        self.text_on_canvas.pack(fill=tk.X, padx=7, pady=(LABEL_PADDINGS_X[0], 0))
+        Hovertip(self.text_on_canvas, self.control_defs["text_entry"]["hover_tip"], hover_delay=TOOLTIP_DELAY)
 
         # Text size slider. Higher divisors mean smaller text, so the slider
         # runs from high to low to make left=smaller and right=bigger.
         self.text_size_slider_label_var = tk.StringVar()
         self.text_size_slider_row = ttk.Frame(self.control_frame)
-        self.text_size_slider_row.pack(fill=tk.X, padx=5, pady=(5, 0))
+        self.text_size_slider_row.pack(fill=tk.X, padx=LABEL_PADDINGS_X, pady=(LABEL_PADDINGS_X[0], 0))
         self.text_size_slider_row.columnconfigure(1, weight=1)
         self.text_size_slider_row.columnconfigure(2, minsize=SLIDER_WIDTH)
         self.text_size_slider_label = ttk.Label(
@@ -170,7 +170,7 @@ class CanvasTextOverlay:
             justify=tk.LEFT,
             style=self.overlay_label_style,
         )
-        self.text_size_slider_label.grid(row=0, column=0, sticky="w", padx=(0, 5))
+        self.text_size_slider_label.grid(row=0, column=0, sticky="w", padx=(0, LABEL_PADDINGS_X[0]))
 
         self.text_size_slider = tk.Scale(
             self.text_size_slider_row,
@@ -193,8 +193,8 @@ class CanvasTextOverlay:
             takefocus=0,
             command=self.control_defs["text_size_reset"]["command"],
         )
-        self.text_size_reset_btn.grid(row=0, column=3, sticky="e", padx=(5, 0))
-        Hovertip(self.text_size_reset_btn, self.control_defs["text_size_reset"]["hover_tip"], hover_delay=250)
+        self.text_size_reset_btn.grid(row=0, column=3, sticky="e", padx=(LABEL_PADDINGS_X[0], 0))
+        Hovertip(self.text_size_reset_btn, self.control_defs["text_size_reset"]["hover_tip"], hover_delay=TOOLTIP_DELAY)
 
         self.text_size_slider.bind("<MouseWheel>", self._on_slider_scroll)
         self.text_size_slider.bind("<Button-4>", lambda e: self._on_slider_scroll_linux(e, 1))
@@ -207,7 +207,7 @@ class CanvasTextOverlay:
         )
 
         self.color_button_row = ttk.Frame(self.control_frame)
-        self.color_button_row.pack(fill=tk.X, padx=5, pady=5)
+        self.color_button_row.pack(fill=tk.X, padx=LABEL_PADDINGS_X, pady=LABEL_PADDINGS_X)
 
         # Text and background color buttons share one row.
         self.text_color_btn = ttk.Button(
@@ -216,7 +216,7 @@ class CanvasTextOverlay:
             command=self.control_defs["text_color"]["command"],
         )
         self.text_color_btn.pack(side=tk.LEFT, padx=0)
-        Hovertip(self.text_color_btn, self.control_defs["text_color"]["hover_tip"], hover_delay=250)
+        Hovertip(self.text_color_btn, self.control_defs["text_color"]["hover_tip"], hover_delay=TOOLTIP_DELAY)
 
         # Keyboard shortcut: Ctrl+Shift+T opens text color picker.
         bind_toggle_keys(
@@ -231,9 +231,9 @@ class CanvasTextOverlay:
             command=self.control_defs["bg_color"]["command"],
         )
         self.bg_color_btn.pack(side=tk.RIGHT, padx=0)
-        Hovertip(self.bg_color_btn, self.control_defs["bg_color"]["hover_tip"], hover_delay=250)
+        Hovertip(self.bg_color_btn, self.control_defs["bg_color"]["hover_tip"], hover_delay=TOOLTIP_DELAY)
 
-        ttk.Separator(self.control_frame).pack(fill=tk.X, pady=5)
+        ttk.Separator(self.control_frame).pack(fill=tk.X, pady=LABEL_PADDINGS_X)
 
         # Keyboard shortcut: Ctrl+Shift+B opens background color picker.
         bind_toggle_keys(
@@ -252,9 +252,8 @@ class CanvasTextOverlay:
         self.overlay_entry_style = "OverlayControl.TEntry"
         self.overlay_entry_disabled_style = "OverlayControl.Disabled.TEntry"
 
-        normal_fg = self.control_style.lookup("TLabel", "foreground") or "white"
-        normal_entry_bg = self.control_style.lookup("TEntry", "fieldbackground") or "white"
-        disabled_entry_bg = "#666666"
+        normal_fg = self.control_style.lookup("TLabel", "foreground") or FOREGROUND_COLOR
+        normal_entry_bg = self.control_style.lookup("TEntry", "fieldbackground") or FOREGROUND_COLOR
         base_entry_style = {
             "borderwidth": 0,
             "relief": "flat",
@@ -267,19 +266,19 @@ class CanvasTextOverlay:
             "bordercolor": normal_entry_bg,
         }
         disabled_entry_colors = {
-            "fieldbackground": disabled_entry_bg,
-            "lightcolor": disabled_entry_bg,
-            "darkcolor": disabled_entry_bg,
-            "bordercolor": disabled_entry_bg,
+            "fieldbackground": DISABLED_COLOR,
+            "lightcolor": DISABLED_COLOR,
+            "darkcolor": DISABLED_COLOR,
+            "bordercolor": DISABLED_COLOR,
         }
         self.control_style.configure(self.overlay_label_style, foreground=normal_fg)
-        self.control_style.configure(self.overlay_label_disabled_style, foreground=disabled_entry_bg)
+        self.control_style.configure(self.overlay_label_disabled_style, foreground=DISABLED_COLOR)
         self.control_style.configure(self.overlay_checkbutton_style, foreground=normal_fg)
         self.control_style.configure(self.overlay_entry_style, **base_entry_style, **normal_entry_colors)
         self.control_style.configure(self.overlay_entry_disabled_style, **base_entry_style, **disabled_entry_colors)
         self.control_style.map(
             self.overlay_checkbutton_style,
-            foreground=[("disabled", disabled_entry_bg)],
+            foreground=[("disabled", DISABLED_COLOR)],
         )
 
     def _set_overlay_labels_dimmed(self, dimmed: bool):

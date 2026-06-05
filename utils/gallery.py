@@ -13,8 +13,15 @@ from utils.control_definitions import (
 )
 from utils.keybinds import bind_toggle_keys
 from utils.tooltip import Hovertip
-from utils.ui_constants import DEFAULT_TOOLTIP_DELAY
-from utils.ui_constants import GALLERY_PADDING, GALLERY_THUMB_SIZE
+from utils.ui_constants import (
+    BORDER_COLOR,
+    GALLERY_THUMB_BORDER_SIZE,
+    TOOLTIP_DELAY, 
+    GALLERY_THUMB_SIZE,
+    HIGHLIGHT_COLOR,
+    LABEL_PADDINGS_X,
+    WINDOW_BACKGROUND_COLOR,
+)
 
 _EXIF_ORIENTATION_TAG = 0x0112
 _EXIF_SWAP_ORIENTATIONS = frozenset({5, 6, 7, 8})
@@ -26,10 +33,6 @@ class AsyncThumbnailGallery(tk.Frame):
         parent,
         image_paths: List[str],
         *,
-        thumb_size: int = GALLERY_THUMB_SIZE,
-        bg: str = "#222222",
-        image_bg: str = "#333333",
-        selected_bg: str = "#add8e6",
         on_select: Optional[Callable[[Optional[int]], None]] = None,
         on_layout_change: Optional[Callable[[], None]] = None,
         show_landscape: bool = True,
@@ -43,14 +46,14 @@ class AsyncThumbnailGallery(tk.Frame):
         Single-row, horizontally scrollable, async-loading thumbnail gallery.
         Rendering is virtualized, so only visible thumbnails are drawn.
         """
-        super().__init__(parent, bg=bg)
+        super().__init__(parent)
 
         self.image_paths: List[str] = image_paths
-        self.thumb_size: int = thumb_size
+        self.thumb_size: int = GALLERY_THUMB_SIZE
         self.selected_index: Optional[int] = None
-        self.default_bg = bg
-        self.image_bg = image_bg
-        self.selected_bg = selected_bg
+        self.default_bg = WINDOW_BACKGROUND_COLOR
+        self.image_bg = BORDER_COLOR
+        self.selected_bg = HIGHLIGHT_COLOR
         self.on_select = on_select
         self.on_layout_change = on_layout_change
         self.on_change_folder = on_change_folder
@@ -59,7 +62,7 @@ class AsyncThumbnailGallery(tk.Frame):
         self._load_generation = 0
         self._thumb_queue: queue.Queue = queue.Queue()
 
-        self._thumb_pad = 2
+        self._thumb_pad = GALLERY_THUMB_BORDER_SIZE * 2
         self._cell_span = self.thumb_size + (self._thumb_pad * 2)
         self._row_height = self.thumb_size + (self._thumb_pad * 2)
 
@@ -85,11 +88,12 @@ class AsyncThumbnailGallery(tk.Frame):
         self.search_text_var = tk.StringVar(value="")
         self.gallery_filter_definitions = build_gallery_filter_control_definitions(self)
         search_def = self.gallery_filter_definitions["search"]
-        self._search_placeholder = str(search_def.get("placeholder", "Search by name"))
+        self._search_placeholder = str(search_def.get("placeholder"))
         self.filter_controls: dict[str, tk.Widget] = {}
         self.folder_controls: dict[str, tk.Widget] = {}
         self.search_entry: Optional[ttk.Entry] = None
 
+        # sidecar file indicator checkmark icon to show which images have already been processed
         try:
             if not hasattr(sys, "frozen"):
                 resource_path = os.path.join(os.path.dirname(__file__), "../_source/round_check_mark_16.png")
@@ -98,26 +102,41 @@ class AsyncThumbnailGallery(tk.Frame):
             self.sidecar_icon = tk.PhotoImage(file=resource_path)
         except Exception:
             self.sidecar_icon = None
+            
+        self._setup_ui()
+        self._prepare_image_flags()
+        self._rebuild_filtered_indices(None)
 
+        threading.Thread(target=self._load_thumbnails_async, daemon=True).start()
+        self.after(10, self._drain_thumbnail_queue)
+        
+    def _setup_ui(self) -> None:
+        # actions bar above gallery thumbnails
         self.filter_bar = tk.Frame(self, bg=self.default_bg)
-        self.filter_bar.pack(fill=tk.X, pady=(0, 2))
+        self.filter_bar.pack(fill=tk.X, padx=LABEL_PADDINGS_X, pady=0)
+        # filter options
         self.filter_left = tk.Frame(self.filter_bar, bg=self.default_bg)
-        self.filter_left.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        self.filter_right = tk.Frame(self.filter_bar, bg=self.default_bg)
-        self.filter_right.pack(side=tk.RIGHT)
+        self.filter_left.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=0, pady=0)
         self._create_filter_controls()
+        # folder actions
+        self.filter_right = tk.Frame(self.filter_bar, bg=self.default_bg)
+        self.filter_right.pack(side=tk.RIGHT, padx=0, pady=0)
         self._create_folder_controls()
 
+        # gallery thumbnails
         self.canvas = tk.Canvas(
             self,
             height=self._compute_canvas_height(),
             highlightthickness=0,
-            bg=self.default_bg,
             background=self.default_bg,
         )
-        self.canvas.pack(fill=tk.X, expand=True)
-
+        self.canvas.pack(fill=tk.X, expand=True, padx=(LABEL_PADDINGS_X[0] * 2, LABEL_PADDINGS_X[1] * 2), pady=0)
         self.canvas.bind("<Configure>", self._resize_canvas)
+        self.canvas.bind("<MouseWheel>", self._on_mouse_wheel)
+        self.canvas.bind("<Button-4>", lambda e: self._scroll_units(-1))
+        self.canvas.bind("<Button-5>", lambda e: self._scroll_units(1))
+        self.canvas.bind("<ButtonPress-1>", self._drag_start)
+        self.canvas.bind("<B1-Motion>", self._drag_move)
 
         self.scrollbar = ttk.Scrollbar(
             self,
@@ -125,18 +144,7 @@ class AsyncThumbnailGallery(tk.Frame):
             command=self._on_scrollbar,
             style="Gallery.Horizontal.TScrollbar",
         )
-
-        self.canvas.bind("<MouseWheel>", self._on_mouse_wheel)
-        self.canvas.bind("<Button-4>", lambda e: self._scroll_units(-1))
-        self.canvas.bind("<Button-5>", lambda e: self._scroll_units(1))
-        self.canvas.bind("<ButtonPress-1>", self._drag_start)
-        self.canvas.bind("<B1-Motion>", self._drag_move)
-
-        self._prepare_image_flags()
-        self._rebuild_filtered_indices(None)
-
-        threading.Thread(target=self._load_thumbnails_async, daemon=True).start()
-        self.after(10, self._drain_thumbnail_queue)
+        # pack is done via _update_scrollbar() after images length is known
 
     def set_images(self, image_paths: List[str]) -> None:
         """
@@ -260,9 +268,11 @@ class AsyncThumbnailGallery(tk.Frame):
             self.after(10, self._drain_thumbnail_queue)
 
     def _create_thumbnail_image(self, img: Image.Image) -> Image.Image:
-        # Leave 1 px on each side so the rectangle fill remains visible.
-        inner = self.thumb_size - 2
-        img.thumbnail((inner, inner), Image.Resampling.LANCZOS)
+        # Leave GALLERY_THUMB_BORDER px on each side so the rectangle fill remains visible.
+        inner = self.thumb_size - GALLERY_THUMB_BORDER_SIZE * 2
+        # use BILINEAR for faster thumbnail generation; looks acceptable at small sizes and is much faster than ANTIALIAS (LANCZOS)
+        # https://www.py4u.org/blog/python-pil-preserve-quality-when-resizing-and-saving/#4-4-preserving-quality-with-resampling-filters
+        img.thumbnail((inner, inner), Image.Resampling.BILINEAR)
         return img.convert("RGB")
 
     def load_image_by_exiforient(self, path: str):
@@ -309,7 +319,7 @@ class AsyncThumbnailGallery(tk.Frame):
     # ============================================================
 
     def _compute_canvas_height(self) -> int:
-        return self._row_height + GALLERY_PADDING
+        return self._row_height + LABEL_PADDINGS_X[0]
 
     def _prepare_image_flags(self) -> None:
         self._sidecar_exists = []
@@ -371,9 +381,10 @@ class AsyncThumbnailGallery(tk.Frame):
                         self.filter_left,
                         textvariable=info["textvariable"],
                         width=width,
+                        style="Gallery.Filter.TEntry",
                     )
                 else:
-                    widget = ttk.Entry(self.filter_left, width=width)
+                    widget = ttk.Entry(self.filter_left, width=width, style="Gallery.Filter.TEntry")
                 if name == "search":
                     self.search_entry = widget
                     self._search_placeholder = str(info.get("placeholder", self._search_placeholder))
@@ -395,12 +406,13 @@ class AsyncThumbnailGallery(tk.Frame):
                 "takefocus": 0,
                 "command": info["command"],
             }
+
             if "underline" in info:
                 button_kwargs["underline"] = info["underline"]
 
             button = ttk.Button(self.filter_right, **button_kwargs)
-            button.pack(side=tk.LEFT, padx=(0, 6 if name == "change_folder" else 0))
-            Hovertip(button, info["enter_tip"], hover_delay=DEFAULT_TOOLTIP_DELAY)
+            button.pack(side=tk.LEFT, padx=LABEL_PADDINGS_X)
+            Hovertip(button, info["enter_tip"], hover_delay=TOOLTIP_DELAY)
             bind_toggle_keys(self.winfo_toplevel(), info, command=info["command"])
             self.folder_controls[name] = button
 
@@ -544,7 +556,7 @@ class AsyncThumbnailGallery(tk.Frame):
 
         fill_color = self.image_bg
         outline_color = self.selected_bg if index == self.selected_index else ""
-        outline_width = 1 if index == self.selected_index else 0
+        outline_width = GALLERY_THUMB_BORDER_SIZE #if index == self.selected_index else 0
         tag = f"thumb-{index}"
 
         thumb_pil = self._thumb_pil.get(index)
@@ -579,6 +591,7 @@ class AsyncThumbnailGallery(tk.Frame):
 
             self._visible_items[index] = (bg_id, overlay_id, img_id)
         else:
+            # empty thumbnail container as long as the thumbnail is not created
             bg_id = self.canvas.create_rectangle(
                 x0,
                 y0,
